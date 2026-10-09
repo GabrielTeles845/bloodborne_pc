@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <stdexcept>
 #include "common/serdes.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
@@ -263,23 +264,36 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
         return false;
     }
 
-    std::vector<u32> spv{};
-    Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary,
-                                       fmt::format("{:#018x}_{}", program->info.pgm_hash, perm_idx),
-                                       spv);
-    if (spv.empty()) {
-        return false;
-    }
-
     // Permutation hash depends on shader variation index. To prevent collisions, we need insert it
     // at the exact position rather than append
 
     vk::ShaderModule module{};
+    // Most pipeline keys reuse a shader module already loaded during warmup. Avoid
+    // opening and allocating its SPIR-V binary again for every repeated stage.
+    const auto compile = [&] {
+        std::vector<u32> spv;
+        Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary,
+                                           fmt::format("{:#018x}_{}", program->info.pgm_hash,
+                                                       perm_idx),
+                                           spv);
+        if (spv.size() < 5 || spv[0] != 0x07230203u) {
+            if (!spv.empty())
+                throw std::runtime_error{"damaged SPIR-V in the shader cache"};
+            return vk::ShaderModule{};
+        }
+        auto [result, created] = instance.GetDevice().createShaderModule(
+            {.codeSize = spv.size() * sizeof(u32), .pCode = spv.data()});
+        if (result != vk::Result::eSuccess)
+            throw std::runtime_error{"cached SPIR-V rejected by the driver"};
+        return created;
+    };
 
-    auto [it_pgm, new_program] = program_cache.try_emplace(program->info.pgm_hash);
-    if (new_program) {
-        module = CompileSPV(spv, instance.GetDevice());
-        it_pgm.value() = std::move(program);
+    auto it_pgm = program_cache.find(program->info.pgm_hash);
+    if (it_pgm == program_cache.end()) {
+        module = compile();
+        if (!module) return false;
+        const auto hash = program->info.pgm_hash;
+        it_pgm = program_cache.try_emplace(hash, std::move(program)).first;
     } else {
         const auto& it = std::ranges::find(it_pgm.value()->modules, spec, &Program::Module::spec);
         if (it != it_pgm.value()->modules.end()) {
@@ -296,9 +310,11 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
             }
             module = it->module;
         } else {
-            module = CompileSPV(spv, instance.GetDevice());
+            module = compile();
+            if (!module) return false;
         }
     }
+    spec.info = &it_pgm.value()->info;
     it_pgm.value()->InsertPermut(module, std::move(spec), perm_idx);
 
     sel.infos[stage] = &it_pgm.value()->info;

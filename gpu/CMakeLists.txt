@@ -259,6 +259,11 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
+if (WIN32)
+    add_executable(respawn-patch-test EXCLUDE_FROM_ALL ../tests/test_respawn_patch.c)
+    target_include_directories(respawn-patch-test PRIVATE ../src)
+    target_compile_options(respawn-patch-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+endif()
 add_executable(motion-history-test EXCLUDE_FROM_ALL ../tests/test_motion_history.cpp)
 target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(motion-history-test PRIVATE ..)

@@ -53,6 +53,9 @@ Problems
 - Black screen at start: Advanced -> "Clear shader cache", then start again (the first minutes
   stutter while the cache is rebuilt).
 - Send user\last_run.log with any bug report.
+- On supported CUSA03173 1.09 images, death respawns skip the game's fixed 12-second minimum
+  delay while still waiting for assets and character readiness. To restore the original delay,
+  set BB_RESPAWN_DELAY_FIX=0 in Advanced -> environment overrides and restart the game.
 
 Upscaling
 - DLSS: NVIDIA GeForce RTX 20 series or newer with a current driver (Graphics -> Upscaler ->
