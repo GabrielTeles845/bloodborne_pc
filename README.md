@@ -6,12 +6,26 @@ The original PlayStation 4 game runs directly on your PC: its own x86-64 code ru
 and the graphics are translated to Vulkan. No emulator window, no setup scripts: unpack the zip,
 start `Bloodborne.exe`, pick your game folder and press **PLAY**.
 
-**[Download the latest version](https://github.com/Supermedo/bloodborne_pc/releases/latest)** · **[Join the Discord](https://discord.gg/yTMG8c4Bqm)**
+**[Download this fork](https://github.com/Jgamrot/bloodborne_pc/releases/latest)** · **[Original project](https://github.com/Supermedo/bloodborne_pc)** · **[Join the Discord](https://discord.gg/yTMG8c4Bqm)**
 
 > **No game files are included.** You need your own decrypted dump of Bloodborne
 > (CUSA03173). Version 1.09 is needed for the community patches (60/90/unlocked FPS,
 > resolution, effects); other versions run at 30 FPS.
 > This project is not affiliated with Sony Interactive Entertainment or FromSoftware.
+
+## Changes in this fork
+
+- The in-game settings menu (Insert or L3+R3) is translated to English. This incorporates
+  the translation proposed in [upstream PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
+- Checkboxes and sliders in that menu now save their newly selected values. This is the fix
+  proposed in [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
+- In a fresh character creation test, the preview was visible with an earlier local rebuild
+  of this same renderer source. We have not isolated the cause or verified the packaged build
+  at character creation, so this is an observation, not a separate renderer fix.
+
+The [release download for this fork](https://github.com/Jgamrot/bloodborne_pc/releases/latest)
+contains the rebuilt Windows port without game files. Existing saves, settings and mods are
+personal files; keep them when replacing an older installation.
 
 ## Features
 
@@ -49,7 +63,7 @@ Nothing else to install: everything the game needs is in the zip.
 
 ## How to play
 
-1. Download the zip from [Releases](https://github.com/Supermedo/bloodborne_pc/releases/latest)
+1. Download the zip from [this fork's releases](https://github.com/Jgamrot/bloodborne_pc/releases/latest)
    and unpack it anywhere.
 2. Start `Bloodborne.exe`.
 3. On **Game & effects**, choose your game folder (the one with `eboot.bin`).
@@ -73,8 +87,8 @@ put its address in **Server address**.
 
 ## Known issues
 
-- The character preview on the character creation screen stays empty. The character is
-  created correctly and looks right in the game.
+- The character preview appeared in a fresh test of an earlier local rebuild. It was
+  previously reported empty; the packaged build still needs a character creation test.
 - Some AMD graphics cards still crash when the game world loads; fixes are in progress.
 - Online play is new. Messages, bloodstains and ghosts work; summoning other players with the
   bells has not been confirmed yet. Please report how it goes on Discord.
@@ -83,7 +97,7 @@ put its address in **Server address**.
 
 ## Problems and feedback
 
-Ask on the [Discord server](https://discord.gg/yTMG8c4Bqm), or open an [issue](https://github.com/Supermedo/bloodborne_pc/issues) and attach
+Ask on the [Discord server](https://discord.gg/yTMG8c4Bqm), or open an [issue on this fork](https://github.com/Jgamrot/bloodborne_pc/issues) and attach
 `user\last_run.log` from the game folder, with your graphics card and what happened.
 If the game shows only a black screen, try **Advanced → Clear shader cache** first.
 
