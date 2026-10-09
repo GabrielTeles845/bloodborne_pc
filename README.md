@@ -84,10 +84,10 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   in [upstream PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
 - Menu checkboxes and sliders save the value you selected, from
   [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
-- The downloadable `bb-probe.exe` is the exact executable used in our successful fresh
-  character creation test: the character preview appeared and the character looked right
-  in the game. This was tested on one PC with an RTX 4060 Laptop GPU at 1440p with DLSS.
-  We have not isolated why the preview was missing before, so results on other PCs may vary.
+- A v1.6.1 executable passed our fresh character-creation test: the preview appeared and the
+  character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. This
+  v1.6.3 executable was rebuilt for the performance fixes and has not repeated that test.
+  The earlier preview problem's cause remains unisolated.
 - The full package has a launcher that checks this fork for updates.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
   readiness checks still apply. This is on by default for supported CUSA03173 1.09 images;
