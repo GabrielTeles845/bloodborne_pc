@@ -7,8 +7,8 @@ and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
 ## Which download do I click?
 
-On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.2),
-click **[Bloodborne-Windows-v1.6.2-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.2/Bloodborne-Windows-v1.6.2-Jgamrot.zip)**
+On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.3),
+click **[Bloodborne-Windows-v1.6.3-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/Bloodborne-Windows-v1.6.3-Jgamrot.zip)**
 if this is your first installation. It contains the launcher, the working game executable,
 and Xbox button prompts. You do **not** need the other assets.
 
@@ -18,7 +18,7 @@ None of these downloads includes Bloodborne's game files.
 
 ## First-time setup
 
-1. Right-click **Bloodborne-Windows-v1.6.2-Jgamrot.zip** in Downloads and choose
+1. Right-click **Bloodborne-Windows-v1.6.3-Jgamrot.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
 2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
@@ -69,13 +69,13 @@ base folder. The game's own files are never uploaded to this repository.
 
 ## Already have Supermedo's v1.6 port?
 
-Close the game, [download the current `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.2/bb-probe.exe),
+Close the game, [download the current `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/bb-probe.exe),
 back up your existing `bin\bb-probe.exe`, and replace it with this file. Keep your `user`
 saves, `bbport.ini`, and mods. For this fork's launcher and future updates, install the full
 package instead.
 
 The full package already includes Xbox button prompts. For an existing installation,
-[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.2/Xbox-360-Prompts-Elden-Ring.zip)
+[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/Xbox-360-Prompts-Elden-Ring.zip)
 and extract its folder into `mods`; it appears under **Mods & patches** in the launcher.
 
 ## What's changed
@@ -97,6 +97,10 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
 - Shader preload now reuses already loaded shader modules before reading their binaries again,
   and creates the Vulkan pipeline cache before warmup. This removes redundant startup work;
   gameplay FPS gains have not been measured. See [technical notes](docs/respawn-performance-windows.md).
+- Motion vectors now keep images for several render sizes instead of draining the GPU whenever
+  a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
+  The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
+  we have not measured its FPS effect on this Windows build.
 
 ## Requirements and notes
 

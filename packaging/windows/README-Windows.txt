@@ -56,6 +56,8 @@ Problems
 - On supported CUSA03173 1.09 images, death respawns skip the game's fixed 12-second minimum
   delay while still waiting for assets and character readiness. To restore the original delay,
   set BB_RESPAWN_DELAY_FIX=0 in Advanced -> environment overrides and restart the game.
+- Water-heavy scenes use a motion-vector image for each render size instead of repeatedly
+  waiting for the GPU when render-target sizes change.
 
 Upscaling
 - DLSS: NVIDIA GeForce RTX 20 series or newer with a current driver (Graphics -> Upscaler ->
