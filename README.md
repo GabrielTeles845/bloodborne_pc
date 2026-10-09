@@ -5,17 +5,78 @@ created by Mohammed Albarghouthi. It runs your own decrypted Bloodborne game fil
 on Windows 10 or 11. It builds on [deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc)
 and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
-## Download
+## Which download do I click?
 
-- **New installation:** [Download the complete Windows package](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/Bloodborne-Windows-v1.6.1-Jgamrot.zip), extract it, and run `Bloodborne.exe`.
-- **Already using Supermedo's v1.6 package:** [Download the tested `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/bb-probe.exe). Close the game, back up the existing `bin\bb-probe.exe`, and replace it with this file. Keep your `user` saves, `bbport.ini`, and mods.
-- **Xbox button prompts:** Included in the full package and enabled by default. For an existing
-  installation, [download the mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/Xbox-360-Prompts-Elden-Ring.zip)
-  and extract its folder into `mods`. The launcher lists it under **Mods & patches**.
+On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.1),
+click **[Bloodborne-Windows-v1.6.1-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/Bloodborne-Windows-v1.6.1-Jgamrot.zip)**
+if this is your first installation. It contains the launcher, the working game executable,
+and Xbox button prompts. You do **not** need the other assets.
 
-Choose your own decrypted CUSA03173 game folder in the launcher, then press **PLAY**. The
-download contains **no game files**. Game version 1.09 is needed for community patches such
-as 60 FPS, higher resolutions and effects.
+The separate `bb-probe.exe` and Xbox prompt zip are only for people updating an existing
+installation. The two **Source code** downloads are for developers; they are not the game.
+None of these downloads includes Bloodborne's game files.
+
+## First-time setup
+
+1. Right-click **Bloodborne-Windows-v1.6.1-Jgamrot.zip** in Downloads and choose
+   **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
+   such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
+2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
+   *different* folder from `bbport-windows`. The correct folder has `eboot.bin` directly
+   inside it, alongside `dvdroot_ps4`, `sce_module`, and `sce_sys`.
+3. Open `bbport-windows` and double-click **Bloodborne.exe**. In the launcher, open
+   **Game & effects**. Beside **Game folder**, choose the folder that contains `eboot.bin`.
+   Select the folder itself, not `eboot.bin` and not the port's `bbport-windows` folder.
+4. Click **PLAY**. The first launch prepares files and may take a while. New areas may stutter
+   briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
+   your saved settings without opening the launcher.
+
+For example, this folder layout works:
+
+```text
+C:\Games\Bloodborne\
+├── bbport-windows\
+│   ├── Bloodborne.exe
+│   └── bin\bb-probe.exe
+└── CUSA03173\                 ← choose this as Game folder
+    ├── eboot.bin
+    ├── dvdroot_ps4\
+    ├── sce_module\
+    └── sce_sys\
+```
+
+### If your game is in `cusa-03173.zip`
+
+That archive is **not** ready for the launcher when you use Windows **Extract All**: it
+contains `CUSA03173.pkg` and several update `.pkg` files. The launcher cannot open the ZIP
+or a PKG directly. If you already have a folder with `eboot.bin`, use that and skip this part.
+
+1. Right-click `cusa-03173.zip` and choose **Extract All**. Open its `cusa-03173` folder.
+2. Download and extract [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus/releases/tag/PKG_EXTRACTOR_1_1).
+   Drag `CUSA03173.pkg` onto `pkg_extractor.exe` and wait for extraction to finish.
+3. Drag **`CUSA03173 Update v1.09.pkg`** onto the same `pkg_extractor.exe` and wait again.
+   Use this plain 1.09 update, not the separate 720p or 1080p variants.
+4. You should now have a base `CUSA03173` folder and an update folder (often called
+   `CUSA03173-patch`). Open the update folder, select everything inside it, copy it into
+   the base `CUSA03173` folder, and choose **Replace** when Windows asks.
+5. Check that the base folder now contains `eboot.bin`, `dvdroot_ps4`, `sce_module`, and
+   `sce_sys`. Move that complete folder to a permanent location, then choose it in the
+   launcher's **Game folder** box as described above.
+
+If the launcher says **No eboot.bin**, you selected the wrong folder or have only extracted
+the PKG archive. If it reports game version 1.00, the 1.09 update was not copied into the
+base folder. The game's own files are never uploaded to this repository.
+
+## Already have Supermedo's v1.6 port?
+
+Close the game, [download the tested `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/bb-probe.exe),
+back up your existing `bin\bb-probe.exe`, and replace it with this file. Keep your `user`
+saves, `bbport.ini`, and mods. For this fork's launcher and future updates, install the full
+package instead.
+
+The full package already includes Xbox button prompts. For an existing installation,
+[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.1/Xbox-360-Prompts-Elden-Ring.zip)
+and extract its folder into `mods`; it appears under **Mods & patches** in the launcher.
 
 ## What's changed
 
