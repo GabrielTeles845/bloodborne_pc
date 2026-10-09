@@ -2,6 +2,7 @@
 #include "bbport_settings.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -71,10 +72,26 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     } else if (key == "live_resolution") {
         v.live_resolution = value == "auto" ? -1 : std::clamp(i, 0, 1);
     } else if (key == "output_res") {
-        for (int r = 0; r < OutputCount; ++r) {
+        for (int r = 0; r < OutputCustom; ++r) {
             if (value == std::to_string(OutputWidths[r]) + "x" + std::to_string(OutputHeights[r])) {
                 v.output_res = r;
+                return;
             }
+        }
+        const auto separator = value.find('x');
+        if (separator == std::string::npos) return;
+        int w = 0, h = 0;
+        const char* begin = value.data();
+        const char* split = begin + separator;
+        const char* end = begin + value.size();
+        const auto width = std::from_chars(begin, split, w);
+        const auto height = std::from_chars(split + 1, end, h);
+        if (width.ec == std::errc{} && width.ptr == split &&
+            height.ec == std::errc{} && height.ptr == end &&
+            w >= 256 && w <= 7680 && h >= 144 && h <= 4320 && !(w & 1) && !(h & 1)) {
+            OutputWidths[OutputCustom] = w;
+            OutputHeights[OutputCustom] = h;
+            v.output_res = OutputCustom;
         }
     } else {
         for (int e = 0; e < EffectCount; ++e) {
@@ -126,6 +143,7 @@ void Load() {
         {"BB_PC_MIRROR", "pc_mirror_appearance"},   {"BB_PC_TWO_INVADERS", "pc_two_invaders"},
         {"BB_PC_REBIRTH", "pc_rebirth"},           {"BB_MOUSE_CAMERA", "mouse_camera"},
         {"BB_PC_LAMPS", "pc_enhanced_lamps"},
+        {"BB_OUTPUT_RES", "output_res"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env)) {
