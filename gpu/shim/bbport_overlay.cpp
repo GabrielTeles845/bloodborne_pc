@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "bbport_overlay.h"
 
+#include <algorithm>
 #include <atomic>
+#include <array>
 #include <cfloat>
 #include <chrono>
 #include <cmath>
@@ -60,6 +62,17 @@ float base_scale = 1.0f;
 // Present rate for the FPS counter.
 std::chrono::steady_clock::time_point last_present{};
 float frame_ms_avg = 0.0f;
+
+// Trophy events can arrive on the game thread while the present thread draws the overlay.
+std::mutex trophy_mutex;
+std::array<unsigned char, 128> trophies{};
+std::atomic<int> toast_trophy{-1};
+std::atomic<int64_t> toast_until_ms{0};
+
+int64_t ClockMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 void SetOpen(bool value) {
     if (menu_open.exchange(value) == value) {
@@ -355,6 +368,27 @@ void Menu() {
         }
     }
 
+    if (ImGui::CollapsingHeader("Achievements (local)")) {
+        std::array<unsigned char, 128> snapshot;
+        {
+            std::scoped_lock lock{trophy_mutex};
+            snapshot = trophies;
+        }
+        const int count = int(std::count(snapshot.begin(), snapshot.end(), 1));
+        ImGui::Text("%d unlocked on this PC", count);
+        if (!count) {
+            ImGui::TextDisabled("New trophies will appear here as you earn them.");
+        } else {
+            if (ImGui::BeginChild("##trophies", ImVec2(0, 150.0f * base_scale), true)) {
+                for (int id = 0; id < int(snapshot.size()); ++id) {
+                    if (snapshot[id]) ImGui::Text("Trophy #%d", id);
+                }
+            }
+            ImGui::EndChild();
+        }
+        ImGui::TextDisabled("Local history only; PlayStation Network is not connected.");
+    }
+
     ImGui::SeparatorText("Other");
     Checkbox("Show FPS counter", s.show_fps);
 
@@ -414,6 +448,21 @@ void FpsCounter() {
                 : s.upscaler == BbSettings::UpscalerTaa ? "TAA"
                 : s.upscaler == BbSettings::UpscalerDlss ? "DLSS"
                                                          : "");
+    ImGui::End();
+}
+
+void TrophyToast() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 12.0f * base_scale,
+                                   viewport->WorkPos.y + 65.0f * base_scale),
+                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.88f);
+    ImGui::Begin("##trophy_toast", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "Achievement unlocked");
+    ImGui::Text("Trophy #%d", toast_trophy.load());
     ImGui::End();
 }
 
@@ -585,7 +634,8 @@ bool HandleEvent(const SDL_Event& event) {
 }
 
 bool Visible() {
-    return initialized && (menu_open || text_entry_active || BbSettings::Get().show_fps);
+    return initialized && (menu_open || text_entry_active || BbSettings::Get().show_fps ||
+                           ClockMs() < toast_until_ms.load());
 }
 
 bool CapturesInput() {
@@ -597,6 +647,26 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
     text_entry_active = active;
     text_entry_prompt = prompt;
     text_entry_text = text;
+}
+
+void LoadTrophies(const unsigned char* unlocked, unsigned count) {
+    std::scoped_lock lock{trophy_mutex};
+    trophies.fill(0);
+    if (unlocked) {
+        for (unsigned i = 0; i < std::min<unsigned>(count, trophies.size()); ++i)
+            trophies[i] = unlocked[i] ? 1 : 0;
+    }
+    toast_until_ms = 0;
+}
+
+void TrophyUnlocked(int id) {
+    if (id < 0 || id >= int(trophies.size())) return;
+    {
+        std::scoped_lock lock{trophy_mutex};
+        trophies[id] = 1;
+    }
+    toast_trophy = id;
+    toast_until_ms = ClockMs() + 6000;
 }
 
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
@@ -633,6 +703,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     }
     if (text_entry_active) {
         TextEntryBox();
+    }
+    if (ClockMs() < toast_until_ms.load()) {
+        TrophyToast();
     }
     ImGui::Render();
 

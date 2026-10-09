@@ -333,6 +333,14 @@ extern "C" int bbgpu_overlay_captures_input(void) {
     return BbOverlay::CapturesInput() ? 1 : 0;
 }
 
+extern "C" void bbgpu_trophy_load(const uint8_t* unlocked, uint32_t count) {
+    BbOverlay::LoadTrophies(unlocked, count);
+}
+
+extern "C" void bbgpu_trophy_unlocked(int32_t id) {
+    BbOverlay::TrophyUnlocked(id);
+}
+
 extern "C" int bbgpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");

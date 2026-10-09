@@ -38,5 +38,7 @@ bool CapturesInput();
 /// Window thread: the game's text dialog (sceImeDialog). Shown as a box on screen until
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text);
+void LoadTrophies(const unsigned char* unlocked, unsigned count);
+void TrophyUnlocked(int id);
 
 } // namespace BbOverlay

@@ -29,6 +29,9 @@ Starting
 - In the game, Insert (or L3+R3 on a gamepad) opens the port's menu (upscaler, resolution,
   effects). Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
   Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
+- Earned trophies show a short in-game popup and appear under Achievements (local) in that menu.
+  Unlock history is saved in user\trophies.txt. Names are unavailable until the encrypted
+  trophy metadata can be read, so the menu shows IDs. This does not connect to PSN.
 
 Data
 - Saves and shader caches: user\ next to Bloodborne.exe (the launcher can pick another folder).

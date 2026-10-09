@@ -17,6 +17,14 @@ if [[ -z $python ]]; then
     done
 fi
 [[ -n $python ]] || { echo 'Need a Windows Python 3 (python.org) or WINPYTHON=path\to\python.exe' >&2; exit 1; }
+# A venv outside Python's install tree may not find Tcl/Tk itself. Point PyInstaller's
+# tkinter hook at the base interpreter's data so the frozen launcher keeps its UI.
+for library in "$(dirname "$python")"/tcl/tcl*; do
+    if [[ -d $library && -z ${TCL_LIBRARY:-} ]]; then export TCL_LIBRARY=$(cygpath -w "$library"); break; fi
+done
+for library in "$(dirname "$python")"/tcl/tk*; do
+    if [[ -d $library && -z ${TK_LIBRARY:-} ]]; then export TK_LIBRARY=$(cygpath -w "$library"); break; fi
+done
 # Windows Python needs USERPROFILE (some MSYS2 shells start without it).
 export USERPROFILE=${USERPROFILE:-$(cygpath -w "/c/Users/$(id -un)")}
 if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
@@ -52,6 +60,12 @@ ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
+# Optional separately licensed controller prompt mod, supplied by the release packager.
+if [[ -n ${BB_XBOX_PROMPTS_DIR:-} ]]; then
+    [[ -d $BB_XBOX_PROMPTS_DIR ]] || { echo "Xbox prompts folder not found: $BB_XBOX_PROMPTS_DIR" >&2; exit 1; }
+    mkdir -p "$dest/mods"
+    cp -r "$BB_XBOX_PROMPTS_DIR" "$dest/mods/"
+fi
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
 # DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to bb-probe.exe

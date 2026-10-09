@@ -260,6 +260,11 @@ endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
 if (WIN32)
+    add_executable(trophy-history-test EXCLUDE_FROM_ALL ../tests/test_runtime_trophies.c
+        ../src/runtime_trophies.c)
+    target_include_directories(trophy-history-test PRIVATE .. ../src)
+    target_compile_options(trophy-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+    target_link_libraries(trophy-history-test PRIVATE -pthread)
     add_executable(respawn-patch-test EXCLUDE_FROM_ALL ../tests/test_respawn_patch.c)
     target_include_directories(respawn-patch-test PRIVATE ../src)
     target_compile_options(respawn-patch-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)

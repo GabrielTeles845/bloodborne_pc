@@ -7,8 +7,8 @@ and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
 ## Which download do I click?
 
-On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.3),
-click **[Bloodborne-Windows-v1.6.3-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/Bloodborne-Windows-v1.6.3-Jgamrot.zip)**
+On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.4),
+click **[Bloodborne-Windows-v1.6.4-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/Bloodborne-Windows-v1.6.4-Jgamrot.zip)**
 if this is your first installation. It contains the launcher, the working game executable,
 and Xbox button prompts. You do **not** need the other assets.
 
@@ -18,7 +18,7 @@ None of these downloads includes Bloodborne's game files.
 
 ## First-time setup
 
-1. Right-click **Bloodborne-Windows-v1.6.3-Jgamrot.zip** in Downloads and choose
+1. Right-click **Bloodborne-Windows-v1.6.4-Jgamrot.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
 2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
@@ -69,13 +69,13 @@ base folder. The game's own files are never uploaded to this repository.
 
 ## Already have Supermedo's v1.6 port?
 
-Close the game, [download the current `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/bb-probe.exe),
+Close the game, [download the current `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/bb-probe.exe),
 back up your existing `bin\bb-probe.exe`, and replace it with this file. Keep your `user`
 saves, `bbport.ini`, and mods. For this fork's launcher and future updates, install the full
 package instead.
 
 The full package already includes Xbox button prompts. For an existing installation,
-[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.3/Xbox-360-Prompts-Elden-Ring.zip)
+[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/Xbox-360-Prompts-Elden-Ring.zip)
 and extract its folder into `mods`; it appears under **Mods & patches** in the launcher.
 
 ## What's changed
@@ -86,7 +86,8 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
 - A v1.6.1 executable passed our fresh character-creation test: the preview appeared and the
   character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. This
-  v1.6.3 executable was rebuilt for the performance fixes and has not repeated that test.
+  v1.6.4 executable was rebuilt for the performance and achievement changes and has not
+  repeated that test.
   The earlier preview problem's cause remains unisolated.
 - The full package has a launcher that checks this fork for updates.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
@@ -101,6 +102,11 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
   The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
   we have not measured its FPS effect on this Windows build.
+- The game's trophy unlock calls now show a six-second in-game notification and save a local
+  unlock history in `user\trophies.txt`. Open **Achievements (local)** in the Insert/L3+R3 menu
+  to see trophies earned with this build. The encrypted game trophy pack does not provide
+  readable names to this port yet, so entries show their trophy ID. Existing progress cannot
+  be reconstructed from old saves. These achievements do not sync to PlayStation Network.
 
 ## Requirements and notes
 
