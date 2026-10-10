@@ -31,9 +31,20 @@ Starting
   Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
   Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
 - Earned trophies show an achievement popup and appear in the guide's Achievements section.
+  In Achievements, "Preview achievement toast" tests the popup without unlocking anything.
   Unlock dates are saved in user\trophies.txt. Trophy icons come from your own game folder.
   Names, descriptions, grades and Gamerscore require your own PS4 trophy key in
   user\keys.json (see README.md). Without it, the guide shows icons and IDs. No PSN sync.
+
+Switching from another launcher
+- Keep your existing extracted game folder: this package does not include or replace game files.
+- Close the old launcher and game. Back up its user folder, bbport.ini, and mods if present.
+- Extract this entire package to a NEW folder. Do not copy only Bloodborne.exe into an older
+  launcher folder; the matching bin, scripts, patches, and support files are also needed.
+- Open this package's Bloodborne.exe. Under "Game & effects", choose the existing folder that
+  contains eboot.bin as "Game folder". Set "Saves folder" to the old user folder if you want
+  those saves, or copy your backed-up saves into the new user folder while both apps are closed.
+- Copy only the mods you want into the new mods folder, enable them, and press PLAY.
 
 Data
 - Saves and shader caches: user\ next to Bloodborne.exe (the launcher can pick another folder).

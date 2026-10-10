@@ -5,20 +5,46 @@ created by Mohammed Albarghouthi. It runs your own decrypted Bloodborne game fil
 on Windows 10 or 11. It builds on [deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc)
 and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
+## In-game guide and achievements
+
+Press **Insert** on a keyboard or **L3+R3** on a controller while the game is running to open
+the guide. **Home** shows FPS and achievement progress; **Achievements** lists locally earned
+trophies and Gamerscore; **Settings** and **Mods** contain the existing graphics and cheat
+controls. Press the same shortcut to close it. These screenshots show the guide running
+over the game at 1440p:
+
+![Xbox-guide-inspired menu running over Bloodborne](docs/images/guide-in-game.jpg)
+
+The Achievements tab shows your locally earned trophies, their icons and dates, and a 1000G
+score when your own trophy key is available:
+
+![Achievements tab running over Bloodborne](docs/images/achievements-in-game.jpg)
+
+When a trophy unlocks, a green achievement toast appears at the bottom of the game. Unlocks
+are queued, so one toast finishes before the next appears:
+
+![Achievement preview toast running over Bloodborne](docs/images/toast-in-game.jpg)
+
+To check the toast without earning a trophy, open **Achievements** and click **Preview
+achievement toast**. It is labelled *Achievement preview* and does not change your unlocks
+or save file. Real unlocks say *Achievement unlocked*.
+
 ## Which download do I click?
 
-On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.4),
-click **[Bloodborne-Windows-v1.6.4-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/Bloodborne-Windows-v1.6.4-Jgamrot.zip)**
+On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.5),
+click **[Bloodborne-Windows-v1.6.5-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.5/Bloodborne-Windows-v1.6.5-Jgamrot.zip)**
 if this is your first installation. It contains the launcher, the working game executable,
 and Xbox button prompts. You do **not** need the other assets.
 
-The separate `bb-probe.exe` and Xbox prompt zip are only for people updating an existing
-installation. The two **Source code** downloads are for developers; they are not the game.
+The separate `bb-probe.exe` is only for replacing the executable in an existing installation
+of **this same fork**. The Xbox prompt zip is for manual mod updates. If you have a different
+launcher, use the full package and the switching guide below. The two **Source code**
+downloads are for developers; they are not the game.
 None of these downloads includes Bloodborne's game files.
 
 ## First-time setup
 
-1. Right-click **Bloodborne-Windows-v1.6.4-Jgamrot.zip** in Downloads and choose
+1. Right-click **Bloodborne-Windows-v1.6.5-Jgamrot.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
 2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
@@ -67,16 +93,32 @@ If the launcher says **No eboot.bin**, you selected the wrong folder or have onl
 the PKG archive. If it reports game version 1.00, the 1.09 update was not copied into the
 base folder. The game's own files are never uploaded to this repository.
 
-## Already have Supermedo's v1.6 port?
+## Already have another launcher or a working game installation?
 
-Close the game, [download the current `bb-probe.exe`](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/bb-probe.exe),
-back up your existing `bin\bb-probe.exe`, and replace it with this file. Keep your `user`
-saves, `bbport.ini`, and mods. For this fork's launcher and future updates, install the full
-package instead.
+You can use the game files you already extracted. **Do not download or extract them again.**
+The easiest way to switch is to keep your old launcher folder intact and install this
+fork's full package in a **new** folder:
 
-The full package already includes Xbox button prompts. For an existing installation,
-[download the separate mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.4/Xbox-360-Prompts-Elden-Ring.zip)
-and extract its folder into `mods`; it appears under **Mods & patches** in the launcher.
+1. Close the game and your old launcher. Find the existing game folder that has `eboot.bin`
+   directly inside it. Leave that folder where it is.
+2. Back up your old launcher folder, especially its `user` folder (saves, trophies, and any
+   `keys.json`), `bbport.ini`, and `mods` folder if present.
+3. Download the **full Windows package** above, extract it to a new permanent folder, and
+   run its `Bloodborne.exe`. Do not copy only `Bloodborne.exe` into an older port: it needs
+   the matching `bin`, scripts, patches, and support files from this package.
+4. In **Game & effects**, set **Game folder** to your *existing* folder containing
+   `eboot.bin`. Set **Saves folder** to your existing `user` folder if you want to keep those
+   saves, or use the new default `user` folder and copy your backed-up save files into it
+   while the launcher and game are closed. Keep a backup until the saves load successfully.
+5. If you used mods, copy only the mods you still want into the new `mods` folder and
+   enable them under **Mods & patches**. Click **PLAY** and confirm your character loads.
+
+This works for Supermedo's launcher and other bbport-derived launchers that use the same
+extracted game folder. A separate shadPS4 installation can use the same game files, but its
+save layout may differ; keep the old saves backed up and check the new launcher's **Saves
+folder** before copying anything. The package includes Xbox button prompts; the separate
+[prompt mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.5/Xbox-360-Prompts-Elden-Ring.zip)
+is for manual mod updates only.
 
 ## What's changed
 
@@ -85,10 +127,9 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
 - Menu checkboxes and sliders save the value you selected, from
   [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
 - A v1.6.1 executable passed our fresh character-creation test: the preview appeared and the
-  character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. This
-  v1.6.4 executable was rebuilt for the performance and achievement changes and has not
-  repeated that test.
-  The earlier preview problem's cause remains unisolated.
+  character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. The
+  v1.6.5 executable has not repeated that character-creation test. The earlier preview
+  problem's cause remains unisolated.
 - The full package has a launcher that checks this fork for updates.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
   readiness checks still apply. This is on by default for supported CUSA03173 1.09 images;
@@ -102,7 +143,7 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
   The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
   we have not measured its FPS effect on this Windows build.
-- Source builds after v1.6.4 show a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
+- v1.6.5 shows a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
   with Home, Achievements, Settings, and Mods/Cheats tabs. Trophy unlocks show a queued
   green achievement toast. The port
   extracts the trophy icons from your own game files and keeps local unlock dates in
@@ -117,8 +158,8 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   explains how to dump it from your own console. Without a key, achievements safely show
   their trophy IDs and icons with unknown scores. Extracted data stays in `user\trophy_cache`;
   the key is never copied there. Existing local trophy history is still readable. Old save
-  progress cannot be reconstructed, and nothing syncs to PlayStation Network. The v1.6.4
-  release downloads above still contain the earlier menu until a new release is published.
+  progress cannot be reconstructed, and nothing syncs to PlayStation Network. The guide,
+  Achievements tab, and preview toast were checked in a live game session at 1440p.
 
 ## Requirements and notes
 

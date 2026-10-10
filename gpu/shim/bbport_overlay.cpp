@@ -81,9 +81,14 @@ float frame_ms_avg = 0.0f;
 // Trophy events can arrive on the game thread while the present thread draws the overlay.
 std::mutex trophy_mutex;
 std::array<unsigned char, 128> trophies{};
-std::deque<int> toast_queue;
+struct ToastEvent {
+    int id;
+    bool preview;
+};
+std::deque<ToastEvent> toast_queue;
 std::atomic<int> queued_toasts{0};
 std::atomic<int> active_toast{-1};
+std::atomic<bool> active_toast_preview{false};
 int64_t toast_start_ms = 0; // present thread only
 std::unordered_map<int, std::unique_ptr<ImTextureData>> trophy_icons;
 
@@ -569,6 +574,18 @@ void AchievementsTab() {
     ImGui::Text("%d of %d unlocked", earned, total);
     ImGui::ProgressBar(total ? float(earned) / total : 0.0f,
                        ImVec2(-1, 9.0f * base_scale), "");
+    ImGui::BeginDisabled(entries.empty());
+    if (ImGui::Button("Preview achievement toast", ImVec2(-1, 0))) {
+        const auto sample = std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
+            return entry.grade == BbTrophies::Grade::Bronze && !entry.hidden;
+        });
+        const int id = sample == entries.end() ? entries.front().id : sample->id;
+        std::scoped_lock lock{trophy_mutex};
+        toast_queue.push_back({id, true});
+        ++queued_toasts;
+    }
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Preview only: this does not unlock or save a trophy.");
     if (!BbTrophies::HasMetadata())
         ImGui::TextWrapped("Names and scores need the trophy key from your own PS4. Icons and local unlock history still work.");
     ImGui::Separator();
@@ -724,7 +741,8 @@ void TrophyToast() {
     if (active_toast.load() < 0) {
         std::scoped_lock lock{trophy_mutex};
         if (toast_queue.empty()) return;
-        active_toast = toast_queue.front();
+        active_toast = toast_queue.front().id;
+        active_toast_preview = toast_queue.front().preview;
         toast_queue.pop_front();
         --queued_toasts;
         toast_start_ms = now;
@@ -768,7 +786,8 @@ void TrophyToast() {
     const float text_x = pos.x + 103.0f * base_scale;
     draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.03f,
                   ImVec2(text_x, pos.y + 19.0f * base_scale),
-                  IM_COL32(255, 255, 255, int(255 * alpha)), "Achievement unlocked");
+                  IM_COL32(255, 255, 255, int(255 * alpha)),
+                  active_toast_preview.load() ? "Achievement preview" : "Achievement unlocked");
     const std::string title = entry.score >= 0 ?
         std::to_string(entry.score) + "G - " + entry.name : entry.name;
     draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.12f,
@@ -1000,6 +1019,7 @@ void LoadTrophies(const std::int64_t* timestamps, unsigned count) {
     toast_queue.clear();
     queued_toasts = 0;
     active_toast = -1;
+    active_toast_preview = false;
 }
 
 void TrophyUnlocked(int id) {
@@ -1010,7 +1030,7 @@ void TrophyUnlocked(int id) {
     }
     {
         std::scoped_lock lock{trophy_mutex};
-        toast_queue.push_back(id);
+        toast_queue.push_back({id, false});
         ++queued_toasts;
     }
 }
