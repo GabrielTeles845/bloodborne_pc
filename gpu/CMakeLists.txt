@@ -259,6 +259,10 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
+add_executable(trophy-data-test EXCLUDE_FROM_ALL ../tests/test_trophy_data.cpp
+    shim/bbport_trophies.cpp)
+target_include_directories(trophy-data-test PRIVATE shadps4 shim)
+target_compile_options(trophy-data-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 if (WIN32)
     add_executable(trophy-history-test EXCLUDE_FROM_ALL ../tests/test_runtime_trophies.c
         ../src/runtime_trophies.c)

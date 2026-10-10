@@ -26,12 +26,14 @@ Starting
   Advanced -> "Check for updates" checks by hand.
 - Advanced -> "Launcher language": English, Russian, Arabic, Spanish, Portuguese, French,
   German, Italian, Polish, Turkish, Chinese, Japanese, Korean (default: the Windows language).
-- In the game, Insert (or L3+R3 on a gamepad) opens the port's menu (upscaler, resolution,
-  effects). Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
+- In the game, Insert (or L3+R3 on a gamepad) opens the guide menu: Home, Achievements,
+  Settings, and Mods/Cheats. Use LB/RB to switch sections, A to select, and B to go back.
+  Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
   Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
-- Earned trophies show a short in-game popup and appear under Achievements (local) in that menu.
-  Unlock history is saved in user\trophies.txt. Names are unavailable until the encrypted
-  trophy metadata can be read, so the menu shows IDs. This does not connect to PSN.
+- Earned trophies show an achievement popup and appear in the guide's Achievements section.
+  Unlock dates are saved in user\trophies.txt. Trophy icons come from your own game folder.
+  Names, descriptions, grades and Gamerscore require your own PS4 trophy key in
+  user\keys.json (see README.md). Without it, the guide shows icons and IDs. No PSN sync.
 
 Data
 - Saves and shader caches: user\ next to Bloodborne.exe (the launcher can pick another folder).

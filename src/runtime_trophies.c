@@ -9,7 +9,7 @@
 
 enum { TROPHY_LIMIT = 128 };
 static pthread_mutex_t trophy_lock = PTHREAD_MUTEX_INITIALIZER;
-static uint8_t unlocked[TROPHY_LIMIT];
+static int64_t unlocked[TROPHY_LIMIT];
 static char trophy_path[1024];
 
 void runtime_trophy_configure(void) {
@@ -29,7 +29,7 @@ void runtime_trophy_configure(void) {
             char extra;
             if (sscanf(line, "%d %lld %c", &id, &when, &extra) == 2 &&
                 id >= 0 && id < TROPHY_LIMIT) {
-                unlocked[id] = 1;
+                unlocked[id] = when > 0 ? when : 1;
             }
         }
         fclose(file);
@@ -45,10 +45,11 @@ int runtime_trophy_unlock(int id) {
         pthread_mutex_unlock(&trophy_lock);
         return 0;
     }
-    unlocked[id] = 1;
+    const int64_t now = (int64_t)time(NULL);
+    unlocked[id] = now;
     FILE *file = trophy_path[0] ? fopen(trophy_path, "a") : NULL;
     if (file) {
-        fprintf(file, "%d %lld\n", id, (long long)time(NULL));
+        fprintf(file, "%d %lld\n", id, (long long)now);
         if (fclose(file) != 0) {
             fprintf(stderr, "Runtime: could not save trophy %d\n", id);
         }
@@ -56,7 +57,7 @@ int runtime_trophy_unlock(int id) {
         fprintf(stderr, "Runtime: could not open local trophy history for trophy %d\n", id);
     }
     printf("Runtime: local trophy %d unlocked\n", id);
-    bbgpu_trophy_unlocked(id);
+    bbgpu_trophy_unlocked(id, now);
     pthread_mutex_unlock(&trophy_lock);
     return 1;
 }

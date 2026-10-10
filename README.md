@@ -102,11 +102,22 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
   The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
   we have not measured its FPS effect on this Windows build.
-- The game's trophy unlock calls now show a six-second in-game notification and save a local
-  unlock history in `user\trophies.txt`. Open **Achievements (local)** in the Insert/L3+R3 menu
-  to see trophies earned with this build. The encrypted game trophy pack does not provide
-  readable names to this port yet, so entries show their trophy ID. Existing progress cannot
-  be reconstructed from old saves. These achievements do not sync to PlayStation Network.
+- Source builds after v1.6.4 show a guide-style Insert/L3+R3 menu with Home, Achievements,
+  Settings, and Mods/Cheats tabs. Trophy unlocks show a queued Xbox-style toast. The port
+  extracts the trophy icons from your own game files and keeps local unlock dates in
+  `user\trophies.txt`. For names, descriptions, grades, secret achievements, and a 1000G
+  score, put **your own** PS4 trophy key in `user\keys.json` using shadPS4's format:
+
+  ```json
+  {"TrophyKeySet":{"ReleaseTrophyKey":"YOUR_32_HEX_CHARACTERS"}}
+  ```
+
+  The key is not included with this port. [shadPS4's setup guide](https://github.com/shadps4-emu/shadPS4/wiki/I.-Quick-start-%5BUsers%5D)
+  explains how to dump it from your own console. Without a key, achievements safely show
+  their trophy IDs and icons with unknown scores. Extracted data stays in `user\trophy_cache`;
+  the key is never copied there. Existing local trophy history is still readable. Old save
+  progress cannot be reconstructed, and nothing syncs to PlayStation Network. The v1.6.4
+  release downloads above still contain the earlier menu until a new release is published.
 
 ## Requirements and notes
 

@@ -33,8 +33,9 @@ int bbgpu_text_input_poll(char *out_utf8, uint64_t size);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int bbgpu_overlay_captures_input(void);
 /* Local trophy notifications. IDs are supplied by the game's trophy API, not PSN. */
-void bbgpu_trophy_load(const uint8_t *unlocked, uint32_t count);
-void bbgpu_trophy_unlocked(int32_t id);
+void bbgpu_trophy_configure(const char *game_dir, const char *user_dir, int32_t language);
+void bbgpu_trophy_load(const int64_t *timestamps, uint32_t count);
+void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned bbgpu_symbol_count(void);
 #ifdef __cplusplus

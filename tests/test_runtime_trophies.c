@@ -8,17 +8,17 @@
 #include <time.h>
 
 static char user_dir[900];
-static uint8_t visible[128];
+static int64_t visible[128];
 static int toasts;
 
 const char *runtime_file_user_dir(void) { return user_dir; }
-void bbgpu_trophy_load(const uint8_t *flags, uint32_t count) {
+void bbgpu_trophy_load(const int64_t *flags, uint32_t count) {
     assert(count == 128);
-    memcpy(visible, flags, count);
+    memcpy(visible, flags, count * sizeof(visible[0]));
 }
-void bbgpu_trophy_unlocked(int32_t id) {
+void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp) {
     assert(id >= 0 && id < 128);
-    visible[id] = 1;
+    visible[id] = timestamp;
     ++toasts;
 }
 void runtime_trophy_configure(void);
@@ -41,6 +41,7 @@ int main(int argc, char **argv) {
     memset(visible, 0, sizeof(visible));
     runtime_trophy_configure();
     assert(visible[7] && visible[127]);
+    assert(visible[7] > 1000000000 && visible[127] > 1000000000);
     assert(runtime_trophy_unlock(7) == 0 && toasts == 2);
     puts("trophy history: persistence, duplicate suppression, and ID bounds passed");
     return 0;

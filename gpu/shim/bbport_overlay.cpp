@@ -9,14 +9,27 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <deque>
+#include <fstream>
+#include <memory>
 #include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include <SDL3/SDL.h>
 #include "bbport_settings.h"
+#include "bbport_trophies.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_vulkan.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+}
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license).
 #ifdef _WIN32
@@ -52,7 +65,9 @@ namespace {
 std::mutex imgui_mutex; // the ImGui context: window thread (input) and present thread
 bool initialized = false;
 std::atomic<bool> menu_open{false};
+std::atomic<std::int64_t> menu_opened_ms{0};
 bool l3_down = false, r3_down = false;
+int active_tab = 0; // Home, Achievements, Settings, Mods / Cheats
 bool dirty = false; // settings changed while open: saved on close
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
@@ -66,8 +81,84 @@ float frame_ms_avg = 0.0f;
 // Trophy events can arrive on the game thread while the present thread draws the overlay.
 std::mutex trophy_mutex;
 std::array<unsigned char, 128> trophies{};
-std::atomic<int> toast_trophy{-1};
-std::atomic<int64_t> toast_until_ms{0};
+std::deque<int> toast_queue;
+std::atomic<int> queued_toasts{0};
+std::atomic<int> active_toast{-1};
+int64_t toast_start_ms = 0; // present thread only
+std::unordered_map<int, std::unique_ptr<ImTextureData>> trophy_icons;
+
+std::vector<unsigned char> DecodePng(const std::filesystem::path& path, int& width, int& height) {
+    std::error_code ec;
+    const auto bytes = std::filesystem::file_size(path, ec);
+    if (ec || bytes == 0 || bytes > 2 * 1024 * 1024) return {};
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return {};
+    std::vector<unsigned char> input(bytes);
+    if (!file.read(reinterpret_cast<char*>(input.data()), std::streamsize(input.size()))) return {};
+    const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_PNG);
+    if (!codec) return {};
+    AVCodecContext* context = avcodec_alloc_context3(codec);
+    AVPacket* packet = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+    std::vector<unsigned char> pixels;
+    if (context && packet && frame && avcodec_open2(context, codec, nullptr) >= 0 &&
+        av_new_packet(packet, int(input.size())) >= 0) {
+        std::memcpy(packet->data, input.data(), input.size());
+        if (avcodec_send_packet(context, packet) >= 0 &&
+            avcodec_receive_frame(context, frame) >= 0 &&
+            frame->width > 0 && frame->height > 0 && frame->width <= 1024 &&
+            frame->height <= 1024) {
+            width = frame->width;
+            height = frame->height;
+            pixels.resize(std::size_t(width) * height * 4);
+            SwsContext* converter = sws_getContext(width, height,
+                static_cast<AVPixelFormat>(frame->format), width, height, AV_PIX_FMT_RGBA,
+                SWS_BILINEAR, nullptr, nullptr, nullptr);
+            if (converter) {
+                std::uint8_t* out[] = {pixels.data()};
+                const int stride[] = {width * 4};
+                if (sws_scale(converter, frame->data, frame->linesize, 0, height, out, stride) != height)
+                    pixels.clear();
+                sws_freeContext(converter);
+            } else pixels.clear();
+        }
+    }
+    av_frame_free(&frame);
+    av_packet_free(&packet);
+    avcodec_free_context(&context);
+    return pixels;
+}
+
+ImTextureRef IconRef(int id) {
+    auto it = trophy_icons.find(id);
+    if (it != trophy_icons.end())
+        return it->second ? it->second->GetTexRef() : ImTextureRef{};
+    const auto entry = BbTrophies::Find(id);
+    int width = 0, height = 0;
+    const auto pixels = entry.icon.empty() ? std::vector<unsigned char>{} :
+                        DecodePng(entry.icon, width, height);
+    if (pixels.empty()) {
+        trophy_icons.emplace(id, nullptr);
+        return {};
+    }
+    auto texture = std::make_unique<ImTextureData>();
+    texture->Create(ImTextureFormat_RGBA32, width, height);
+    std::memcpy(texture->Pixels, pixels.data(), pixels.size());
+    texture->UseColors = true;
+    ImGui::RegisterUserTexture(texture.get());
+    const auto ref = texture->GetTexRef();
+    trophy_icons.emplace(id, std::move(texture));
+    return ref;
+}
+
+ImU32 GradeColor(BbTrophies::Grade grade, float alpha = 1.0f) {
+    const ImVec4 color = grade == BbTrophies::Grade::Bronze ? ImVec4(.77f, .45f, .24f, alpha) :
+                         grade == BbTrophies::Grade::Silver ? ImVec4(.74f, .79f, .84f, alpha) :
+                         grade == BbTrophies::Grade::Gold ? ImVec4(1.0f, .78f, .27f, alpha) :
+                         grade == BbTrophies::Grade::Platinum ? ImVec4(.66f, .83f, 1.0f, alpha) :
+                         ImVec4(.35f, .78f, .42f, alpha);
+    return ImGui::ColorConvertFloat4ToU32(color);
+}
 
 int64_t ClockMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -79,6 +170,10 @@ void SetOpen(bool value) {
         return;
     }
     ImGui::GetIO().MouseDrawCursor = value;
+    if (value) menu_opened_ms = ClockMs();
+    else for (const auto key : {ImGuiKey_GamepadLStickLeft, ImGuiKey_GamepadLStickRight,
+                                ImGuiKey_GamepadLStickUp, ImGuiKey_GamepadLStickDown})
+        ImGui::GetIO().AddKeyAnalogEvent(key, false, 0.0f);
     if (!value && dirty) {
         dirty = false;
         BbSettings::Save();
@@ -168,22 +263,29 @@ void Hint(const char* text) {
     }
 }
 
-void Menu() {
-    auto& s = BbSettings::Get();
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 40.0f * base_scale,
-                                   viewport->WorkPos.y + 40.0f * base_scale),
-                            ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(ImVec2(620.0f * base_scale, 0.0f), ImGuiCond_Appearing);
-    bool keep_open = true;
-    if (!ImGui::Begin("Bloodborne - Settings (Insert / L3+R3)", &keep_open,
-                      ImGuiWindowFlags_NoCollapse)) {
-        ImGui::End();
-        return;
-    }
-    ImGui::Text("%.0f FPS  (%.1f ms)", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
-                frame_ms_avg);
+bool RestartNeeded() {
+    const auto& s = BbSettings::Get();
+    bool restart = s.object_motion != s.startup_object_motion ||
+                   s.model_lod != s.startup_model_lod ||
+                   s.live_resolution != s.startup_live_resolution ||
+                   BbSettings::ResolutionNeedsRestart();
+    for (int e = 0; e < BbSettings::EffectCount; ++e)
+        restart |= s.effects[e] != s.startup_effects[e];
+    return restart;
+}
 
+void RestartPrompt() {
+    if (!RestartNeeded()) return;
+    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
+                       "Changes will apply after restarting the game");
+    if (ImGui::Button("Apply and restart")) {
+        BbSettings::Save();
+        runtime_restart();
+    }
+}
+
+void SettingsTab() {
+    auto& s = BbSettings::Get();
     ImGui::SeparatorText("Temporal upscaling");
     static const char* upscalers[] = {"Off", "FSR 3.1", "FSR 4 (INT8)", "FSR 4.1.1 (INT8)",
                                      "TAA (native anti-aliasing)", "DLSS (NVIDIA RTX)"};
@@ -346,62 +448,192 @@ void Menu() {
         }
         ImGui::EndCombo();
     }
-    for (int e = 0; e < BbSettings::EffectCount; ++e) {
+    for (int e = 0; e < 8; ++e) {
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
     }
     Hint("Effects are applied through game patches at startup (patches/Bloodborne.xml). Motion blur and dynamic shadows can increase GPU load.");
-    Hint("Free camera: hold Cross and press L3 (keyboard: Space + Z). Debug menu: left touchpad / Tab. Requires DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font from the debug-font mod. Right touchpad: Backspace.");
 
-    bool restart = s.object_motion != s.startup_object_motion ||
-                   s.model_lod != s.startup_model_lod ||
-                   s.live_resolution != s.startup_live_resolution ||
-                   BbSettings::ResolutionNeedsRestart();
-    for (int e = 0; e < BbSettings::EffectCount; ++e) {
-        restart |= s.effects[e] != s.startup_effects[e];
-    }
-    if (restart) {
-        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
-                           "Changes will apply after restarting the game");
-        if (ImGui::Button("Apply and restart")) {
-            BbSettings::Save();
-            runtime_restart();
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Achievements (local)")) {
-        std::array<unsigned char, 128> snapshot;
-        {
-            std::scoped_lock lock{trophy_mutex};
-            snapshot = trophies;
-        }
-        const int count = int(std::count(snapshot.begin(), snapshot.end(), 1));
-        ImGui::Text("%d unlocked on this PC", count);
-        if (!count) {
-            ImGui::TextDisabled("New trophies will appear here as you earn them.");
-        } else {
-            if (ImGui::BeginChild("##trophies", ImVec2(0, 150.0f * base_scale), true)) {
-                for (int id = 0; id < int(snapshot.size()); ++id) {
-                    if (snapshot[id]) ImGui::Text("Trophy #%d", id);
-                }
-            }
-            ImGui::EndChild();
-        }
-        ImGui::TextDisabled("Local history only; PlayStation Network is not connected.");
-    }
+    RestartPrompt();
 
     ImGui::SeparatorText("Other");
     Checkbox("Show FPS counter", s.show_fps);
+}
 
+void ModsTab() {
+    auto& s = BbSettings::Get();
+    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Mods / Cheats");
+    ImGui::TextWrapped("These switches use the existing game patches. Changes apply after a restart.");
+    ImGui::SeparatorText("Gameplay and debug");
+    for (int e = 8; e < BbSettings::EffectCount; ++e)
+        Checkbox(BbSettings::Effects[e].label, s.effects[e]);
+    Hint("Free camera: hold Cross/A and press L3 (keyboard: Space + Z). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
+    ImGui::Separator();
+    RestartPrompt();
+    ImGui::TextDisabled("Mod order and the FPS cap are set in the launcher before starting the game.");
+}
+
+std::string UnlockDate(std::int64_t timestamp) {
+    if (timestamp <= 0) return {};
+    const std::time_t when = static_cast<std::time_t>(timestamp);
+    const std::tm* local = std::localtime(&when);
+    if (!local) return {};
+    char date[48]{};
+    std::strftime(date, sizeof(date), "%d %b %Y", local);
+    return date;
+}
+
+void AchievementRow(const BbTrophies::Entry& entry) {
+    const float h = 98.0f * base_scale;
+    const bool earned = entry.unlocked_at > 0;
+    ImGui::PushID(entry.id);
+    ImGui::Selectable("##achievement", false, 0, ImVec2(0, h));
+    const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float icon = 52.0f * base_scale;
+    const ImVec2 icon_min(min.x + 9.0f * base_scale, min.y + (h - icon) * .5f);
+    const ImVec2 icon_max(icon_min.x + icon, icon_min.y + icon);
+    const auto texture = IconRef(entry.id);
+    const ImU32 tint = earned ? IM_COL32_WHITE : IM_COL32(105, 112, 110, 255);
+    if (texture._TexData || texture._TexID != ImTextureID_Invalid)
+        draw->AddImageRounded(texture, icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1),
+                              tint, 8.0f * base_scale);
+    else
+        draw->AddRectFilled(icon_min, icon_max, IM_COL32(40, 48, 46, 255), 8.0f * base_scale);
+    const ImVec2 center(icon_min.x + icon * .5f, icon_min.y + icon * .5f);
+    draw->AddCircle(center, icon * .51f, GradeColor(entry.grade, earned ? 1.0f : .45f),
+                    0, 2.0f * base_scale);
+    const float text_x = icon_max.x + 14.0f * base_scale;
+    const float right_x = max.x - 64.0f * base_scale;
+    const bool secret = entry.hidden && !earned;
+    const std::string name = secret ? "Secret achievement" : entry.name;
+    const std::string detail = secret ? "Unlock to reveal this achievement" : entry.description;
+    const std::string score = secret || entry.score < 0 ? "??G" :
+                              std::to_string(entry.score) + "G";
+    const ImVec4 name_clip(text_x, min.y, right_x - 7.0f * base_scale, max.y);
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                  ImVec2(text_x, min.y + 10.0f * base_scale),
+                  earned ? IM_COL32(240, 247, 241, 255) : IM_COL32(158, 165, 161, 255),
+                  name.c_str(), nullptr, 0.0f, &name_clip);
+    draw->AddText(ImVec2(right_x, min.y + 10.0f * base_scale),
+                  earned ? IM_COL32(126, 224, 135, 255) : IM_COL32(133, 141, 136, 255),
+                  score.c_str());
+    if (!detail.empty())
+        draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * .83f,
+                      ImVec2(text_x, min.y + 34.0f * base_scale),
+                      earned ? IM_COL32(180, 192, 183, 255) : IM_COL32(112, 122, 115, 255),
+                      detail.c_str(), nullptr, right_x - text_x - 7.0f * base_scale);
+    if (earned) {
+        const auto date = UnlockDate(entry.unlocked_at);
+        draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * .78f,
+                      ImVec2(text_x, min.y + 76.0f * base_scale),
+                      IM_COL32(137, 209, 145, 255), date.c_str());
+    }
+    draw->AddLine(ImVec2(min.x, max.y), ImVec2(max.x, max.y),
+                  IM_COL32(80, 93, 83, 130));
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::TextUnformatted(name.c_str());
+        if (!detail.empty()) ImGui::TextWrapped("%s", detail.c_str());
+        ImGui::EndTooltip();
+    }
+    ImGui::PopID();
+}
+
+void AchievementsTab() {
+    auto entries = BbTrophies::Entries();
+    const int total = int(entries.size());
+    int earned = 0;
+    for (const auto& entry : entries) earned += entry.unlocked_at > 0;
+    const int score = BbTrophies::EarnedScore();
+    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Achievements");
+    if (BbTrophies::TotalScore() == 1000)
+        ImGui::Text("Gamerscore: %d / 1000G", score);
+    else
+        ImGui::Text("Gamerscore: -- / 1000G");
+    ImGui::Text("%d of %d unlocked", earned, total);
+    ImGui::ProgressBar(total ? float(earned) / total : 0.0f,
+                       ImVec2(-1, 9.0f * base_scale), "");
+    if (!BbTrophies::HasMetadata())
+        ImGui::TextWrapped("Names and scores need the trophy key from your own PS4. Icons and local unlock history still work.");
+    ImGui::Separator();
+    if (entries.empty()) {
+        ImGui::TextDisabled("No trophy pack found in the selected game folder.");
+        return;
+    }
+    ImGuiListClipper clipper;
+    clipper.Begin(total, 98.0f * base_scale + ImGui::GetStyle().ItemSpacing.y);
+    while (clipper.Step())
+        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+            AchievementRow(entries[i]);
+    ImGui::TextDisabled("Local achievements only. No online account is connected.");
+}
+
+void HomeTab() {
+    const auto entries = BbTrophies::Entries();
+    const int earned = int(std::count_if(entries.begin(), entries.end(),
+                                         [](const auto& e) { return e.unlocked_at > 0; }));
+    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Bloodborne");
+    ImGui::Text("%.0f FPS  |  %.1f ms", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
+                frame_ms_avg);
+    ImGui::Separator();
+    ImGui::Text("%d of %d achievements unlocked", earned, int(entries.size()));
+    if (BbTrophies::TotalScore() == 1000)
+        ImGui::Text("%d / 1000G", BbTrophies::EarnedScore());
+    if (ImGui::Button("View achievements", ImVec2(-1, 0))) active_tab = 1;
+    if (ImGui::Button("Settings", ImVec2(-1, 0))) active_tab = 2;
+    if (ImGui::Button("Mods / Cheats", ImVec2(-1, 0))) active_tab = 3;
     ImGui::Spacing();
-    if (ImGui::Button("Close")) {
-        keep_open = false;
+    ImGui::TextDisabled("Insert or L3+R3 closes the guide.");
+}
+
+void Menu() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float appear = std::clamp(float(ClockMs() - menu_opened_ms.load()) / 180.0f,
+                                    0.0f, 1.0f);
+    ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
+        ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
+        IM_COL32(0, 0, 0, int(125 * appear)));
+    const float width = std::min(760.0f * base_scale, viewport->WorkSize.x * .78f);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x - (1.0f - appear) *
+                                   24.0f * base_scale, viewport->WorkPos.y));
+    ImGui::SetNextWindowSize(ImVec2(width, viewport->WorkSize.y));
+    ImGui::SetNextWindowBgAlpha(.94f * appear);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, .6f + .4f * appear);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(18.0f * base_scale, 20.0f * base_scale));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.065f, .075f, .072f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.15f, .34f, .18f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.19f, .42f, .22f, 1));
+    ImGui::Begin("##bloodborne_guide", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextColored(ImVec4(.43f, .92f, .5f, 1), "BLOODBORNE GUIDE");
+    ImGui::Separator();
+    const float nav_width = 150.0f * base_scale;
+    ImGui::BeginChild("##guide_nav", ImVec2(nav_width, -28.0f * base_scale), false);
+    const char* tabs[] = {"Home", "Achievements", "Settings", "Mods / Cheats"};
+    for (int i = 0; i < 4; ++i) {
+        ImGui::PushStyleColor(ImGuiCol_Button, i == active_tab ?
+            ImVec4(.18f, .37f, .21f, 1) : ImVec4(.10f, .12f, .11f, 1));
+        if (ImGui::Button(tabs[i], ImVec2(-1, 42.0f * base_scale))) active_tab = i;
+        ImGui::PopStyleColor();
     }
+    ImGui::EndChild();
     ImGui::SameLine();
-    ImGui::TextDisabled("Settings are saved to bbport.ini");
-    ImGui::End();
-    if (!keep_open) {
-        SetOpen(false);
+    ImGui::BeginChild("##guide_content", ImVec2(0, -28.0f * base_scale), false);
+    switch (active_tab) {
+    case 0: HomeTab(); break;
+    case 1: AchievementsTab(); break;
+    case 2: SettingsTab(); break;
+    case 3: ModsTab(); break;
     }
+    ImGui::EndChild();
+    ImGui::Separator();
+    ImGui::TextDisabled("D-pad / stick: move    A: select    B: back    LB/RB: tabs");
+    ImGui::End();
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(3);
 }
 
 // The game's text dialog: what is typed, and how to finish (keyboard or controller).
@@ -452,18 +684,66 @@ void FpsCounter() {
 }
 
 void TrophyToast() {
+    const int64_t now = ClockMs();
+    if (active_toast.load() < 0) {
+        std::scoped_lock lock{trophy_mutex};
+        if (toast_queue.empty()) return;
+        active_toast = toast_queue.front();
+        toast_queue.pop_front();
+        --queued_toasts;
+        toast_start_ms = now;
+    }
+    constexpr int64_t kFadeInMs = 320, kHoldMs = 5000, kFadeOutMs = 420;
+    int64_t elapsed = now - toast_start_ms;
+    if (elapsed >= kFadeInMs + kHoldMs + kFadeOutMs) {
+        active_toast = -1;
+        if (queued_toasts.load() > 0) TrophyToast();
+        return;
+    }
+    const float appear = std::clamp(float(elapsed) / kFadeInMs, 0.0f, 1.0f);
+    const float disappear = std::clamp(float(kFadeInMs + kHoldMs + kFadeOutMs - elapsed) /
+                                            kFadeOutMs, 0.0f, 1.0f);
+    const float alpha = std::min(appear, disappear);
+    const auto entry = BbTrophies::Find(active_toast.load());
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 12.0f * base_scale,
-                                   viewport->WorkPos.y + 65.0f * base_scale),
-                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.88f);
+    const float w = std::min(520.0f * base_scale, viewport->WorkSize.x - 24.0f * base_scale);
+    const float h = 84.0f * base_scale;
+    const float slide = (1.0f - appear) * 28.0f * base_scale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * .5f - w * .5f,
+                                   viewport->WorkPos.y + viewport->WorkSize.y - h -
+                                       30.0f * base_scale + slide));
+    ImGui::SetNextWindowSize(ImVec2(w, h));
+    ImGui::SetNextWindowBgAlpha(.91f * alpha);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, h * .5f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("##trophy_toast", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "Achievement unlocked");
-    ImGui::Text("Trophy #%d", toast_trophy.load());
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImVec2 pos = ImGui::GetWindowPos();
+    const float icon = 54.0f * base_scale;
+    const ImVec2 icon_min(pos.x + 15.0f * base_scale, pos.y + (h - icon) * .5f);
+    const ImVec2 icon_max(icon_min.x + icon, icon_min.y + icon);
+    const ImVec2 center((icon_min.x + icon_max.x) * .5f, (icon_min.y + icon_max.y) * .5f);
+    const auto texture = IconRef(entry.id);
+    if (texture._TexData || texture._TexID != ImTextureID_Invalid)
+        draw->AddImageRounded(texture, icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1),
+                              IM_COL32(255, 255, 255, int(255 * alpha)), icon * .5f);
+    else
+        draw->AddCircleFilled(center, icon * .48f, IM_COL32(37, 50, 42, int(255 * alpha)));
+    draw->AddCircle(center, icon * .5f, GradeColor(entry.grade, alpha), 0, 3.0f * base_scale);
+    const float text_x = icon_max.x + 15.0f * base_scale;
+    draw->AddText(ImVec2(text_x, pos.y + 16.0f * base_scale),
+                  IM_COL32(158, 235, 164, int(255 * alpha)), "Achievement unlocked");
+    const std::string title = entry.score >= 0 ?
+        std::to_string(entry.score) + "G - " + entry.name : entry.name;
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                  ImVec2(text_x, pos.y + 42.0f * base_scale),
+                  IM_COL32(255, 255, 255, int(255 * alpha)), title.c_str(), nullptr,
+                  w - (text_x - pos.x) - 18.0f * base_scale);
     ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 } // namespace
@@ -510,7 +790,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     info.Device = instance.GetDevice();
     info.QueueFamily = instance.GetGraphicsQueueFamilyIndex();
     info.Queue = instance.GetGraphicsQueue();
-    info.DescriptorPoolSize = 16;
+    info.DescriptorPoolSize = 256; // font atlas plus the game's trophy icons
     info.MinImageCount = std::max(image_count, 2u);
     info.ImageCount = std::max(image_count, 2u);
     info.UseDynamicRendering = true;
@@ -586,8 +866,35 @@ bool HandleEvent(const SDL_Event& event) {
         if (!is_open) {
             return false;
         }
+        if (button == SDL_GAMEPAD_BUTTON_EAST && down) {
+            if (active_tab == 0) SetOpen(false);
+            else active_tab = 0;
+            return true;
+        }
+        if (button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ||
+            button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) {
+            if (down) active_tab = (active_tab +
+                (button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER ? 1 : 3)) % 4;
+            return true;
+        }
         if (const ImGuiKey key = KeyFromGamepad(button); key != ImGuiKey_None) {
             io.AddKeyEvent(key, down);
+        }
+        return true;
+    }
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+        if (!is_open) return false;
+        const float value = std::clamp(float(event.gaxis.value) / 32767.0f, -1.0f, 1.0f);
+        const auto analog = [&](ImGuiKey key, float magnitude) {
+            const float amount = std::clamp((magnitude - .24f) / .76f, 0.0f, 1.0f);
+            io.AddKeyAnalogEvent(key, amount > 0.0f, amount);
+        };
+        if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX) {
+            analog(ImGuiKey_GamepadLStickLeft, -value);
+            analog(ImGuiKey_GamepadLStickRight, value);
+        } else if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+            analog(ImGuiKey_GamepadLStickUp, -value);
+            analog(ImGuiKey_GamepadLStickDown, value);
         }
         return true;
     }
@@ -635,7 +942,7 @@ bool HandleEvent(const SDL_Event& event) {
 
 bool Visible() {
     return initialized && (menu_open || text_entry_active || BbSettings::Get().show_fps ||
-                           ClockMs() < toast_until_ms.load());
+                           active_toast.load() >= 0 || queued_toasts.load() > 0);
 }
 
 bool CapturesInput() {
@@ -649,14 +956,16 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
     text_entry_text = text;
 }
 
-void LoadTrophies(const unsigned char* unlocked, unsigned count) {
+void LoadTrophies(const std::int64_t* timestamps, unsigned count) {
     std::scoped_lock lock{trophy_mutex};
     trophies.fill(0);
-    if (unlocked) {
+    if (timestamps) {
         for (unsigned i = 0; i < std::min<unsigned>(count, trophies.size()); ++i)
-            trophies[i] = unlocked[i] ? 1 : 0;
+            trophies[i] = timestamps[i] ? 1 : 0;
     }
-    toast_until_ms = 0;
+    toast_queue.clear();
+    queued_toasts = 0;
+    active_toast = -1;
 }
 
 void TrophyUnlocked(int id) {
@@ -665,8 +974,11 @@ void TrophyUnlocked(int id) {
         std::scoped_lock lock{trophy_mutex};
         trophies[id] = 1;
     }
-    toast_trophy = id;
-    toast_until_ms = ClockMs() + 6000;
+    {
+        std::scoped_lock lock{trophy_mutex};
+        toast_queue.push_back(id);
+        ++queued_toasts;
+    }
 }
 
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
@@ -704,7 +1016,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     if (text_entry_active) {
         TextEntryBox();
     }
-    if (ClockMs() < toast_until_ms.load()) {
+    if (active_toast.load() >= 0 || queued_toasts.load() > 0) {
         TrophyToast();
     }
     ImGui::Render();

@@ -1,6 +1,7 @@
 #include "bbport_write_log.h"
 // bbport: glue between the C loader and the vendored shadPS4 video core.
 #include "bbport_overlay.h"
+#include "bbport_trophies.h"
 #include "bbport_settings.h"
 #include "bbport_copy.h"
 #ifndef _WIN32
@@ -333,11 +334,17 @@ extern "C" int bbgpu_overlay_captures_input(void) {
     return BbOverlay::CapturesInput() ? 1 : 0;
 }
 
-extern "C" void bbgpu_trophy_load(const uint8_t* unlocked, uint32_t count) {
-    BbOverlay::LoadTrophies(unlocked, count);
+extern "C" void bbgpu_trophy_configure(const char* game_dir, const char* user_dir, int32_t language) {
+    BbTrophies::Configure(game_dir ? game_dir : "", user_dir ? user_dir : "", language);
 }
 
-extern "C" void bbgpu_trophy_unlocked(int32_t id) {
+extern "C" void bbgpu_trophy_load(const int64_t* timestamps, uint32_t count) {
+    BbTrophies::LoadUnlocks(timestamps, count);
+    BbOverlay::LoadTrophies(timestamps, count);
+}
+
+extern "C" void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp) {
+    BbTrophies::Unlock(id, timestamp);
     BbOverlay::TrophyUnlocked(id);
 }
 

@@ -425,6 +425,9 @@ int main(int argc, char **argv) {
     }
     if (app0) {
         runtime_file_configure(app0, user_dir ? user_dir : "user");
+        const char *language_env = getenv("BB_LANGUAGE");
+        bbgpu_trophy_configure(app0, runtime_file_user_dir(),
+                               language_env ? atoi(language_env) : 1);
         runtime_trophy_configure();
         char sfo[4096], id[16]="";
         snprintf(sfo,sizeof(sfo),"%s/sce_sys/param.sfo",app0);
