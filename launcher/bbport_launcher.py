@@ -89,7 +89,7 @@ DEFAULTS = {
 
 # bbport.ini keys the launcher edits; the rest of the file is kept.
 INI_DEFAULTS = {
-    "upscaler": "fsr4",
+    "upscaler": "dlss",
     "preset": "4",
     "sharpen": "1",
     "sharpness": "0.50",
