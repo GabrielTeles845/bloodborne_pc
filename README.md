@@ -134,8 +134,8 @@ fork's full package in a **new** folder:
 This works for Supermedo's launcher and other bbport-derived launchers that use the same
 extracted game folder. A separate shadPS4 installation can use the same game files, but its
 save layout may differ; keep the old saves backed up and check the new launcher's **Saves
-folder** before copying anything. The package includes Xbox button prompts; switch between
-Xbox and original PlayStation buttons on the launcher's **Mods** page.
+folder** before copying anything. The package includes Xbox button prompts, on by default;
+switch between Xbox and original PlayStation buttons on the launcher's **Controller** page.
 
 ## What's changed
 
@@ -148,6 +148,9 @@ Xbox and original PlayStation buttons on the launcher's **Mods** page.
   v1.6.6 executable has not repeated that character-creation test. The earlier preview
   problem's cause remains unisolated.
 - The full package has a launcher that checks this fork for updates.
+- The 1.6.7 package includes the Xbox button prompts (every build now packages them from
+  `packaging/windows/mods`). Its updater adds them to an existing installation if that mod
+  folder is missing, while leaving existing mods and settings alone.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
   readiness checks still apply. This is on by default for supported CUSA03173 1.09 images;
   set `BB_RESPAWN_DELAY_FIX=0` in the launcher's Advanced environment overrides to restore

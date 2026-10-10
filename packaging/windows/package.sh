@@ -93,12 +93,15 @@ ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
-# Optional separately licensed controller prompt mod, supplied by the release packager.
-if [[ -n ${BB_XBOX_PROMPTS_DIR:-} ]]; then
-    [[ -d $BB_XBOX_PROMPTS_DIR ]] || { echo "Xbox prompts folder not found: $BB_XBOX_PROMPTS_DIR" >&2; exit 1; }
-    mkdir -p "$dest/mods"
-    cp -r "$BB_XBOX_PROMPTS_DIR" "$dest/mods/"
-fi
+# Xbox button prompts by Dommo (nexusmods.com/bloodborne/mods/30, redistribution allowed with
+# credit), shipped in every package so a fresh download has them. BB_XBOX_PROMPTS_DIR overrides
+# the copy kept in packaging/windows/mods.
+BB_XBOX_PROMPTS_DIR=${BB_XBOX_PROMPTS_DIR:-"packaging/windows/mods/Xbox 360 Prompts (Elden Ring)"}
+[[ -d $BB_XBOX_PROMPTS_DIR ]] || { echo "Xbox prompts folder not found: $BB_XBOX_PROMPTS_DIR" >&2; exit 1; }
+mkdir -p "$dest/mods"
+cp -r "$BB_XBOX_PROMPTS_DIR" "$dest/mods/"
+[[ -f "$dest/mods/Xbox 360 Prompts (Elden Ring)/menu/common.tpf.dcx" ]] ||
+    { echo "The package is missing the Xbox prompt texture." >&2; exit 1; }
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 mkdir -p "$dest/docs"
 cp -r docs/images "$dest/docs/"

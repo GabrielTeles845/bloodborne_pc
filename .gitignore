@@ -24,3 +24,5 @@ perf.data
 mods.json
 patches.json
 !launcher/bloodborne.png
+# Player mods folder for source runs (packages take the Xbox prompts from packaging/windows/mods)
+/mods/
