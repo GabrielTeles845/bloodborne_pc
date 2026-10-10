@@ -10,6 +10,14 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 # Frame pointers keep the loader's thread dumps (watchdog, SIGUSR2 sampling) walkable.
 add_compile_options(-fno-omit-frame-pointer)
+# Newer libc++ (MSYS2 clang 23) no longer includes the C library headers transitively, and the
+# vendored code (shadPS4, sirit, the FSR SDK) relies on it: std::abort, _countof, swprintf_s,
+# log2, placement new. Include them everywhere instead of patching every vendored file.
+if (WIN32)
+    foreach(header stdlib.h wchar.h cstdlib cstring cmath new)
+        add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${header}>")
+    endforeach()
+endif()
 
 # bbport: link-time optimization (BB_LTO, default on) and profile-guided optimization
 # (BB_PGO: off, generate = instrumented build writing into BB_PGO_DIR, use = build with that

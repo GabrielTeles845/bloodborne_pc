@@ -1,0 +1,2 @@
+# git apply needs patches byte for byte; a CRLF checkout (core.autocrlf) breaks them.
+*.patch text eol=lf
