@@ -193,15 +193,14 @@ static const Option PRESETS[] = {{0, 117110}, {1, 117111}, {2, 117112}, {3, 1171
 static const Option OUTPUTS[] = {{0, 125100}, {1, 125101}, {2, 125102}, {3, 125103}};
 static const Option LIVE[] = {{-1, 125110}, {0, 125111}, {1, 125112}};
 static const Option LODS[] = {{-2, 125120}, {0, 125121}, {1, 125122}, {2, 125123}};
-static const Option MOUSE_SPEEDS[] = {{5, 116100}, {7, 116101}, {10, 116102}, {13, 116103},
-                                      {16, 116104}, {20, 116105}, {30, 116106}};
 #define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 #define TOGGLE_ROW(key, id) {key, id, TOGGLE, NULL, 0, 0, 0, 0, {{0, 0}}, 0, {{0}}, {0}}
 #define PICK_ROW(key, id, list) {key, id, PICK, list, COUNT(list), 0, 0, 0, {{0, 0}}, 0, {{0}}, {0}}
 
-/* Pick lists last in every section (their drop-down covers what is below them). A section is
- * at most 5 rows with a pick list, 6 without: a 6-row section ending in a pick list (PC Settings
- * with the mouse rows) crashed the menu movie on moving down through it. */
+/* Pick lists last in every section (their drop-down covers what is below them). Growing PC
+ * Settings or PC Gameplay past these rows (for the mouse settings) crashed the menu movie
+ * (guest 0xdcf79/0xd67bb) even with the engine hooks off: the mouse settings stay in the
+ * launcher and bbport.ini until that is understood. */
 static Row g_graphics[] = {
     TOGGLE_ROW("sharpen", 117000), TOGGLE_ROW("jitter", 117001), TOGGLE_ROW("object_motion", 117002),
     PICK_ROW("upscaler", 117003, UPSCALERS), PICK_ROW("preset", 117004, PRESETS),
@@ -218,12 +217,11 @@ static Row g_effects[] = {
 static Row g_settings[] = {
     TOGGLE_ROW("skip_intro", 116004), TOGGLE_ROW("effect_ssr", 116008),
     TOGGLE_ROW("debug_camera", 116009), TOGGLE_ROW("debug_menu", 116010),
-    PICK_ROW("mouse_sensitivity", 116012, MOUSE_SPEEDS),
 };
 static Row g_gameplay[] = {
     TOGGLE_ROW("tweak_no_rally", 126000), TOGGLE_ROW("tweak_camera_distance", 126001),
     TOGGLE_ROW("tweak_no_camera_rotation", 126002), TOGGLE_ROW("tweak_easy_run", 126003),
-    TOGGLE_ROW("tweak_ragdoll", 126004), TOGGLE_ROW("mouse_camera", 116011),
+    TOGGLE_ROW("tweak_ragdoll", 126004),
 };
 static Row g_cheats[] = {
     TOGGLE_ROW("cheat_no_death", 127000), TOGGLE_ROW("cheat_stealth", 127001),
