@@ -5,7 +5,7 @@
 # Environment, ... 115000 Language. Inside a block, N is a row and N+20 is the screen title;
 # N+100.. are a row's choices. The PC menu takes 116000 PC Settings, 117000 PC Graphics,
 # 120000 PC Effects, 124000 PC Enhancements, 125000 PC Display, 126000 PC Gameplay and
-# 127000 PC Cheats, and 110006..110017 for the System rows that open them; all are unused in
+# 127000 PC Cheats and 128000 Achievements, and 110006..110018 for the System rows that open them; all are unused in
 # the shipped bundle.
 # Ids 920000..929999 are dialog text (groups 78 and 204, yes/no questions); 122000 is the
 # title menu's Quit Game.
@@ -21,6 +21,7 @@
 110014	PC Display	Fullscreen, resolution, detail and the FPS counter.
 110015	PC Gameplay	Gameplay tweaks. Restart to apply.
 110016	PC Cheats	Cheats for this session. Restart to apply.
+110018	Achievements	Your achievements, unlock dates and Gamerscore.
 110017	Restart to Apply	Restart the game so changed settings take effect.
 116020	PC Settings
 116004	Skip Company Logos	Skips the logos and intro movie. Applies next start.
@@ -81,6 +82,13 @@
 127003	Rally Never Decays	Regained health stays available. Restart.
 127004	Enemy Control	Control the targeted enemy. Restart to apply.
 124020	PC Enhancements
+128020	Achievements
+128000	Achievements	Left and right show more achievements.
+128001	Achievement
+128002	Achievement
+128003	Achievement
+128004	Achievement
+128005	Achievement
 124001	Hunter's Dream Mirror	Dream mirror changes appearance. Restart to apply.
 124003	Two Invaders	Two invaders in late areas, if all players use it.
 124002	Rebirth at the Altar	Altar of Despair resets levels. Restart to apply.

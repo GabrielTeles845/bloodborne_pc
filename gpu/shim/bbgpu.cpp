@@ -2,6 +2,7 @@
 // bbport: glue between the C loader and the vendored shadPS4 video core.
 #include "bbport_overlay.h"
 #include "bbport_trophies.h"
+#include <cstdio>
 #include "bbport_settings.h"
 #include "bbport_copy.h"
 #ifndef _WIN32
@@ -341,6 +342,30 @@ extern "C" void bbgpu_trophy_configure(const char* game_dir, const char* user_di
 extern "C" void bbgpu_trophy_load(const int64_t* timestamps, uint32_t count) {
     BbTrophies::LoadUnlocks(timestamps, count);
     BbOverlay::LoadTrophies(timestamps, count);
+}
+
+extern "C" int bbgpu_achievement_count(void) {
+    return int(BbTrophies::Entries().size());
+}
+
+extern "C" int bbgpu_achievement_get(int index, BbAchievement* out) {
+    const auto entries = BbTrophies::Entries();
+    if (!out || index < 0 || index >= int(entries.size())) return 0;
+    const auto& e = entries[index];
+    *out = BbAchievement{};
+    out->id = e.id;
+    out->hidden = e.hidden;
+    out->score = e.score;
+    out->unlocked_at = e.unlocked_at;
+    std::snprintf(out->name, sizeof(out->name), "%s", e.name.c_str());
+    std::snprintf(out->description, sizeof(out->description), "%s", e.description.c_str());
+    return 1;
+}
+
+extern "C" int bbgpu_achievement_score(int* earned, int* total) {
+    *earned = BbTrophies::EarnedScore();
+    *total = BbTrophies::TotalScore();
+    return *total == 1000;
 }
 
 extern "C" void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp) {

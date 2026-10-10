@@ -50,7 +50,13 @@ class FormatTests(unittest.TestCase):
         rows = m.read_messages()
         arrays = dict(re.findall(r'static Row (g_\w+)\[\] = \{(.*?)\n\};', runtime, re.S))
         sections = re.findall(r'\{"(\w+)", (\d+), (g_\w+), COUNT\(g_\w+\)\}', runtime)
-        self.assertEqual(sorted(n for n, *_ in sections), sorted(n for n, *_ in m.SECTION_ROWS))
+        # Achievements is built by its own handler: six text rows (ACH_ROWS) from 128000.
+        self.assertIn('"PCAchieve"', runtime)
+        self.assertIn('ACH_ROWS = 6', runtime)
+        self.assertIn(('PCAchieve', 128020, 6), m.SECTION_ROWS)
+        for row_id in range(128000, 128006):
+            self.assertIn(row_id, rows)
+        self.assertEqual(sorted([n for n, *_ in sections] + ['PCAchieve']), sorted(n for n, *_ in m.SECTION_ROWS))
         counts = {name: rows_n for name, _title, rows_n in m.SECTION_ROWS}
         for name, system, array in sections:
             ids = [int(i) for i in re.findall(r'_ROW\("\w+", (\d+)', arrays[array])]

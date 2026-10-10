@@ -15,6 +15,8 @@ typedef bb_jmp_buf sigjmp_buf;
 extern __thread sigjmp_buf *runtime_fault_recover;
 /* Restarts the game (in-game settings menu, render resolution change). */
 void runtime_restart(void);
+/* The pad buttons the game was last given (BTN_* bits of runtime_pad.c). */
+uint32_t runtime_pad_buttons(void);
 #define ABI __attribute__((sysv_abi))
 typedef void (ABI *GuestCallback)(void);
 void runtime_start(uint64_t capabilities);

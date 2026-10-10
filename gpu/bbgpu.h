@@ -47,6 +47,20 @@ int bbgpu_setting_default(const char *key, int *value);
 void bbgpu_setting_set(const char *key, int value);
 /* Whether this GPU runs the upscaler (BbSettings::Upscaler index). */
 int bbgpu_upscaler_supported(int upscaler);
+/* Local achievements (BbTrophies: the game's own trophy pack and the unlock history), read
+ * only, for the in-game PC menu. Names are empty without the player's trophy key. */
+typedef struct {
+    int32_t id;
+    int32_t hidden;       /* a secret one: shown once earned */
+    int32_t score;        /* Gamerscore, -1 when the grade is not known */
+    int64_t unlocked_at;  /* Unix seconds, 0 while locked */
+    char name[128];       /* UTF-8 */
+    char description[256];
+} BbAchievement;
+int bbgpu_achievement_count(void);
+int bbgpu_achievement_get(int index, BbAchievement *out);
+/* Earned and total Gamerscore; returns 0 while the total is not the full 1000. */
+int bbgpu_achievement_score(int *earned, int *total);
 /* Ends the game as closing its window does (the title menu's Quit Game). */
 void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */

@@ -273,9 +273,17 @@ static void replay_sample(PadData *d) {
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
+/* The buttons the game was last given (runtime_pad_buttons: the in-game PC menu's paging). */
+static volatile uint32_t delivered_buttons;
+uint32_t runtime_pad_buttons(void) { return delivered_buttons; }
+static void sample_game(PadData *d);
 static void sample(PadData *d) {
+    sample_game(d);
+    delivered_buttons=d->buttons;
+}
+static void sample_game(PadData *d) {
     sample_host(d);
-    if (bbgpu_overlay_captures_input()) { hold_after_capture=1; return; }
+    if (bbgpu_overlay_captures_input()) { hold_after_capture=1; d->buttons=0; return; }
     record_sample(d);
     read_inject();
     replay_sample(d);

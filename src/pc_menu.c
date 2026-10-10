@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* Binary Ninja addresses of CUSA03173 1.09 (eboot at 0x400000). */
 enum {
@@ -402,9 +403,12 @@ static void set_blank(int from) {
     fn(LIST_REDRAW)(ptr(g_open.dialog + DIALOG_ROWS), 0, 0, 0, 0, 0);
 }
 
+static void ach_list_update(unsigned char *comp);  /* the Achievements section's paging */
+
 /* Every menu list's update: a pick list taking the input blanks the rows under it; the rows
- * taking it back restore them. Then the game's own update. */
+ * taking it back restore them. Achievements turns its pages. Then the game's own update. */
 static BB_GUEST_ABI int64_t list_update(unsigned char *comp, unsigned char *input) {
+    if (input && *input) ach_list_update(comp);
     if (g_open.dialog && input && *input) {
         if (!open_alive()) {
             g_open.dialog = NULL;
@@ -479,6 +483,216 @@ static const void *const SECTION_ROWS[] = {
 };
 _Static_assert(sizeof(SECTION_ROWS) / sizeof(SECTION_ROWS[0]) == sizeof(g_sections) / sizeof(g_sections[0]),
                "one row function per section");
+
+/* --- Achievements -------------------------------------------------------------------------- */
+/* A section of six one-entry choice rows whose caption, line help and value are the menu's own
+ * buffers, as bbhost's Key Bindings screen does it: a summary row, then five achievements. Left
+ * or Right on any row turns the page, which refills the buffers and redraws the lists - the
+ * rows draw the raw pointers they were built with. Read only: the source of truth is
+ * BbTrophies (the game's own trophy pack and the local unlock history). */
+enum {
+    ACH_ROWS = 6, ACH_PER_PAGE = 5, ACH_TEXT = 96, ACH_VALUE = 32,
+    CHOICE_APPEND = 0x1f2c200,  /* (two-entry container, entry*) */
+    CHOICE_LIST = 0xa0, CHOICE_VALUE = 0x360, DEFAULTS_ROW_ID = 0x9d8a,
+    ROW_ACHIEVEMENTS = 110018, ACH_FIRST_ROW = 128000,
+    PAD_RIGHT = 0x20, PAD_LEFT = 0x80,
+};
+static struct {
+    unsigned char *dialog;
+    unsigned char *widget[ACH_ROWS];
+    uint8_t value[ACH_ROWS];
+    uint16_t label[ACH_ROWS][ACH_TEXT], help[ACH_ROWS][ACH_TEXT], text[ACH_ROWS][ACH_VALUE];
+    int page;
+    uint32_t pad_was;
+} g_ach;
+
+/* UTF-8 into UTF-16, cut to fit `n` units (with "..." when cut). */
+static void to_utf16(uint16_t *out, size_t n, const char *in) {
+    size_t o = 0;
+    const unsigned char *s = (const unsigned char *)in;
+    while (*s && o + 1 < n) {
+        uint32_t c = *s++;
+        int extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+        c &= extra == 3 ? 0x07 : extra == 2 ? 0x0f : extra == 1 ? 0x1f : 0x7f;
+        for (; extra && (*s & 0xc0) == 0x80; --extra) c = (c << 6) | (*s++ & 0x3f);
+        if (c >= 0x10000) {
+            if (o + 2 >= n) break;
+            c -= 0x10000;
+            out[o++] = (uint16_t)(0xd800 + (c >> 10));
+            out[o++] = (uint16_t)(0xdc00 + (c & 0x3ff));
+        } else {
+            out[o++] = (uint16_t)c;
+        }
+    }
+    if (*s && n > 4) {
+        o = o < n - 4 ? o : n - 4;
+        out[o++] = '.', out[o++] = '.', out[o++] = '.';
+    }
+    out[o] = 0;
+}
+
+static void ach_fill(int page) {
+    const int count = bbgpu_achievement_count();
+    const int pages = count ? (count + ACH_PER_PAGE - 1) / ACH_PER_PAGE : 1;
+    g_ach.page = ((page % pages) + pages) % pages;
+    int earned = 0;
+    BbAchievement a;
+    for (int i = 0; i < count; ++i) earned += bbgpu_achievement_get(i, &a) && a.unlocked_at > 0;
+    char line[256];
+    to_utf16(g_ach.label[0], ACH_TEXT, "Achievements");
+    snprintf(line, sizeof(line), "Page %d / %d", g_ach.page + 1, pages);
+    to_utf16(g_ach.text[0], ACH_VALUE, line);
+    int score = 0, total = 0;
+    if (!count)
+        snprintf(line, sizeof(line), "No trophy pack in the game folder.");
+    else if (bbgpu_achievement_score(&score, &total))
+        snprintf(line, sizeof(line), "%d of %d unlocked (%d%%), %d / 1000G", earned, count, earned * 100 / count, score);
+    else
+        snprintf(line, sizeof(line), "%d of %d unlocked (%d%%). Left/right: more", earned, count, earned * 100 / count);
+    to_utf16(g_ach.help[0], 53, line);
+    for (int r = 1; r < ACH_ROWS; ++r) {
+        const int index = g_ach.page * ACH_PER_PAGE + r - 1;
+        if (index >= count || !bbgpu_achievement_get(index, &a)) {
+            g_ach.label[r][0] = g_ach.help[r][0] = g_ach.text[r][0] = 0;
+            continue;
+        }
+        const int got = a.unlocked_at > 0, secret = a.hidden && !got;
+        if (secret) {
+            to_utf16(g_ach.label[r], ACH_TEXT, "Secret Achievement");
+            to_utf16(g_ach.help[r], 53, "Unlock it to reveal it.");
+        } else if (!a.name[0]) {
+            snprintf(line, sizeof(line), "Achievement %d", a.id + 1);
+            to_utf16(g_ach.label[r], ACH_TEXT, line);
+            to_utf16(g_ach.help[r], 53, "Names need your trophy key (launcher, Game).");
+        } else {
+            to_utf16(g_ach.label[r], 41, a.name);
+            to_utf16(g_ach.help[r], 53, a.description);  /* the help bar shows about 52 */
+        }
+        if (got) {
+            const time_t when = (time_t)a.unlocked_at;
+            const struct tm *local = localtime(&when);
+            if (!local || !strftime(line, sizeof(line), "%d %b %Y", local)) snprintf(line, sizeof(line), "Unlocked");
+        } else {
+            snprintf(line, sizeof(line), "Locked");
+        }
+        to_utf16(g_ach.text[r], ACH_VALUE, line);
+    }
+}
+
+/* A row whose caption, help and only value are the menu's own text. */
+static void add_text_row(void *dialog, int r) {
+    Captions captions;
+    captions_init(&captions, ACH_FIRST_ROW + (uint32_t)r);
+    wr64(captions.buf, ptr(g_ach.label[r]));
+    wr64(captions.buf + 0x40, ptr(g_ach.help[r]));
+    _Alignas(16) unsigned char list[0x100], entry[0x48];
+    memset(list, 0, sizeof(list));
+    memset(entry, 0, sizeof(entry));
+    wr64(entry + 8, ptr(g_ach.text[r]));
+    fn(WSTR_COPY)(ptr(entry + 0x10), ptr(g_ach.text[r]), 0, 0, 0, 0);
+    entry[0x40] = 1;
+    fn(CHOICE_APPEND)(ptr(list), ptr(entry), 0, 0, 0, 0);
+    free_wstring(entry + 0x18);
+    g_ach.value[r] = 0;
+    uint8_t def = 0;
+    fn(ADD_CHOICE_ROW)(ptr(dialog), ptr(captions.buf), ptr(&g_ach.value[r]), ptr(list), ptr(&def), 0);
+    free_wstring(list + 0x18);
+    captions_free(&captions);
+}
+
+static unsigned char *dialog_record(unsigned char *dialog, int row) {
+    return (unsigned char *)at(rd64(dialog + ITEMS_BEGIN)) + (size_t)row * ITEM_STRIDE;
+}
+
+static int dialog_records(unsigned char *dialog) {
+    const uint64_t begin = rd64(dialog + ITEMS_BEGIN), end = rd64(dialog + ITEMS_END);
+    if (!begin || end < begin || (end - begin) % ITEM_STRIDE) return 0;
+    return (int)((end - begin) / ITEM_STRIDE);
+}
+
+/* The section has nothing to restore: the game's Defaults row comes off again, the way a
+ * vector element is destroyed (its caption copies freed, its widget unreferenced). */
+static void drop_defaults_row(unsigned char *dialog) {
+    const int n = dialog_records(dialog);
+    if (n != ACH_ROWS + 1) return;
+    Captions defaults;
+    captions_init(&defaults, DEFAULTS_ROW_ID);
+    const uint64_t text = rd64(defaults.buf);
+    captions_free(&defaults);
+    unsigned char *rec = dialog_record(dialog, n - 1);
+    if (rd64(rec) != text) {
+        puts("PC menu: Achievements: the last row is not Defaults; left alone");
+        return;
+    }
+    free_wstring(rec + 0x08);
+    free_wstring(rec + 0x48);
+    release_ref(rd64(rec + ITEM_WIDGET));
+    wr64(dialog + ITEMS_END, rd64(dialog + ITEMS_END) - ITEM_STRIDE);
+    fn(LAYOUT_ROWS)(ptr(dialog), 0, 0, 0, 0, 0);
+}
+
+static int ach_alive(void) {
+    if (!g_ach.dialog || dialog_records(g_ach.dialog) < ACH_ROWS) return 0;
+    for (int r = 0; r < ACH_ROWS; ++r) {
+        unsigned char *w = at(rd64(dialog_record(g_ach.dialog, r) + ITEM_WIDGET));
+        if (w != g_ach.widget[r] || rd64(w + CHOICE_VALUE) != ptr(&g_ach.value[r])) return 0;
+    }
+    return 1;
+}
+
+/* From the list update: Left or Right, newly pressed on any of the section's lists, turns the
+ * page. */
+static void ach_update(unsigned char *comp) {
+    int ours = comp == g_ach.dialog + DIALOG_ROWS;
+    for (int r = 0; r < ACH_ROWS && !ours; ++r) ours = comp == g_ach.widget[r] + CHOICE_LIST;
+    if (!ours) return;
+    const uint32_t pad = runtime_pad_buttons(), edge = pad & ~g_ach.pad_was;
+    g_ach.pad_was = pad;
+    if (!(edge & (PAD_LEFT | PAD_RIGHT))) return;
+    ach_fill(g_ach.page + ((edge & PAD_LEFT) ? -1 : 1));
+    fn(LIST_REDRAW)(ptr(g_ach.dialog + DIALOG_ROWS), 0, 0, 0, 0, 0);
+    for (int r = 0; r < ACH_ROWS; ++r) fn(LIST_REDRAW)(ptr(g_ach.widget[r] + CHOICE_LIST), 0, 0, 0, 0, 0);
+}
+
+static void ach_list_update(unsigned char *comp) {
+    if (!g_ach.dialog) return;
+    if (!ach_alive()) {
+        g_ach.dialog = NULL;
+        return;
+    }
+    ach_update(comp);
+}
+
+static BB_GUEST_ABI void ach_handler(void *dialog, void *params) {
+    (void)params;
+    _Alignas(16) unsigned char scratch[0x100];
+    memset(scratch, 0, sizeof(scratch));
+    fn(SCRATCH_INIT)(ptr(scratch), 0, 0, 0, 0, 0);
+    g_ach.pad_was = runtime_pad_buttons();  /* the press that opened the section is not a page turn */
+    ach_fill(g_ach.page);
+    for (int r = 0; r < ACH_ROWS; ++r) add_text_row(dialog, r);
+}
+
+static BB_GUEST_ABI int64_t ach_opener(void *root, void *params) {
+    snprintf(g_open_name, sizeof(g_open_name), "%s", "PCAchieve");
+    g_open.dialog = NULL;
+    g_ach.dialog = NULL;
+    const int64_t dialog = fn(OPEN_SECTION)(ptr(root), ptr(params), ptr(g_open_name), ptr((const void *)ach_handler), 0, 0);
+    if (dialog) {
+        unsigned char *d = at((uint64_t)dialog);
+        drop_defaults_row(d);
+        for (int r = 0; r < ACH_ROWS && r < dialog_records(d); ++r) g_ach.widget[r] = at(rd64(dialog_record(d, r) + ITEM_WIDGET));
+        g_ach.dialog = d;
+        if (!ach_alive()) {
+            puts("PC menu: Achievements: the dialog is not laid out as expected; no paging");
+            g_ach.dialog = NULL;
+        }
+        puts("PC menu: Achievements opened");
+    }
+    return dialog;
+}
+
+static BB_GUEST_ABI void *ach_row(void *out, void *ctx) { return row_open(out, ctx, (const void *)ach_opener); }
 
 /* --- Yes/no commands: Quit Game and Restart to Apply ------------------------------------- */
 /* Built like the game's own Exit Game opener (sub_200c9f0): a message box from a dialog caption
@@ -568,6 +782,7 @@ static BB_GUEST_ABI void *system_finalize(void *out, void *builder, void *arg3) 
     unsigned char *last = builder_last_row(builder);
     const int move_exit = last && row_is_exit_game(last);
     if (move_exit) pop_last_row(builder);
+    add_command(builder, ROW_ACHIEVEMENTS, (const void *)ach_row, 1);
     for (int i = 0; i < COUNT(g_sections); ++i) add_command(builder, g_sections[i].system_row, SECTION_ROWS[i], 1);
     add_command(builder, ROW_RESTART, (const void *)restart_opener, 0);
     if (move_exit) add_command(builder, EXIT_GAME_ROW_ID, bb_guest(BB_BN(EXIT_GAME_OPENER)), 0);
@@ -641,7 +856,7 @@ int bb_pc_menu_install(void) {
     }
     g_installed = 1;
     int hooks = 3 + hook_list_update();
-    printf("PC menu: System gains %d PC sections and Restart to Apply\n", COUNT(g_sections));
+    printf("PC menu: System gains Achievements, %d PC sections and Restart to Apply\n", COUNT(g_sections));
     const char *quit = getenv("BB_PC_MENU_QUIT");
     if (!quit || strcmp(quit, "1"))
         puts("PC menu: no Quit Game on the title (its line was not made)");

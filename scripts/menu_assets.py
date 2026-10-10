@@ -39,6 +39,7 @@ SECTION_ROWS = [
     ('PCGameplay', 126020, 5),
     ('PCCheats', 127020, 5),
     ('PCEnhance', 124020, 2),
+    ('PCAchieve', 128020, 6),
 ]
 # (name, title, depth on the main timeline, Defaults slot, rows dropped)
 SECTIONS = [(name, title, 383 + i, rows, [f'Item_{k}_0' for k in range(rows, 6)])
