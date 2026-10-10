@@ -51,26 +51,22 @@ screenshots and features; adopt the presets concept, not its values.
 
 ## Native menus instead of the L3+R3 overlay
 
-Goal: Options → System → PC Settings holds what the overlay offers (graphics, presets, display
-and resolution, DLSS/FSR, FPS and performance, controller configuration, mods, and other
-overlay functions where they fit), feeling like part of the game.
+Done on `feature/native-menus` (checked in game, 2026-10-10): System offers Achievements, PC
+Graphics, PC Display (with live Fullscreen), PC Effects, PC Settings, PC Gameplay, PC Cheats, PC
+Enhancements and Restart to Apply, on the title screen and in game; the title menu has Quit
+Game. Approach: genuine game menus extended through hooks and generated movie/message assets
+(`src/pc_menu.c`, `scripts/menu_assets.py`). Sections do not scroll (six rows each); pick lists
+sit below toggles and blank the rows under them while open. The L3+R3 overlay still works.
 
-- The in-game PC menu (System → PC Settings / PC Enhancements, `src/pc_menu.c`,
-  `scripts/menu_assets.py`) proves approach 1/2: genuine game menus, extended through hooks and
-  generated movie/message assets. Constraints learned: option sections do not scroll (at most
-  six rows each, so more sections), pick lists need care (bbhost's keep_defaults_row).
-- Compare: (1) extending genuine menus, (2) hooking the menu/UI systems, (3) a natively drawn
-  submenu in the render pipeline, (4) a minimal overlay for what cannot be integrated.
-- Keep the L3+R3 overlay working until the replacement is proven stable.
+Still open:
 
-### Achievements in the game's menus
-
-- Show name, description, unlock status, progress where available, unlock date, artwork/icons,
-  hidden achievements and their reveal behaviour, overall completion percentage.
-- Xbox-style unlock notifications.
-- First find the source of truth for tracking (`src/runtime_trophies.c`, the trophy history in
-  the user folder, the guide overlay); never invent progress, duplicate unlocks or risk saves.
-- If native menu integration is impractical, propose an in-engine alternative.
+- Achievement icons in the game's menus: option rows show no images. Either put the trophy
+  icons into the menu movie's textures (Scaleform image swap) or draw them over the section
+  from the renderer; both are larger jobs. The overlay keeps icons and the Xbox-style toasts.
+- Overlay functions not moved yet: button prompts (Xbox / PlayStation), the mods list and its
+  order, the FSR 4 checks, the reactive mask and debug views, sharpness amount.
+- An Achievements entry in the in-game pause menu itself (a separate grid; not investigated).
+- Retire the overlay's duplicated settings once the native menus have proven stable.
 
 ## Bloodborne Enhanced features
 
