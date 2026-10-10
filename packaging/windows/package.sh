@@ -2,8 +2,8 @@
 # Builds dist/bbport-windows/ (and dist/bbport-windows.zip): Bloodborne.exe (the launcher, frozen
 # with PyInstaller so players need no Python), bb-probe.exe with the MSYS2 CLANG64 DLLs it needs,
 # the preparation scripts and run.py. Run from an MSYS2 CLANG64 shell after `bash build.sh`.
-# Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv in
-# out/pyenv with PyInstaller. FSR 4 assets in fsr4_shaders/ are included when present.
+# Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv with
+# PyInstaller and PySide6 Essentials. FSR 4 assets are included when present.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
@@ -27,20 +27,31 @@ for library in "$(dirname "$python")"/tcl/tk*; do
 done
 # Windows Python needs USERPROFILE (some MSYS2 shells start without it).
 export USERPROFILE=${USERPROFILE:-$(cygpath -w "/c/Users/$(id -un)")}
-if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
-    "$python" -m venv out/pyenv
+venv=${BB_LAUNCHER_VENV:-out/qt-venv}
+if [[ ! -x $venv/Scripts/python.exe ]]; then
+    "$python" -m venv "$venv"
 fi
-out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller
+# Qt Quick uses real translucent surfaces over full-window artwork. Pillow remains for the
+# classic Tk fallback. Essentials avoids the unrelated, very large Qt Addons wheel.
+"$venv/Scripts/python.exe" -m pip install -q --disable-pip-version-check pyinstaller pillow PySide6_Essentials==6.12.0
 # The scripts run inside Bloodborne.exe (--script): the standard modules they import come along.
 hidden=()
 for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
               urllib.request ctypes.wintypes; do
     hidden+=(--hidden-import "$module")
 done
-out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
-    --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/bloodborne.ico")" --distpath out/pyi-dist \
+"$venv/Scripts/python.exe" -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
+    --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/assets/hunter-icon.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
-    "$(cygpath -w "$PWD/launcher/bbport_launcher_win.py")"
+    "$(cygpath -w "$PWD/launcher/bbport_launcher_qml.py")"
+# Qt Quick needs the VC runtime shipped with the PySide6 wheel. PyInstaller can pick an older
+# root copy from Windows Python. It can also collect an unrelated ICU from the build host's PATH;
+# that DLL shadows Windows' ICU and prevents Qt6Core from loading in the packaged launcher.
+pyi_internal=out/pyi-dist/Bloodborne/_internal
+for dll in VCRUNTIME140.dll VCRUNTIME140_1.dll; do
+    cp "$pyi_internal/PySide6/$dll" "$pyi_internal/$dll"
+done
+rm -f "$pyi_internal/icuuc.dll" "$pyi_internal/icudt78.dll"
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/bbport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
@@ -50,6 +61,10 @@ mkdir -p "$dest/bin" "$dest/launcher"
 cp -r out/pyi-dist/Bloodborne/. "$dest/"
 llvm-strip -o "$dest/Play Bloodborne.exe" out/bb-play.exe
 cp launcher/bloodborne.ico launcher/bloodborne.png "$dest/launcher/"
+cp -r launcher/art "$dest/launcher/"
+cp -r launcher/qml "$dest/launcher/"
+mkdir -p "$dest/launcher/assets"
+cp launcher/assets/hunter-icon.ico "$dest/launcher/assets/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
 for exe in bb-probe.exe bb-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"

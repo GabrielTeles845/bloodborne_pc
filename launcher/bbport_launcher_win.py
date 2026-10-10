@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Bloodborne launcher for Windows (Tkinter; launcher/bbport_launcher.py is the Linux one).
+"""Bloodborne launcher for Windows (Qt Quick, with a classic Tk fallback).
 
 Every setting of the port in one window: the game folder and saves, bbport.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
@@ -41,6 +41,8 @@ MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This fork's build; the release tag includes this version.
 VERSION = '1.6.5'
+HERO_ART = PORT_DIR / 'launcher' / 'art' / 'hero.png'
+STRIP_ART = PORT_DIR / 'launcher' / 'art' / 'strip.png'
 # Co-op: the community server that answers the game's own server requests.
 COMMUNITY_SERVER = 'https://thehuntersdream.com'
 RELEASES_API = 'https://api.github.com/repos/Jgamrot/bloodborne_pc/releases/latest'
@@ -161,8 +163,8 @@ TWEAKS = [
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS)}
-INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
-                'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080', 'model_lod': '0',
+INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
+                'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'model_lod': '0',
                 'live_resolution': 'auto',
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '',
@@ -382,8 +384,19 @@ def game_environment(s):
 # ---------------------------------------------------------------------------------------------
 # The window.
 
-BG, PANEL, CARD, LINE = '#0e0c0b', '#151210', '#1c1815', '#2e2722'
-TEXT, MUTED, GOLD, BLOOD, BLOOD_HI = '#e9e2d6', '#9a8f80', '#c8a96a', '#7c1717', '#9e2222'
+BG, PANEL, CARD, LINE = '#090d12', '#131920', '#1c232b', '#33404a'
+TEXT, MUTED, GOLD, BLOOD, BLOOD_HI = '#f3f1eb', '#a3aeb7', '#d2bb85', '#8a2635', '#ba3446'
+NAV_HOVER, NAV_ACTIVE, SUCCESS = '#242b32', '#48252c', '#8dcc93'
+
+
+def round_rect(canvas, x1, y1, x2, y2, radius, fill, outline='', width=1, tags=()):
+    """A rounded Canvas surface, shared by the guide-like sidebar and dashboard."""
+    r = min(radius, (x2 - x1) / 2, (y2 - y1) / 2)
+    points = [x1+r,y1, x2-r,y1, x2,y1, x2,y1+r,
+              x2,y2-r, x2,y2, x2-r,y2, x1+r,y2,
+              x1,y2, x1,y2-r, x1,y1+r, x1,y1]
+    return canvas.create_polygon(points, smooth=True, splinesteps=16,
+                                 fill=fill, outline=outline, width=width, tags=tags)
 
 
 class Launcher:
@@ -398,13 +411,30 @@ class Launcher:
         self.output = queue.Queue()
         self.gpu_text = _('• Checking the graphics card…', '• Проверка видеокарты…')
         self.banner_source = self.banner_image = None
+        self.hero_cache_key = None
+        self.footer_cache_key = None
+        self.wallpaper_cache_key = None
+        self.glass_images = []
+        self.check_texts = {}
+        self.play_enabled = False
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
-        root.title('Bloodborne — bbport')
+        self.mod_profile_mtime = None
+        self.mod_dirty = False
+        root.title('Bloodborne')
         root.configure(bg=BG)
+        try:
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            dark = ctypes.c_int(1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), 4)
+        except (AttributeError, OSError):
+            pass
         self.dpi = root.winfo_fpixels('1i') / 96.0
-        root.geometry(f'{self.px(1120)}x{self.px(740)}')
-        root.minsize(self.px(980), self.px(660))
+        screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f'{min(self.px(1280), screen_w - self.px(36))}x'
+                      f'{min(self.px(820), screen_h - self.px(80))}')
+        root.minsize(min(self.px(1040), screen_w - self.px(36)),
+                     min(self.px(700), screen_h - self.px(80)))
         self.set_icon()
         self.style()
         self.build()
@@ -442,8 +472,8 @@ class Launcher:
         images = []
         for checked in (False, True):
             image = tk.PhotoImage(width=n + self.px(8), height=n)  # unset pixels stay transparent
-            fill = BLOOD if checked else CARD
-            image.put(GOLD if checked else '#5a4c40', to=(0, 0, n, n))
+            fill = GOLD if checked else CARD
+            image.put(GOLD if checked else '#62636e', to=(0, 0, n, n))
             image.put(fill, to=(1, 1, n - 1, n - 1))
             if checked:
                 # Tick: down from (0.22n, 0.52n) to (0.42n, 0.72n), up to (0.78n, 0.30n).
@@ -455,7 +485,7 @@ class Launcher:
                     pts.append((x1 + (x2 - x1) * f, y1 + (y2 - y1) * f))
                 width = max(1, round(n / 9))
                 for x, y in pts:
-                    image.put('#f4ece0', to=(int(x), int(y), int(x) + width, int(y) + width))
+                    image.put('#ffffff', to=(int(x), int(y), int(x) + width, int(y) + width))
             images.append(image)
         self.check_off, self.check_on = images
 
@@ -472,14 +502,22 @@ class Launcher:
         base = ('Segoe UI', 10)
         self.root.option_add('*TCombobox*Listbox.background', CARD)
         self.root.option_add('*TCombobox*Listbox.foreground', TEXT)
-        self.root.option_add('*TCombobox*Listbox.selectBackground', BLOOD)
+        self.root.option_add('*TCombobox*Listbox.selectBackground', NAV_ACTIVE)
         self.root.option_add('*TCombobox*Listbox.font', base)
         s.configure('.', background=PANEL, foreground=TEXT, fieldbackground=CARD, bordercolor=LINE,
                     lightcolor=LINE, darkcolor=LINE, troughcolor=CARD, focuscolor=GOLD, font=base)
         s.configure('TFrame', background=PANEL)
         s.configure('TLabel', background=PANEL, foreground=TEXT)
         s.configure('Muted.TLabel', background=PANEL, foreground=MUTED, font=('Segoe UI', 9))
-        s.configure('Section.TLabel', background=PANEL, foreground=GOLD, font=('Georgia', 13))
+        s.configure('Section.TLabel', background=PANEL, foreground=GOLD,
+                    font=('Segoe UI Semibold', 13))
+        s.configure('Card.TFrame', background=CARD)
+        s.configure('Card.TLabel', background=CARD, foreground=TEXT)
+        s.configure('CardMuted.TLabel', background=CARD, foreground=MUTED, font=('Segoe UI', 9))
+        s.configure('CardHeader.TLabel', background=CARD, foreground=TEXT,
+                    font=('Segoe UI Semibold', 13))
+        s.configure('Card.TCheckbutton', background=CARD, foreground=TEXT, padding=(0, 3))
+        s.map('Card.TCheckbutton', background=[('active', CARD)], foreground=[('disabled', MUTED)])
         s.configure('TCheckbutton', background=PANEL, foreground=TEXT, padding=(0, 3))
         s.map('TCheckbutton', background=[('active', PANEL)], foreground=[('disabled', MUTED)])
         s.configure('Warning.TLabel', background='#2a1d12', foreground='#e3b25a', padding=(10, 6))
@@ -488,13 +526,14 @@ class Launcher:
               selectbackground=[('readonly', CARD)], selectforeground=[('readonly', TEXT)])
         s.configure('TEntry', foreground=TEXT, insertcolor=TEXT, padding=4)
         s.configure('TSpinbox', foreground=TEXT, arrowcolor=GOLD, insertcolor=TEXT, padding=4)
-        s.configure('TButton', background=CARD, foreground=TEXT, padding=(12, 6), borderwidth=1)
+        s.configure('TButton', background=CARD, foreground=TEXT, padding=(14, 8), borderwidth=1)
         s.map('TButton', background=[('active', LINE), ('disabled', PANEL)], foreground=[('disabled', MUTED)])
-        s.configure('Play.TButton', background=BLOOD, foreground='#f4ece0', font=('Georgia', 15, 'bold'),
+        s.configure('Play.TButton', background=BLOOD, foreground='#ffffff', font=('Segoe UI Semibold', 15),
                     padding=(36, 10), borderwidth=0)
-        s.map('Play.TButton', background=[('active', BLOOD_HI), ('disabled', '#3a2420')],
-              foreground=[('disabled', '#8a7a70')])
-        s.configure('Horizontal.TProgressbar', background=GOLD, troughcolor=CARD, bordercolor=LINE)
+        s.map('Play.TButton', background=[('active', BLOOD_HI), ('disabled', '#3b3036')],
+              foreground=[('disabled', '#97949a')])
+        s.configure('Horizontal.TScale', background=BLOOD, troughcolor=CARD, bordercolor=LINE)
+        s.configure('Horizontal.TProgressbar', background=BLOOD_HI, troughcolor=CARD, bordercolor=LINE)
         s.configure('Vertical.TScrollbar', background=CARD, arrowcolor=GOLD, troughcolor=PANEL, bordercolor=PANEL)
 
     # ---- widget helpers ----------------------------------------------------------------------
@@ -542,10 +581,13 @@ class Launcher:
     def row(self, parent, title, widget, hint=None):
         ttk = self.ttk
         r = self.next_row(parent)
-        ttk.Label(parent, text=title).grid(row=r, column=0, sticky='nw', padx=(0, 18), pady=(8, 0))
-        widget.grid(row=r, column=1, sticky='w', pady=(5, 0))
+        label_style = 'Card.TLabel' if parent.cget('style') == 'Card.TFrame' else 'TLabel'
+        ttk.Label(parent, text=title, style=label_style).grid(
+            row=r, column=0, sticky='nw', padx=(0, 22), pady=(12, 0))
+        widget.grid(row=r, column=1, sticky='w', pady=(9, 0))
         if hint:
-            ttk.Label(parent, text=hint, style='Muted.TLabel', wraplength=self.px(560), justify='left').grid(
+            hint_style = 'CardMuted.TLabel' if label_style == 'Card.TLabel' else 'Muted.TLabel'
+            ttk.Label(parent, text=hint, style=hint_style, wraplength=self.px(560), justify='left').grid(
                 row=r + 1, column=1, sticky='w', pady=(2, 2))
         return widget
 
@@ -553,7 +595,7 @@ class Launcher:
         ttk = self.ttk
         r = self.next_row(parent)
         ttk.Checkbutton(parent, text=title, variable=self.var(key, store)).grid(
-            row=r, column=0, columnspan=2, sticky='w', pady=(4, 0))
+            row=r, column=0, columnspan=2, sticky='w', pady=(8, 0))
         if hint:
             ttk.Label(parent, text=hint, style='Muted.TLabel', wraplength=self.px(640), justify='left').grid(
                 row=r + 1, column=0, columnspan=2, sticky='w', padx=(26, 0))
@@ -563,6 +605,10 @@ class Launcher:
             row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=(top, 0))
 
     def section(self, parent, title, top=18):
+        if self.next_row(parent):
+            self.ttk.Separator(parent,orient='horizontal').grid(
+                row=self.next_row(parent),column=0,columnspan=2,sticky='ew',pady=(top,0))
+            top=8
         self.ttk.Label(parent, text=title, style='Section.TLabel').grid(
             row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=(top, 2))
 
@@ -587,13 +633,26 @@ class Launcher:
         """A settings page: a heading and content that scrolls vertically."""
         tk, ttk = self.tk, self.ttk
         outer = ttk.Frame(self.content)
-        head = ttk.Frame(outer, padding=(28, 22, 28, 6))
+        head = tk.Canvas(outer,height=self.px(132),bg=BG,highlightthickness=0,bd=0)
         head.pack(fill='x')
-        ttk.Label(head, text=title, background=PANEL, foreground=TEXT, font=('Georgia', 20)).pack(anchor='w')
-        ttk.Label(head, text=subtitle, style='Muted.TLabel').pack(anchor='w')
+        def draw_header(_event=None):
+            head.delete('all')
+            w=head.winfo_width();s=self.dpi
+            head.create_rectangle(0,0,w,self.px(132),fill='#101a23',outline='')
+            for i in range(8):
+                head.create_rectangle(w-i*self.px(65),0,w-(i-1)*self.px(65),self.px(132),
+                                      fill=('#17232b' if i%2 else '#142028'),outline='')
+            head.create_rectangle(0,self.px(128),w,self.px(132),fill=BLOOD,outline='')
+            head.create_text(self.px(30),self.px(22),text='BLOODBORNE  /  '+_('OPTIONS','НАСТРОЙКИ'),
+                             anchor='w',fill=GOLD,font=('Segoe UI Semibold',9))
+            head.create_text(self.px(30),self.px(60),text=title,anchor='w',fill=TEXT,
+                             font=('Segoe UI Semibold',24))
+            head.create_text(self.px(30),self.px(103),text=subtitle,anchor='w',fill=MUTED,
+                             font=('Segoe UI',10),width=max(self.px(500),w-self.px(65)))
+        head.bind('<Configure>',draw_header)
         canvas = tk.Canvas(outer, bg=PANEL, highlightthickness=0, bd=0)
         bar = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
-        inner = ttk.Frame(canvas, padding=(28, 0, 28, 24))
+        inner = ttk.Frame(canvas, padding=(30, 18, 30, 30))
         inner.columnconfigure(1, weight=1)
         window = canvas.create_window(0, 0, window=inner, anchor='nw')
         inner.bind('<Configure>', lambda _e: canvas.configure(scrollregion=canvas.bbox('all')))
@@ -608,46 +667,35 @@ class Launcher:
     # ---- layout ------------------------------------------------------------------------------
     def build(self):
         tk, ttk = self.tk, self.ttk
-        side = tk.Frame(self.root, bg=BG, width=self.px(220))
-        side.pack(side='left', fill='y')
-        side.pack_propagate(False)
-        tk.Label(side, text='BLOODBORNE', bg=BG, fg=GOLD, font=('Georgia', 16)).pack(anchor='w', padx=22, pady=(24, 0))
-        self.side = side
-        tk.Label(side, text=_('by Super Medo'), bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(anchor='w', padx=22)
-        tk.Label(side, text=_('native port · Windows', 'нативный порт · Windows') + f'  ·  v{VERSION}' + ('\n' + _('co-op test build') if COOP_TEST else ''), bg=BG, fg=MUTED, justify='left',
-                 font=('Segoe UI', 9)).pack(anchor='w', padx=22, pady=(0, 20))
-        self.nav, self.current_page = {}, None
-        for name, title in (('play', _('Play', 'Играть')), ('graphics', _('Graphics', 'Графика')),
-                            ('display', _('Display & FPS', 'Экран и FPS')), ('game', _('Game & effects', 'Игра и эффекты')),
-                            ('cheats', _('Cheats', 'Читы')), ('online', _('Online co-op', 'Онлайн-кооператив')),
-                            ('mods', _('Mods & patches', 'Моды и патчи')),
-                            ('advanced', _('Advanced', 'Дополнительно')),
-                            ('log', _('Log', 'Журнал'))):
-            item = tk.Label(side, text='    ' + title, bg=BG, fg=TEXT, anchor='w', font=('Segoe UI', 11),
-                            pady=10, cursor='hand2')
-            item.pack(fill='x')
-            item.bind('<Button-1>', lambda _e, n=name: self.show(n))
-            item.bind('<Enter>', lambda _e, n=name: n != self.current_page and self.nav[n].configure(bg='#1a1613'))
-            item.bind('<Leave>', lambda _e, n=name: n != self.current_page and self.nav[n].configure(bg=BG))
-            self.nav[name] = item
-        tk.Frame(side, bg=BG).pack(fill='both', expand=True)
+        self.nav_items = (('play', '▶', _('Play', 'Играть')),
+                          ('graphics', '▣', _('Graphics', 'Графика')),
+                          ('display', '▤', _('Display & FPS', 'Экран и FPS')),
+                          ('game', '◈', _('Game & effects', 'Игра и эффекты')),
+                          ('cheats', '✦', _('Cheats', 'Читы')),
+                          ('online', '◎', _('Online co-op', 'Онлайн-кооператив')),
+                          ('mods', '▦', _('Mods & patches', 'Моды и патчи')),
+                          ('advanced', '⚙', _('Advanced', 'Дополнительно')),
+                          ('log', '≡', _('Log', 'Журнал')))
+        self.current_page = None
+        self.nav_hovered = None
+        self.side = tk.Canvas(self.root, bg=BG, width=self.px(254), highlightthickness=0)
+        self.side.pack(side='left', fill='y')
+        self.side.bind('<Configure>', lambda _e: self.draw_sidebar())
+        self.side.bind('<Key-Up>', lambda _e: self.move_nav(-1))
+        self.side.bind('<Key-Down>', lambda _e: self.move_nav(1))
+        self.side.bind('<Key-Return>', lambda _e: self.show(self.nav_items[self.nav_focus][0]))
+        self.nav_focus = 0
         self.update_box = None
-        self.side_note = tk.Label(side, text=_('In the game: Insert or L3+R3\nopens the port\'s menu.',
-                                               'В игре: Insert или L3+R3\nоткрывает меню порта.'),
-                                  bg=BG, fg=MUTED, font=('Segoe UI', 9), justify='left', wraplength=self.px(210))
-        self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
-
         right = tk.Frame(self.root, bg=PANEL)
         right.pack(side='left', fill='both', expand=True)
-        bar = tk.Frame(right, bg=BG, height=72)
+        bar = tk.Frame(right, bg=BG, height=self.px(48))
         bar.pack(fill='x', side='bottom')
         bar.pack_propagate(False)
-        self.status = tk.Label(bar, text='', bg=BG, fg=MUTED, font=('Segoe UI', 10), anchor='w', justify='left')
-        self.status.pack(side='left', padx=24)
-        self.play_button = ttk.Button(bar, text=_('PLAY', 'ИГРАТЬ'), style='Play.TButton', command=self.play)
-        self.play_button.pack(side='right', padx=(10, 24), pady=11)
-        self.stop_button = ttk.Button(bar, text=_('Stop', 'Остановить'), command=self.stop, state='disabled')
-        self.stop_button.pack(side='right', pady=11)
+        self.status = tk.Label(bar, text='', bg=BG, fg=MUTED, font=('Segoe UI', 9),
+                               anchor='w', justify='left')
+        self.status.pack(side='left', padx=self.px(22))
+        self.stop_button = ttk.Button(bar, text=_('Stop game', 'Остановить игру'), command=self.stop, state='disabled')
+        self.stop_button.pack(side='right', padx=self.px(22), pady=self.px(5))
         self.content = tk.Frame(right, bg=PANEL)
         self.content.pack(fill='both', expand=True)
 
@@ -662,7 +710,163 @@ class Launcher:
         self.build_advanced()
         self.build_log()
         self.root.bind_all('<MouseWheel>', self.wheel)
+        self.root.bind_all('<Control-Tab>', lambda _e: self.move_nav(1))
+        self.root.bind_all('<Control-Shift-Tab>', lambda _e: self.move_nav(-1))
         self.refresh_status()
+
+    def move_nav(self, step):
+        self.nav_focus = (self.nav_focus + step) % len(self.nav_items)
+        self.show(self.nav_items[self.nav_focus][0])
+        self.side.focus_set()
+
+    def wallpaper(self):
+        """One cover-cropped scene shared by the sidebar and dashboard canvases."""
+        width=max(self.root.winfo_width(),self.px(800))
+        height=max(self.root.winfo_height(),self.px(600))
+        source=HERO_ART if HERO_ART.is_file() else Path(self.var('game_dir','app').get() or '.')/'sce_sys'/'pic1.png'
+        key=(str(source),width,height)
+        if self.wallpaper_cache_key==key:
+            return self.wallpaper_image
+        self.wallpaper_cache_key,self.wallpaper_image=key,None
+        try:
+            from PIL import Image
+            with Image.open(source) as image:
+                image=image.convert('RGB')
+                scale=max(width/image.width,height/image.height)
+                image=image.resize((round(image.width*scale),round(image.height*scale)),Image.Resampling.LANCZOS)
+                left=round((image.width-width)*.46)
+                top=round((image.height-height)*.42)
+                self.wallpaper_image=image.crop((left,top,left+width,top+height))
+        except (ImportError,OSError,ValueError):
+            pass
+        return self.wallpaper_image
+
+    def glass_surface(self,canvas,x1,y1,x2,y2,radius,tint=(13,20,28,205)):
+        """Blur and tint only the pixels beneath this card; content is drawn separately."""
+        if self.dashboard_backdrop is None:
+            round_rect(canvas,x1,y1,x2,y2,radius,CARD,LINE)
+            return
+        try:
+            from PIL import Image, ImageDraw, ImageFilter, ImageTk
+            box=(round(x1),round(y1),round(x2),round(y2))
+            area=self.dashboard_backdrop.crop(box).filter(ImageFilter.GaussianBlur(6)).convert('RGBA')
+            area=Image.alpha_composite(area,Image.new('RGBA',area.size,tint))
+            mask=Image.new('L',area.size)
+            ImageDraw.Draw(mask).rounded_rectangle((0,0,area.width-1,area.height-1),
+                                                     radius=round(radius),fill=255)
+            glass=Image.new('RGBA',area.size)
+            glass.paste(area,(0,0),mask)
+            photo=ImageTk.PhotoImage(glass)
+            self.glass_images.append(photo)
+            canvas.create_image(x1,y1,image=photo,anchor='nw')
+            round_rect(canvas,x1,y1,x2,y2,radius,'','#63707a')
+            canvas.create_line(x1+radius,y1+1,x2-radius,y1+1,fill='#687780')
+        except (ImportError,OSError,ValueError):
+            round_rect(canvas,x1,y1,x2,y2,radius,CARD,LINE)
+
+    def nav_icon(self,canvas,name,x,y,color,tag):
+        """Consistent thin-line icons instead of platform-dependent Unicode glyphs."""
+        u=self.dpi
+        line=lambda *p:canvas.create_line(*p,fill=color,width=max(1,1.6*u),capstyle='round',tags=(tag,))
+        rect=lambda a,b,c,d:canvas.create_rectangle(a,b,c,d,outline=color,width=max(1,1.5*u),tags=(tag,))
+        oval=lambda a,b,c,d:canvas.create_oval(a,b,c,d,outline=color,width=max(1,1.5*u),tags=(tag,))
+        if name=='play':
+            canvas.create_polygon(x-5*u,y-8*u,x+8*u,y,x-5*u,y+8*u,fill=color,outline='',tags=(tag,))
+        elif name=='graphics':
+            rect(x-9*u,y-7*u,x+9*u,y+5*u);line(x,y+5*u,x,y+9*u);line(x-5*u,y+9*u,x+5*u,y+9*u)
+        elif name=='display':
+            rect(x-8*u,y-8*u,x+8*u,y+8*u);line(x-4*u,y+4*u,x+4*u,y+4*u)
+        elif name=='game':
+            for offset,k in ((-6,-3),(0,4),(6,-1)):
+                line(x-9*u,y+offset*u,x+9*u,y+offset*u)
+                oval(x+(k-2)*u,y+(offset-2)*u,x+(k+2)*u,y+(offset+2)*u)
+        elif name=='cheats':
+            canvas.create_polygon(x,y-10*u,x+2*u,y-2*u,x+9*u,y,x+2*u,y+2*u,
+                                  x,y+10*u,x-2*u,y+2*u,x-9*u,y,x-2*u,y-2*u,
+                                  outline=color,fill='',width=max(1,1.5*u),tags=(tag,))
+        elif name=='online':
+            oval(x-8*u,y-7*u,x-1*u,y);oval(x+2*u,y-7*u,x+9*u,y)
+            line(x-10*u,y+7*u,x-8*u,y+3*u,x-1*u,y+2*u,x+2*u,y+5*u)
+            line(x,y+5*u,x+3*u,y+2*u,x+9*u,y+3*u,x+11*u,y+7*u)
+        elif name=='mods':
+            for offset in (-5,0,5):
+                line(x-8*u,y+(offset-3)*u,x,y+(offset+1)*u,x+8*u,y+(offset-3)*u)
+        elif name=='advanced':
+            oval(x-5*u,y-5*u,x+5*u,y+5*u);oval(x-2*u,y-2*u,x+2*u,y+2*u)
+            for dx,dy in ((0,-9),(0,9),(-9,0),(9,0),(-6,-6),(6,6),(-6,6),(6,-6)):
+                line(x+dx*.65,y+dy*.65,x+dx*u,y+dy*u)
+        else:
+            for offset in (-5,0,5):
+                line(x-9*u,y+offset*u,x+9*u,y+offset*u)
+
+    def draw_sidebar(self):
+        c = self.side
+        c.delete('all')
+        self.nav_shapes = {}
+        w, h = max(c.winfo_width(), self.px(254)), max(c.winfo_height(), self.px(650))
+        s = self.dpi
+        rr = lambda x1,y1,x2,y2,r,fill,outline='': round_rect(c,x1*s,y1*s,x2*s,y2*s,r*s,fill,outline)
+        background=self.wallpaper()
+        if background:
+            try:
+                from PIL import Image, ImageDraw, ImageFilter, ImageTk
+                original=background.crop((0,0,w,h)).convert('RGBA')
+                blurred=original.filter(ImageFilter.GaussianBlur(8))
+                glass=Image.alpha_composite(blurred,Image.new('RGBA',blurred.size,(8,13,20,207)))
+                mask=Image.new('L',(w,h))
+                ImageDraw.Draw(mask).rounded_rectangle((self.px(10),self.px(12),w-self.px(10),h-self.px(12)),
+                                                         radius=self.px(16),fill=255)
+                original.paste(glass,(0,0),mask)
+                draw=ImageDraw.Draw(original)
+                draw.rounded_rectangle((self.px(10),self.px(12),w-self.px(10),h-self.px(12)),
+                                       radius=self.px(16),outline=(116,128,138,115),width=1)
+                self.side_background=ImageTk.PhotoImage(original)
+                c.create_image(0,0,image=self.side_background,anchor='nw')
+            except (ImportError,OSError,ValueError):
+                rr(10,12,w/s-10,h/s-12,16,'#151b22',LINE)
+        else:
+            rr(10,12,w/s-10,h/s-12,16,'#151b22',LINE)
+        try:
+            if not hasattr(self, 'side_icon'):
+                self.side_icon = self.tk.PhotoImage(file=str(PORT_DIR / 'launcher' / 'bloodborne.png')).subsample(2)
+            c.create_image(28*s,32*s,image=self.side_icon,anchor='nw')
+        except (self.tk.TclError, OSError):
+            pass
+        c.create_text(83*s,43*s,text='Bloodborne',anchor='w',fill=TEXT,font=('Georgia',14))
+        c.create_text(83*s,68*s,text=_('WINDOWS EDITION','ВЕРСИЯ ДЛЯ WINDOWS'),anchor='w',fill=GOLD,
+                      font=('Segoe UI Semibold',8))
+        c.create_line(26*s,105*s,w-26*s,105*s,fill=LINE)
+        for i,(name,icon,title) in enumerate(self.nav_items):
+            y = (122+i*51)*s if i < 7 else (122+i*51+15)*s
+            if i == 7:
+                c.create_line(26*s,y-15*s,w-26*s,y-15*s,fill=LINE)
+            active = name == self.current_page
+            hover = name == self.nav_hovered
+            fill = NAV_ACTIVE if active else NAV_HOVER if hover else '#151b22'
+            tag = f'nav_{name}'
+            self.nav_shapes[name] = round_rect(c,20*s,y,w-20*s,y+45*s,9*s,fill,tags=(tag,))
+            if not active:
+                c.itemconfigure(self.nav_shapes[name],stipple='gray50' if hover else 'gray12')
+            if active:
+                round_rect(c,21*s,y+7*s,24*s,y+38*s,2*s,BLOOD_HI,tags=(tag,))
+            self.nav_icon(c,name,44*s,y+22*s,GOLD if active else MUTED,tag)
+            c.create_text(66*s,y+22*s,text=title,anchor='w',fill=TEXT if active else '#cbd1d5',
+                          font=('Segoe UI Semibold' if active else 'Segoe UI',10),tags=(tag,))
+            c.tag_bind(tag,'<Button-1>',lambda _e,n=name: self.show(n))
+            c.tag_bind(tag,'<Enter>',lambda _e,n=name: self.nav_hover(n,True))
+            c.tag_bind(tag,'<Leave>',lambda _e,n=name: self.nav_hover(n,False))
+        c.create_text(28*s,h-76*s,text=f'WINDOWS  ·  v{VERSION}',anchor='w',fill=GOLD,
+                      font=('Segoe UI Semibold',9))
+        c.create_text(28*s,h-52*s,text=_('Insert / L3+R3  ·  In-game guide',
+                                         'Insert / L3+R3  ·  Игровое меню'),anchor='w',fill=MUTED,
+                      font=('Segoe UI',8))
+
+    def nav_hover(self, name, hover):
+        self.nav_hovered = name if hover else None
+        self.side.configure(cursor='hand2' if hover else '')
+        if name != self.current_page and name in self.nav_shapes:
+            self.side.itemconfigure(self.nav_shapes[name],fill=NAV_HOVER if hover else '#151b22',
+                                    stipple='gray50' if hover else 'gray12')
 
     def wheel(self, event):
         page = self.pages.get(self.current_page)
@@ -675,8 +879,8 @@ class Launcher:
             page.pack_forget()
         self.pages[name].pack(fill='both', expand=True)
         self.current_page = name
-        for n, item in self.nav.items():
-            item.configure(bg=PANEL if n == name else BG, fg=GOLD if n == name else TEXT)
+        self.nav_focus = next(i for i,item in enumerate(self.nav_items) if item[0] == name)
+        self.draw_sidebar()
         if name == 'mods':
             self.refresh_lists()
         elif name == 'graphics':
@@ -685,70 +889,228 @@ class Launcher:
             self.refresh_status()
 
     def build_play(self):
-        tk, ttk = self.tk, self.ttk
-        page = tk.Frame(self.content, bg=PANEL)
+        tk = self.tk
+        page = tk.Frame(self.content, bg=BG)
         self.pages['play'] = page
-        self.banner = tk.Canvas(page, height=self.px(290), bg=BG, highlightthickness=0, bd=0)
-        self.banner.pack(fill='x')
-        self.banner.bind('<Configure>', lambda _e: self.draw_banner())
-        body = ttk.Frame(page, padding=(28, 12, 28, 8))
-        body.pack(fill='both', expand=True)
-        body.columnconfigure(0, weight=3)
-        body.columnconfigure(1, weight=2)
-        info = ttk.Frame(body)
-        info.grid(row=0, column=0, sticky='nw', padx=(0, 24))
-        ttk.Label(info, text=_('Ready check', 'Проверка'), style='Section.TLabel').pack(anchor='w', pady=(0, 6))
-        self.checks = {}
-        for key in ('game', 'saves', 'gpu', 'fsr4'):
-            self.checks[key] = ttk.Label(info, text='', justify='left', wraplength=self.px(440))
-            self.checks[key].pack(anchor='w', pady=3)
-        quick = ttk.Frame(body)
-        quick.grid(row=0, column=1, sticky='nw')
-        ttk.Label(quick, text=_('Quick settings', 'Основное'), style='Section.TLabel').grid(
-            row=0, column=0, columnspan=2, sticky='w', pady=(0, 2))
-        self.row(quick, _('Frame rate', 'Частота кадров'), self.choice(quick, 'fps_mode', 'app', FPS_MODES, 26))
-        self.row(quick, _('Upscaler', 'Апскейлер'), self.choice(quick, 'upscaler', 'ini', UPSCALERS, 26))
-        self.row(quick, _('Preset', 'Пресет'), self.choice(quick, 'preset', 'ini', PRESETS, 26))
-        self.row(quick, _('Output', 'Разрешение'), self.choice(quick, 'output_res', 'ini', OUTPUTS, 26))
-        ttk.Checkbutton(quick, text=_('Fullscreen', 'Полный экран'), variable=self.var('fullscreen', 'app')).grid(
-            row=self.next_row(quick), column=1, sticky='w', pady=(8, 0))
-        ttk.Checkbutton(quick, text=_('Play online'), variable=self.var('online', 'app')).grid(
-            row=self.next_row(quick), column=1, sticky='w', pady=(4, 0))
-        ttk.Button(quick, text=_('Add to Steam'), command=self.add_to_steam).grid(
-            row=self.next_row(quick), column=1, sticky='w', pady=(10, 0))
-        for key in ('fps_mode', 'upscaler', 'output_res'):
-            self.vars[key].trace_add('write', lambda *_a: self.refresh_status())
+        self.dashboard = tk.Canvas(page, bg=BG, highlightthickness=0, bd=0)
+        self.dashboard.pack(fill='both', expand=True)
+        self.dashboard.bind('<Configure>', lambda _e: self.draw_dashboard())
+        for key,store in (('fps_mode','app'),('upscaler','ini'),('preset','ini'),
+                          ('output_res','ini'),('fullscreen','app'),('online','app')):
+            self.var(key,store).trace_add('write', lambda *_a: self.refresh_status())
 
     def draw_banner(self):
-        """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
-        tk, c = self.tk, self.banner
-        c.delete('all')
-        w, h = max(c.winfo_width(), 400), int(c['height'])
-        art = Path(self.var('game_dir', 'app').get() or '.') / 'sce_sys' / 'pic1.png'
-        if self.banner_source != art:
-            self.banner_source, self.banner_image, self.banner_size = art, None, None
+        self.hero_cache_key = None
+        self.draw_dashboard()
+
+    def hero_art(self, path, width, height):
+        """Full-scene backdrop with a gentle reading gradient under the controls."""
+        key = (str(HERO_ART if HERO_ART.is_file() else path), width, height,
+               self.root.winfo_width(), self.root.winfo_height())
+        if self.hero_cache_key == key:
+            return self.banner_image
+        self.hero_cache_key, self.banner_image, self.dashboard_backdrop = key, None, None
+        try:
+            from PIL import Image, ImageDraw, ImageTk
+            wallpaper=self.wallpaper()
+            left=self.side.winfo_width()
+            source=wallpaper.crop((left,0,left+width,height)).convert('RGBA')
+            shade=Image.new('RGBA',(width,height),(0,0,0,0))
+            draw = ImageDraw.Draw(shade)
+            for y in range(0,height,4):
+                t=y/max(height-1,1)
+                opacity=round(24+113*t*t)
+                draw.rectangle((0,y,width,y+4),fill=(7,11,17,opacity))
+            source=Image.alpha_composite(source,shade)
+            left_shade=Image.new('RGBA',(width,height),(0,0,0,0))
+            draw=ImageDraw.Draw(left_shade)
+            for x in range(0,round(width*.65),6):
+                opacity=round(70*(1-x/max(width*.65,1)))
+                draw.rectangle((x,0,x+6,height),fill=(3,6,11,opacity))
+            self.dashboard_backdrop=Image.alpha_composite(source,left_shade)
+            self.banner_image=ImageTk.PhotoImage(self.dashboard_backdrop)
+        except (ImportError, OSError, ValueError):
             try:
-                self.banner_image = tk.PhotoImage(file=str(art))
-            except (tk.TclError, OSError):
+                original = self.tk.PhotoImage(file=str(path))
+                self.banner_image = original.subsample(max(1,original.width()//width))
+            except (self.tk.TclError, OSError):
                 pass
-        if self.banner_image:
-            if self.banner_size != w:
-                self.banner_size, self.banner_scaled = w, self.scaled_art(art, w)
-            # The logo sits in the upper half of the cover: show that part.
-            c.create_image(w // 2, int(h * 0.62), image=self.banner_scaled)
-            for i, stipple in enumerate(('gray12', 'gray25', 'gray50', 'gray75')):
-                c.create_rectangle(0, h - 120 + i * 24, w, h - 96 + i * 24, fill=PANEL, outline='', stipple=stipple)
-            c.create_rectangle(0, h - 24, w, h, fill=PANEL, outline='')
+        return self.banner_image
+
+    def canvas_action(self, canvas, tag, command):
+        canvas.tag_bind(tag,'<Button-1>',lambda _e: command())
+        canvas.tag_bind(tag,'<Enter>',lambda _e: canvas.configure(cursor='hand2'))
+        canvas.tag_bind(tag,'<Leave>',lambda _e: canvas.configure(cursor=''))
+
+    def footer_art(self, path, width, height):
+        source_path=STRIP_ART if STRIP_ART.is_file() else path
+        key=(str(source_path),width,height)
+        if self.footer_cache_key==key:
+            return self.footer_image
+        self.footer_cache_key,self.footer_image=key,None
+        try:
+            from PIL import Image, ImageDraw, ImageEnhance, ImageTk
+            with Image.open(source_path) as source:
+                source=source.convert('RGB')
+                scale=max(width/source.width,height/source.height)
+                source=source.resize((round(source.width*scale),round(source.height*scale)),Image.Resampling.LANCZOS)
+                left=(source.width-width)//2
+                top=min(max(0,round(source.height*.15)),source.height-height)
+                source=ImageEnhance.Brightness(source.crop((left,top,left+width,top+height))).enhance(.70)
+            shade=Image.new('RGBA',(width,height))
+            draw=ImageDraw.Draw(shade)
+            for x in range(0,width,5):
+                draw.rectangle((x,0,x+5,height),fill=(9,13,18,round(215*(1-x/max(width,1))+35)))
+            combined=Image.alpha_composite(source.convert('RGBA'),shade)
+            mask=Image.new('L',(width,height))
+            ImageDraw.Draw(mask).rounded_rectangle((0,0,width-1,height-1),radius=self.px(10),fill=255)
+            finished=Image.new('RGBA',(width,height))
+            finished.paste(combined,(0,0),mask)
+            self.footer_image=ImageTk.PhotoImage(finished)
+        except (ImportError,OSError,ValueError):
+            pass
+        return self.footer_image
+
+    def controller_connected(self):
+        try:
+            dll = ctypes.windll.xinput1_4
+            return any(dll.XInputGetState(i,ctypes.create_string_buffer(16)) == 0 for i in range(4))
+        except (AttributeError, OSError):
+            return False
+
+    def draw_dashboard(self):
+        c = self.dashboard
+        c.delete('all')
+        self.glass_images=[]
+        w,h = c.winfo_width(),c.winfo_height()
+        if w < 350 or h < 350:
+            return
+        s = self.dpi
+        hero_h = min(max(round(h*.52),self.px(315)),self.px(440))
+        art = Path(self.var('game_dir','app').get() or '.')/'sce_sys'/'pic1.png'
+        photo = self.hero_art(art,w,h)
+        if photo:
+            c.create_image(0,0,image=photo,anchor='nw')
         else:
-            c.create_text(w // 2, h // 2 - 20, text=_('Choose your game folder (Game & effects)',
-                                                       'Выберите папку игры («Игра и эффекты»)'),
-                          fill=MUTED, font=('Segoe UI', 11))
-        if not self.banner_image:
-            c.create_text(30, h - 70, text='Bloodborne', anchor='w', fill='#f2ead9', font=('Georgia', 36))
-        info = game_info(self.var('game_dir', 'app').get())
-        sub = (_('CUSA03173 · game version {}', 'CUSA03173 · версия игры {}').format(info[1]) if info
-               else _('Game folder not set', 'Папка игры не выбрана'))
-        c.create_text(33, h - 30, text=sub, anchor='w', fill=GOLD, font=('Segoe UI', 11))
+            c.create_rectangle(0,0,w,h,fill=BG,outline='')
+        x = self.px(30)
+        c.create_text(x+self.px(2),hero_h-self.px(220)+self.px(2),text='Bloodborne',anchor='w',
+                      fill='#070a0e',font=('Georgia',48))
+        c.create_text(x,hero_h-self.px(220),text='Bloodborne',anchor='w',
+                      fill='#d8c38e',font=('Georgia',48))
+        c.create_text(x,hero_h-self.px(137),text=_('RETURN TO YHARNAM','ВОЗВРАЩЕНИЕ В ЯРНАМ'),anchor='w',
+                      fill=GOLD,font=('Segoe UI Semibold',9))
+        c.create_text(x,hero_h-self.px(111),text=_('Face your nightmares once more.',
+                                                   'Встретьтесь со своими кошмарами вновь.'),anchor='w',
+                      fill=TEXT,font=('Segoe UI',13))
+        play_y = hero_h-self.px(83)
+        play_tag='dashboard_play'
+        play_fill = BLOOD if self.play_enabled else '#3d3034'
+        round_rect(c,x,play_y,x+self.px(205),play_y+self.px(49),8*s,play_fill,
+                   '#c15160' if self.play_enabled else '#534349',tags=(play_tag,))
+        c.create_text(x+self.px(25),play_y+self.px(25),text='▶',fill=TEXT,
+                      font=('Segoe UI Symbol',14),tags=(play_tag,))
+        c.create_text(x+self.px(106),play_y+self.px(25),text=_('PLAY','ИГРАТЬ'),fill=TEXT,
+                      font=('Segoe UI Semibold',13),tags=(play_tag,))
+        if self.play_enabled:
+            self.canvas_action(c,play_tag,self.play)
+        options_tag='dashboard_options'
+        ox=x+self.px(218)
+        round_rect(c,ox,play_y,ox+self.px(176),play_y+self.px(49),8*s,'#222b33','#53616d',tags=(options_tag,))
+        c.create_text(ox+self.px(88),play_y+self.px(25),text=_('⚙   GAME OPTIONS','⚙   НАСТРОЙКИ'),
+                      fill=TEXT,font=('Segoe UI Semibold',10),tags=(options_tag,))
+        self.canvas_action(c,options_tag,lambda:self.show('graphics'))
+
+        gap=self.px(13); margin=self.px(22)
+        card_y=hero_h+self.px(12)
+        card_h=min(self.px(215),max(self.px(164),h-card_y-self.px(103)))
+        card_w=(w-2*margin-2*gap)/3
+        cards=[]
+        for index in range(3):
+            left=margin+index*(card_w+gap)
+            right=left+card_w
+            shadow=round_rect(c,left+self.px(3),card_y+self.px(5),right+self.px(3),
+                              card_y+card_h+self.px(5),12*s,'#080c11')
+            c.itemconfigure(shadow,stipple='gray50')
+            self.glass_surface(c,left,card_y,right,card_y+card_h,12*s)
+            cards.append((left,right))
+        def card_title(index,icon,title):
+            left,right=cards[index]
+            c.create_text(left+self.px(16),card_y+self.px(22),text=icon,anchor='w',fill=GOLD,
+                          font=('Segoe UI Symbol',15))
+            c.create_text(left+self.px(46),card_y+self.px(23),text=title,anchor='w',fill=TEXT,
+                          font=('Segoe UI Semibold',11))
+            c.create_line(left+self.px(16),card_y+self.px(45),right-self.px(16),card_y+self.px(45),fill=LINE)
+        card_title(0,'◈',_('Game status','Состояние игры'))
+        card_title(1,'▣',_('Current setup','Текущие настройки'))
+        card_title(2,'♧',_('Controller & guide','Геймпад и меню'))
+        def line(index,row,label,value=None,color=TEXT,action=None):
+            left,right=cards[index]
+            y=card_y+self.px(67+row*30)
+            if value is None:
+                c.create_text(left+self.px(17),y,text=label,anchor='w',fill=color,
+                              font=('Segoe UI',9),width=card_w-self.px(34))
+            else:
+                c.create_text(left+self.px(17),y,text=label,anchor='w',fill=MUTED,font=('Segoe UI',9))
+                c.create_text(right-self.px(17),y,text=value,anchor='e',fill=color,font=('Segoe UI Semibold',9),
+                              width=card_w*.57)
+            if action:
+                tag=f'card_{index}_{row}'
+                c.create_rectangle(left+self.px(12),y-self.px(13),right-self.px(12),y+self.px(15),
+                                   fill='',outline='',tags=(tag,))
+                self.canvas_action(c,tag,action)
+        info=game_info(self.var('game_dir','app').get())
+        line(0,0,_('Game ready','Игра готова') if info else _('Choose game folder','Выберите папку игры'),
+             color=SUCCESS if info else '#e1ad65',action=lambda:self.show('game'))
+        if info:
+            line(0,1,_('Game version','Версия игры'),info[1],
+                 SUCCESS if info[1]==PATCH_VERSION else '#e1ad65')
+        line(0,2,self.check_texts.get('saves',_('Checking saves…','Проверка сохранений…')).lstrip('✓• '))
+        missing=bool(fsr4_missing())
+        line(0,3,_('FSR 4 assets missing  ·  Details →','Нет FSR 4  ·  Подробнее →') if missing
+             else _('FSR 4 assets installed','FSR 4 установлены'),
+             color='#e1ad65' if missing else SUCCESS,action=(lambda:self.show('graphics')) if missing else None)
+        if card_h>self.px(195):
+            line(0,4,_('All 1.09 patches available','Патчи 1.09 доступны') if info and info[1]==PATCH_VERSION
+                 else _('Patch status  ·  Details →','Состояние патчей →'),
+                 color=SUCCESS if info and info[1]==PATCH_VERSION else MUTED,
+                 action=lambda:self.show('mods'))
+        line(1,0,_('Resolution','Разрешение'),self.var('output_res','ini').get().replace('x',' × '))
+        fps=dict(FPS_MODES).get(self.var('fps_mode','app').get(),('?',))[0]
+        line(1,1,_('Frame rate','Частота кадров'),fps)
+        upscaler=dict(UPSCALERS).get(self.var('upscaler','ini').get(),('?',))[0].split(' (')[0]
+        line(1,2,_('Upscaling','Апскейлинг'),upscaler,action=lambda:self.show('graphics'))
+        line(1,3,_('Display','Экран'),_('Fullscreen','Полный экран') if self.var('fullscreen','app').get()
+             else _('Windowed','В окне'),action=lambda:self.show('display'))
+        if card_h>self.px(195):
+            gpu=self.gpu_text.lstrip('✓•✗ ').replace('Graphics card: ','')
+            line(1,4,gpu[:41] + ('…' if len(gpu)>41 else ''),color=MUTED)
+        line(2,0,_('Xbox controller connected','Геймпад Xbox подключен') if self.controller_connected()
+             else _('No Xbox controller detected','Геймпад Xbox не найден'),
+             color=SUCCESS if self.controller_connected() else MUTED)
+        line(2,1,_('Insert or L3+R3 opens the guide','Insert или L3+R3 открывает меню'),color=MUTED)
+        line(2,2,_('Mods & patches  →','Моды и патчи  →'),color=GOLD,action=lambda:self.show('mods'))
+        line(2,3,_('Add to Steam  →','Добавить в Steam  →'),color=GOLD,action=self.add_to_steam)
+        if card_h>self.px(195):
+            line(2,4,_('Online co-op enabled','Кооператив включён') if self.var('online','app').get()
+                 else _('Playing offline','Игра офлайн'),color=MUTED,action=lambda:self.show('online'))
+        banner_y=card_y+card_h+self.px(12)
+        if banner_y+self.px(55)<h:
+            footer_height=h-self.px(10)-banner_y
+            footer=self.footer_art(art,round(w-2*margin),round(footer_height))
+            round_rect(c,margin,banner_y,w-margin,h-self.px(10),10*s,'#172027','#394751')
+            if footer:
+                c.create_image(margin,banner_y,image=footer,anchor='nw')
+            round_rect(c,margin,banner_y,w-margin,h-self.px(10),10*s,'','#63707a')
+            c.create_text(margin+self.px(19),banner_y+self.px(21),
+                          text=_('THE HUNT CONTINUES','ОХОТА ПРОДОЛЖАЕТСЯ'),anchor='w',fill=GOLD,
+                          font=('Segoe UI Semibold',9))
+            c.create_text(margin+self.px(19),banner_y+self.px(43),
+                          text=_('Return to Yharnam. Your saves stay with your game installation.',
+                                 'Вернитесь в Ярнам. Сохранения остаются в установленной игре.'),
+                          anchor='w',fill=TEXT,font=('Georgia',12))
+            c.create_text(w-margin-self.px(20),banner_y+self.px(34),text='→',anchor='e',fill=GOLD,
+                          font=('Segoe UI',19))
 
     def scaled_art(self, path, width):
         """The cover art scaled to `width`: Pillow (smooth) or Tk's integer subsampling."""
@@ -948,6 +1310,15 @@ class Launcher:
                     _('Empty: {}', 'Пусто: {}').format(DATA_DIR / 'mods'), on_change=self.refresh_lists)
         self.mods_frame = self.ttk.Frame(f)
         self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
+        self.section(f, _('Optional: Bloodborne Enhanced', 'Дополнительно: Bloodborne Enhanced'))
+        self.note(f, _('Adds lamp rest and travel, vial restocking and boss rematches. Download it from its author, '
+                       'place it in the Mods folder, then enable it above. Its own features can be changed in game '
+                       'through the Doll or Prime Hunter\'s Mark. It is not included in this launcher.',
+                       'Добавляет отдых и перемещение у ламп, пополнение флаконов и повторные бои с боссами. '
+                       'Скачайте мод у автора и поместите его в папку модов. Настройки меняются через Куклу.'), top=4)
+        self.ttk.Button(f, text=_('Open Bloodborne Enhanced on Nexus', 'Открыть Bloodborne Enhanced на Nexus'),
+                        command=lambda:webbrowser.open('https://www.nexusmods.com/bloodborne/mods/19')).grid(
+                            row=self.next_row(f),column=0,columnspan=2,sticky='w',pady=(10,0))
         self.section(f, _('Third-party patches', 'Сторонние патчи'))
         self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
                     _('shadPS4/GoldHEN XML patch files for version 1.09. Empty: {}',
@@ -1046,15 +1417,14 @@ class Launcher:
                      '⚠ Версия игры {}: 30 FPS без патчей сообщества (они для 1.09)').format(info[1])
         user = Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
         saves = list((user / 'savedata').glob('*/*/SPRJ*')) if (user / 'savedata').is_dir() else []
-        save = (_('✓ Saves found in {}', '✓ Найдены сохранения в {}').format(user) if saves
-                else _('• No saves yet: the game creates them in {}', '• Сохранений пока нет: игра создаст их в {}').format(user))
+        save = (_('✓ Saves found', '✓ Сохранения найдены') if saves
+                else _('• No saves yet: the game creates them when you play',
+                       '• Сохранений пока нет: игра создаст их после запуска'))
         missing = fsr4_missing()
         fsr4 = (_('✓ FSR 4 assets installed', '✓ Ассеты FSR 4 установлены') if not missing else
                 _('• FSR 4 assets missing (Graphics); FSR 3.1 is used meanwhile',
                   '• Нет ассетов FSR 4 («Графика»); пока используется FSR 3.1'))
-        for key, text in (('game', game), ('saves', save), ('gpu', self.gpu_text), ('fsr4', fsr4)):
-            self.checks[key].configure(text=text, foreground=MUTED if text.startswith('•') else
-                                       '#d9a441' if text.startswith('⚠') else '#d36b5c' if text.startswith('✗') else TEXT)
+        self.check_texts.update((('game', game), ('saves', save), ('gpu', self.gpu_text), ('fsr4', fsr4)))
         for label in getattr(self, 'warnings', []):
             if info and info[1] != PATCH_VERSION:
                 label.configure(text=label.template.format(info[1]))
@@ -1062,9 +1432,14 @@ class Launcher:
             else:
                 label.grid_remove()
         if not self.process:
-            self.play_button.configure(state='normal' if info else 'disabled')
+            self.set_play_enabled(bool(info))
             self.status.configure(text=self.summary() if info else _('Choose the game folder first.',
                                                                      'Сначала выберите папку игры.'), fg=MUTED)
+
+    def set_play_enabled(self, enabled):
+        self.play_enabled = enabled
+        if hasattr(self, 'dashboard'):
+            self.draw_dashboard()
 
     def summary(self):
         fps = dict(FPS_MODES).get(self.var('fps_mode', 'app').get(), ('?',))
@@ -1145,12 +1520,19 @@ class Launcher:
             for widget in holder.winfo_children():
                 widget.destroy()
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
-        profile = load_json(DATA_DIR / 'mods.json', {})
+        mod_config = DATA_DIR / 'mods.json'
+        profile = load_json(mod_config, {})
+        mtime = mod_config.stat().st_mtime_ns if mod_config.is_file() else None
+        externally_changed = self.mod_profile_mtime is not None and mtime != self.mod_profile_mtime
+        if externally_changed:
+            self.mod_dirty = False
+            self.mod_order = []
+        self.mod_profile_mtime = mtime
         available = discover(root)
         if set(self.mod_order) != set(available):
             known = [n for n in profile.get('order', []) if n in available]
             self.mod_order = known + [n for n in available if n not in known]
-        old = {n: v.get() for n, v in self.mod_vars.items()}
+        old = {} if externally_changed else {n: v.get() for n, v in self.mod_vars.items()}
         self.mod_vars = {}
         if not available:
             ttk.Label(self.mods_frame, text=_('No mods in {} yet.', 'В {} пока нет модов.').format(root),
@@ -1159,6 +1541,7 @@ class Launcher:
             line = ttk.Frame(self.mods_frame)
             line.pack(fill='x', pady=1)
             var = tk.BooleanVar(value=old.get(name, name not in profile.get('disabled', [])))
+            var.trace_add('write', lambda *_a: setattr(self,'mod_dirty',True))
             self.mod_vars[name] = var
             ttk.Button(line, text='▲', width=3, command=lambda i=index: self.move_mod(i, -1)).pack(side='left')
             ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=(2, 10))
@@ -1186,6 +1569,7 @@ class Launcher:
         other = index + step
         if 0 <= other < len(self.mod_order):
             self.mod_order[index], self.mod_order[other] = self.mod_order[other], self.mod_order[index]
+            self.mod_dirty = True
             self.refresh_lists()
 
     def collect(self):
@@ -1205,9 +1589,17 @@ class Launcher:
         save_ini({key: self.ini[key] for key in INI_DEFAULTS}, self.ini_lines)
         self.ini, self.ini_lines = load_ini()
         if self.mod_order:
-            (DATA_DIR / 'mods.json').write_text(json.dumps(
-                {'order': self.mod_order, 'disabled': [n for n, v in self.mod_vars.items() if not v.get()]},
-                indent=2), encoding='utf-8')
+            mod_config = DATA_DIR / 'mods.json'
+            mtime = mod_config.stat().st_mtime_ns if mod_config.is_file() else None
+            if mtime == self.mod_profile_mtime or self.mod_dirty:
+                # An in-game prompt switch may update this while the launcher remains open.
+                # Keep that newer choice unless this window itself changed the mod list.
+                profile = load_json(mod_config, {})
+                profile.update({'order': self.mod_order,
+                                'disabled': [n for n, v in self.mod_vars.items() if not v.get()]})
+                mod_config.write_text(json.dumps(profile, indent=2), encoding='utf-8')
+                self.mod_profile_mtime = mod_config.stat().st_mtime_ns
+                self.mod_dirty = False
         if self.patch_vars:
             chosen = load_json(DATA_DIR / 'patches.json', {})
             shown = set(self.patch_vars)
@@ -1251,7 +1643,7 @@ class Launcher:
             return
         self.job = GameJob(self.process)
         threading.Thread(target=self.read_output, args=(self.process,), daemon=True).start()
-        self.play_button.configure(state='disabled')
+        self.set_play_enabled(False)
         self.stop_button.configure(state='normal')
         self.status.configure(text=_('Preparing the game; it opens in its own window…',
                                      'Подготовка игры; она откроется в своём окне…'), fg=GOLD)
@@ -1608,6 +2000,19 @@ def main():
         ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on scaled displays
     except (AttributeError, OSError):
         pass
+    if '--classic-launcher' not in args:
+        try:
+            from bbport_launcher_qml import run_ui
+        except ImportError as error:
+            import traceback
+            try:
+                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                (CONFIG_DIR / 'launcher-startup.log').write_text(traceback.format_exc(), encoding='utf-8')
+            except OSError:
+                pass
+            print(f'Qt Quick unavailable; opening classic launcher: {error}', file=sys.stderr)
+        else:
+            sys.exit(run_ui())
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     root = tk.Tk()
