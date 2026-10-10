@@ -20,6 +20,8 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 import bbport_launcher_win as core
+from bbport_pkg_setup import PackageSetupError, install_game
+from bbport_readiness import check_readiness, valid_trophy_key
 
 
 def choice_rows(options):
@@ -104,6 +106,9 @@ class LauncherBackend(QObject):
     workerNotice = Signal(str)
     gpuDetected = Signal(str)
     connectionResult = Signal(str)
+    setupRunningChanged = Signal()
+    setupCompleted = Signal(str)
+    setupFailed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -117,10 +122,13 @@ class LauncherBackend(QObject):
         self._patches = []
         self._update = None
         self._gpu_status = 'Checking graphics card…'
+        self._setup_running = False
         self.workerNotice.connect(self._set_notice)
         self.updateAvailable.connect(self._offer_update)
         self.gpuDetected.connect(self._set_gpu_status)
         self.connectionResult.connect(self._show_connection_result)
+        self.setupCompleted.connect(self._complete_game_setup)
+        self.setupFailed.connect(self._fail_game_setup)
         self.refresh_addons()
         threading.Thread(target=self._detect_gpu, daemon=True).start()
         if self.app.get('check_updates'):
@@ -130,6 +138,10 @@ class LauncherBackend(QObject):
     def notice(self):
         return self._notice
 
+    @Property(str, constant=True)
+    def version(self):
+        return core.VERSION
+
     @Property(str, notify=logChanged)
     def log(self):
         return self._log
@@ -137,6 +149,10 @@ class LauncherBackend(QObject):
     @Property(bool, notify=runningChanged)
     def running(self):
         return self.process is not None
+
+    @Property(bool, notify=setupRunningChanged)
+    def setupRunning(self):
+        return self._setup_running
 
     @Property(str, notify=changed)
     def gameStatus(self):
@@ -155,9 +171,17 @@ class LauncherBackend(QObject):
 
     @Property(str, notify=changed)
     def saveStatus(self):
-        folder = Path(self.app.get('user_dir') or core.DATA_DIR / 'user')
-        saves = list((folder / 'savedata').glob('*/*/SPRJ*')) if (folder / 'savedata').is_dir() else []
-        return 'Saves found' if saves else 'No saves found in this folder yet'
+        return self.readiness[2]['detail']
+
+    @Property('QVariantList', notify=changed)
+    def readiness(self):
+        return check_readiness(self.app.get('game_dir'),
+                               self.app.get('user_dir') or core.DATA_DIR / 'user',
+                               core.game_info)
+
+    @Slot()
+    def refreshReadiness(self):
+        self.changed.emit()
 
     @Property(str, notify=changed)
     def gpuStatus(self):
@@ -221,6 +245,67 @@ class LauncherBackend(QObject):
         self.ini, self.ini_lines = core.load_ini()
         self.changed.emit()
 
+    @Slot()
+    def installFromArchive(self):
+        if self._setup_running or self.running:
+            self._set_notice('Close the game or wait for the current setup to finish.')
+            return
+        source, _ = QFileDialog.getOpenFileName(
+            None, 'Choose cusa-03173.zip or CUSA03173.pkg', str(Path.home() / 'Downloads'),
+            'Game archive or base PKG (*.zip *.pkg)')
+        if not source:
+            return
+        update = None
+        if Path(source).suffix.casefold() == '.pkg':
+            update, _ = QFileDialog.getOpenFileName(
+                None, 'Choose CUSA03173 Update v1.09.pkg', str(Path(source).parent), 'Update PKG (*.pkg)')
+            if not update:
+                return
+        parent = QFileDialog.getExistingDirectory(
+            None, 'Choose where to create the CUSA03173 game folder', str(Path.home()))
+        if not parent:
+            return
+        target = Path(parent) / 'CUSA03173'
+        if target.exists():
+            QMessageBox.warning(None, 'Game folder already exists',
+                                f'{target} already exists. Choose another location so no game files are replaced.')
+            return
+        extractor = core.PORT_DIR / 'tools' / 'pkg-extractor' / 'pkg_extractor.exe'
+        if not extractor.is_file() and not core.FROZEN:
+            extractor = core.PORT_DIR / 'out' / 'vendor' / 'pkg-extractor' / 'pkg_extractor.exe'
+        self._setup_running = True
+        self.setupRunningChanged.emit()
+        self._set_notice('Preparing your game files. Keep the launcher open…')
+
+        def work():
+            try:
+                installed = install_game(source, parent, extractor, update, self.workerNotice.emit)
+                self.setupCompleted.emit(str(installed))
+            except PackageSetupError as error:
+                self.setupFailed.emit(str(error))
+            except Exception as error:
+                self.setupFailed.emit(f'Unexpected installer error: {error}')
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(str)
+    def _complete_game_setup(self, folder):
+        self.app['game_dir'] = folder
+        self._write()
+        self._setup_running = False
+        self.setupRunningChanged.emit()
+        info = core.game_info(folder)
+        if info and info[1] == '01.09':
+            self._set_notice('Game installed and version 1.09 verified. Press PLAY.')
+        else:
+            self._set_notice('Game installed. Check that the launcher reports version 1.09 before playing.')
+
+    @Slot(str)
+    def _fail_game_setup(self, message):
+        self._setup_running = False
+        self.setupRunningChanged.emit()
+        self._set_notice(message)
+        QMessageBox.warning(None, 'Game installation could not finish', message)
+
     @Slot(str, 'QVariant')
     def setValue(self, key, value):
         if key not in core.APP_DEFAULTS and key not in core.INI_DEFAULTS:
@@ -255,8 +340,8 @@ class LauncherBackend(QObject):
         try:
             data = json.loads(Path(source).read_text(encoding='utf-8-sig'))
             trophy_key = data['TrophyKeySet']['ReleaseTrophyKey']
-            if not isinstance(trophy_key, str) or not trophy_key.strip():
-                raise ValueError('ReleaseTrophyKey must be a non-empty string')
+            if not valid_trophy_key(trophy_key):
+                raise ValueError('ReleaseTrophyKey must be 32 hexadecimal characters')
         except (OSError, ValueError, KeyError, TypeError) as error:
             QMessageBox.warning(None, 'Invalid trophy keys',
                                 f'This is not a valid trophy keys.json: {error}')
@@ -317,6 +402,9 @@ class LauncherBackend(QObject):
 
     @Slot()
     def play(self):
+        if self._setup_running:
+            self._set_notice('Wait for the game files to finish installing.')
+            return
         if self.process:
             return
         if not core.game_info(self.app.get('game_dir')):

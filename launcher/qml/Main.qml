@@ -74,16 +74,17 @@ ApplicationWindow {
                     height: 67
                     width: parent.width
                     spacing: 13
-                    Rectangle {
-                        width: 46; height: 46; radius: 11; color: "#59323e"
-                        border.color: "#77e7a5af"
-                        NavIcon { anchors.centerIn: parent; width: 26; height: 26; kind: "achievements"; strokeColor: "#f8e6e8" }
+                    Image {
+                        width: 46; height: 46
+                        source: Qt.resolvedUrl("../assets/hunter-icon.png")
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true; mipmap: true
                     }
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 2
                         Text { text: "BLOODBORNE"; color: cream; font.family: "Georgia"; font.pointSize: 14; font.bold: true }
-                        Text { text: "WINDOWS  ·  " + "1.6.5"; color: quiet; font.pixelSize: 10; font.letterSpacing: 1.3 }
+                        Text { text: "WINDOWS  ·  " + launcher.version; color: quiet; font.pixelSize: 10; font.letterSpacing: 1.3 }
                     }
                 }
                 Rectangle { width: parent.width; height: 1; color: "#38ffffff" }
@@ -208,6 +209,60 @@ ApplicationWindow {
                         id: settingsColumn
                         width: settingsView.width - 14
                         spacing: 9
+                        Rectangle {
+                            visible: page === "Game"
+                            width: parent.width; height: visible ? 82 : 0; radius: 8
+                            color: "#86151d27"; border.color: "#6a9dc6b2"
+                            GlassButton {
+                                x: 12; y: 12; width: 232; height: 36
+                                text: launcher.setupRunning ? "Installing game files…" : "Install from ZIP / PKG"
+                                enabled: !launcher.setupRunning && !launcher.running
+                                onClicked: launcher.installFromArchive()
+                            }
+                            Text {
+                                x: 12; y: 54; width: parent.width - 24
+                                text: "Choose your cusa-03173.zip or base and 1.09 PKGs. Your current game folder is never replaced."
+                                color: quiet; font.pixelSize: 12; elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle {
+                            visible: page === "Game"
+                            width: parent.width; height: visible ? 202 : 0; radius: 10
+                            color: "#94111922"; border.color: "#65c4d4d2"
+                            Text {
+                                x: 15; y: 12; text: "SETUP CHECKS"
+                                color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.6
+                            }
+                            GlassButton {
+                                anchors.right: parent.right; anchors.rightMargin: 12; y: 7
+                                text: "Check again"; width: 108; height: 29
+                                onClicked: launcher.refreshReadiness()
+                            }
+                            Column {
+                                x: 14; y: 47; width: parent.width - 28; spacing: 6
+                                Repeater {
+                                    model: page === "Game" ? launcher.readiness : []
+                                    delegate: Rectangle {
+                                        width: parent.width; height: 43; radius: 6
+                                        color: "#40ffffff"; border.color: "#2cffffff"
+                                        Rectangle {
+                                            x: 9; y: 16; width: 10; height: 10; radius: 5
+                                            color: modelData.level === "ready" ? "#72d69a" :
+                                                   modelData.level === "error" ? "#df6672" : "#e9ba69"
+                                        }
+                                        Text {
+                                            x: 27; y: 5; text: modelData.label
+                                            color: cream; font.pixelSize: 13; font.bold: true
+                                        }
+                                        Text {
+                                            x: 27; y: 23; width: parent.width - 37
+                                            text: modelData.detail; color: quiet; font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         Repeater {
                             model: page === "Home" || page === "Log" ? [] : launcher.fields(page)
                             delegate: FieldRow { width: settingsColumn.width; field: modelData }
@@ -297,7 +352,7 @@ ApplicationWindow {
                 Text { x: 30; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 320; elide: Text.ElideRight; text: launcher.notice; color: "#cbd2d8"; font.pixelSize: 12 }
                 Row { anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter; spacing: 10
                     GlassButton { text: "STOP"; enabled: launcher.running; onClicked: launcher.stop(); width: 106; height: 42 }
-                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
+                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running && !launcher.setupRunning; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
                 }
             }
         }

@@ -15,6 +15,15 @@ Starting
 - Bloodborne.exe opens the launcher. On "Game" choose the folder containing eboot.bin,
   adjust settings, then press PLAY. The Home page shows the game version, saves, graphics
   card and FSR 4 assets. The new Qt Quick panels let the background show through.
+- If you have cusa-03173.zip instead of an extracted game folder, use Game ->
+  "Install from ZIP / PKG". Choose your ZIP, then an empty destination parent folder.
+  The bundled extractor applies the plain 1.09 update and sets the Game folder for you.
+  With a 30 GB ZIP, allow about 70 GB of free space while it runs. Existing game folders
+  are never replaced. You can also choose the base and plain 1.09 PKGs directly.
+- On Game, review "Setup checks" before PLAY. It checks the game folders and version,
+  whether the trophy pack and key format are present, and whether the save folder is
+  writable. Amber for saves is expected before your first save. Use "Check again" after
+  copying files. Trophy-name decryption is only confirmed once the game reads the pack.
 - Play Bloodborne.exe starts the game straight away with the settings saved in the launcher,
   without opening it. Set things up once in Bloodborne.exe, then use Play Bloodborne.exe (or a
   shortcut to it, or "Add to Steam" on the Advanced page). If no game folder is chosen
@@ -97,6 +106,8 @@ Mods and patches
   Prime Hunter's Mark.
 
 Credits
+- PKG extraction: ShadPs4Plus PKG Extractor 1.1 by AzaharPlus, GPL-2.0,
+  https://github.com/AzaharPlus/shadPS4Plus. Its license is in licenses\.
 - Online play: shadp2p by Wozzardman (https://github.com/Wozzardman/shadp2p), shadNet by the
   shadPS4 team, The Hunter's Dream by droogie.
 - bbport (the Linux port this is built on): https://github.com/deadinside28/bloodborne_pc

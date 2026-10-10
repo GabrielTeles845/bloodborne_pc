@@ -48,29 +48,39 @@ or save file. Real unlocks say *Achievement unlocked*.
 
 ## Which download do I click?
 
-On the [QML launcher preview release](https://github.com/Jgamrot/bloodborne_pc/releases/tag/qml-launcher-preview-1),
-download **[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/qml-launcher-preview-1/bbport-windows.zip)**.
-It contains the launcher, game executable and Xbox button prompts. Extract the whole archive.
+On the [latest release](https://github.com/Jgamrot/bloodborne_pc/releases/latest),
+download **[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/latest/download/bbport-windows.zip)**.
+It contains the launcher, game executable, Xbox button prompts and PKG extractor. Extract the whole archive.
 The two **Source code** downloads are for developers; they are not the game.
 None of these downloads includes Bloodborne's game files.
 
-This is a **prerelease**. A game launch with an already configured game folder has been checked;
-first-run folder selection and trophy-key import still need wider testing.
+The packaged launcher and game launch were checked on Windows. Trophy-key import still needs
+wider testing; you can also place your own `keys.json` in `bbport-windows\user` manually.
 
 ## First-time setup
 
 1. Right-click **bbport-windows.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
-2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
-   *different* folder from `bbport-windows`. The correct folder has `eboot.bin` directly
-   inside it, alongside `dvdroot_ps4`, `sce_module`, and `sce_sys`.
-3. Open `bbport-windows` and double-click **Bloodborne.exe**. In the launcher, open
-   **Game**. Beside **Game folder**, choose the folder that contains `eboot.bin`.
-   Select the folder itself, not `eboot.bin` and not the port's `bbport-windows` folder.
-4. Click **PLAY**. The first launch prepares files and may take a while. New areas may stutter
+2. Open `bbport-windows` and double-click **Bloodborne.exe**. Open **Game** in the left sidebar.
+3. If you have `cusa-03173.zip`, click **Install from ZIP / PKG**, choose that ZIP, then choose
+   an empty destination such as `C:\Games\Bloodborne`. The launcher extracts the base game and
+   the *plain* 1.09 update and creates `CUSA03173` there. Keep it open until it says the game
+   is installed. For a 30 GB archive, allow about 70 GB of free space during setup. The ZIP
+   and your other game folders are not changed.
+4. If you already have an extracted game folder with `eboot.bin` directly inside it, skip the
+   install button. Beside **Game folder**, click **Browse** and choose that folder. Do not
+   select `eboot.bin`, the ZIP, a `.pkg`, or the `bbport-windows` folder.
+5. Look at **Setup checks** on the Game page. **Game files** should turn green when the selected
+   folder has version 1.09. **Trophies** shows whether the trophy pack and your own key are
+   present; trophy names are verified after the game reads them. **Saves** checks that the save
+   folder is writable and whether a Bloodborne save already exists. Amber is normal for a new
+   install with no saves yet. Click **Check again** after copying files or importing a key.
+6. Click **PLAY**. The first launch prepares files and may take a while. New areas may stutter
    briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
    your saved settings without opening the launcher.
+
+![The Game page shows Install from ZIP or PKG, setup checks, and the game folder selector](docs/images/setup-game-tab.jpg)
 
 For example, this folder layout works:
 
@@ -86,27 +96,11 @@ C:\Games\Bloodborne\
     └── sce_sys\
 ```
 
-### If your game is in `cusa-03173.zip`
-
-That archive is **not** ready for the launcher when you use Windows **Extract All**: it
-contains `CUSA03173.pkg` and several update `.pkg` files. The launcher cannot open the ZIP
-or a PKG directly. If you already have a folder with `eboot.bin`, use that and skip this part.
-
-1. Right-click `cusa-03173.zip` and choose **Extract All**. Open its `cusa-03173` folder.
-2. Download and extract [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus/releases/tag/PKG_EXTRACTOR_1_1).
-   Drag `CUSA03173.pkg` onto `pkg_extractor.exe` and wait for extraction to finish.
-3. Drag **`CUSA03173 Update v1.09.pkg`** onto the same `pkg_extractor.exe` and wait again.
-   Use this plain 1.09 update, not the separate 720p or 1080p variants.
-4. You should now have a base `CUSA03173` folder and an update folder (often called
-   `CUSA03173-patch`). Open the update folder, select everything inside it, copy it into
-   the base `CUSA03173` folder, and choose **Replace** when Windows asks.
-5. Check that the base folder now contains `eboot.bin`, `dvdroot_ps4`, `sce_module`, and
-   `sce_sys`. Move that complete folder to a permanent location, then choose it in the
-   launcher's **Game folder** box as described above.
-
-If the launcher says **No eboot.bin**, you selected the wrong folder or have only extracted
-the PKG archive. If it reports game version 1.00, the 1.09 update was not copied into the
-base folder. The game's own files are never uploaded to this repository.
+The finished folder should contain `eboot.bin`, `dvdroot_ps4`, `sce_module`, and `sce_sys`.
+If the launcher says **No eboot.bin**, you chose the wrong folder. If it reports version 1.00,
+the 1.09 update did not apply. The installer uses the independently licensed
+[ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus/releases/tag/PKG_EXTRACTOR_1_1)
+bundled in this release; the game's own files are never uploaded to this repository.
 
 ## Already have another launcher or a working game installation?
 
@@ -121,7 +115,7 @@ fork's full package in a **new** folder:
 3. Download the **full Windows package** above, extract it to a new permanent folder, and
    run its `Bloodborne.exe`. Do not copy only `Bloodborne.exe` into an older port: it needs
    the matching `bin`, scripts, patches, and support files from this package.
-4. In **Game & effects**, set **Game folder** to your *existing* folder containing
+4. In **Game**, set **Game folder** to your *existing* folder containing
    `eboot.bin`. Set **Saves folder** to your existing `user` folder if you want to keep those
    saves, or use the new default `user` folder and copy your backed-up save files into it
    while the launcher and game are closed. Keep a backup until the saves load successfully.
@@ -142,7 +136,7 @@ Xbox and original PlayStation buttons on the launcher's **Mods** page.
   [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
 - A v1.6.1 executable passed our fresh character-creation test: the preview appeared and the
   character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. The
-  v1.6.5 executable has not repeated that character-creation test. The earlier preview
+  v1.6.6 executable has not repeated that character-creation test. The earlier preview
   problem's cause remains unisolated.
 - The full package has a launcher that checks this fork for updates.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
@@ -157,7 +151,7 @@ Xbox and original PlayStation buttons on the launcher's **Mods** page.
   a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
   The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
   we have not measured its FPS effect on this Windows build.
-- v1.6.5 shows a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
+- v1.6.6 shows a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
   with Home, Achievements, Settings, and Mods/Cheats tabs. Trophy unlocks show a queued
   green achievement toast. The port
   extracts the trophy icons from your own game files and keeps local unlock dates in
@@ -197,6 +191,8 @@ translation goes to the author of [PR #13](https://github.com/Supermedo/bloodbor
 The Xbox prompts are by **Dommo**, from
 [Xbox (and switch) UI for Bloodborne](https://www.nexusmods.com/bloodborne/mods/30),
 redistributed under the upload permission on the mod page.
+The bundled PKG extraction helper is [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus),
+by AzaharPlus under GPL-2.0; its license is included in the `licenses` folder.
 [Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19) is an optional manual
 download. Its author does not permit redistribution, so it is not in this package. Put it in
 the launcher’s `mods` folder to enable it; its own features are configured in game through
