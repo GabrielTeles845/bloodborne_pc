@@ -52,9 +52,9 @@ On the [latest release](https://github.com/Jgamrot/bloodborne_pc/releases/latest
 download **[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/latest/download/bbport-windows.zip)**.
 It contains the launcher, game executable, Xbox button prompts and PKG extractor. Extract the whole archive.
 The two **Source code** downloads are for developers; they are not the game.
-None of these downloads includes Bloodborne's game files.
+None of these downloads includes Bloodborne's game files, saves or a trophy key.
 
-The packaged launcher and game launch were checked on Windows. Trophy-key import still needs
+The packaged launcher reached the title screen on Windows. Trophy-key import still needs
 wider testing; you can also place your own `keys.json` in `bbport-windows\user` manually.
 
 ## First-time setup
@@ -67,19 +67,21 @@ wider testing; you can also place your own `keys.json` in `bbport-windows\user` 
    launcher. You can reopen the wizard later from **Game → Setup wizard**.
 3. In the wizard's **Game** step (or the launcher's **Game** page), if you have `cusa-03173.zip`,
    click **Install from ZIP / PKG**, choose that ZIP, then choose
-   an empty destination such as `C:\Games\Bloodborne`. The launcher extracts the base game and
-   the *plain* 1.09 update and creates `CUSA03173` there. Keep it open until it says the game
+   a destination such as `C:\Games\Bloodborne`. The launcher extracts the base game and
+   the *plain* 1.09 update and creates `CUSA03173` there. It will not replace an
+   existing `CUSA03173` folder. Keep it open until it says the game
    is installed. For a 30 GB archive, allow about 70 GB of free space during setup. The ZIP
    and your other game folders are not changed.
 4. If you already have an extracted game folder with `eboot.bin` directly inside it, skip the
    install button. In the wizard click **Choose existing game folder**, or beside **Game folder**
    click **Browse**, and choose that folder. Do not
    select `eboot.bin`, the ZIP, a `.pkg`, or the `bbport-windows` folder.
-5. Look at the wizard's checks or **Setup checks** on the Game page. **Game files** should turn green when the selected
-   folder has version 1.09. **Trophies** shows whether the trophy pack and your own key are
-   present; trophy names are verified after the game reads them. **Saves** checks that the save
-   folder is writable and whether a Bloodborne save already exists. Amber is normal for a new
-   install with no saves yet. Click **Check again** after copying files or importing a key.
+5. On **Your data**, optionally import your own `keys.json` or choose an existing saves folder.
+   Look at the wizard's checks or **Setup checks** on the Game page. **Game files** should turn
+   green when the selected folder has version 1.09. **Trophies** checks the pack and key format;
+   trophy-name decryption is confirmed only after the game reads the pack. **Saves** checks that
+   the folder is writable and whether a Bloodborne save exists. Amber is normal for a new
+   install with no saves yet. Click **Check again** after changing files.
 6. Finish the wizard and click **Play now**, or click **PLAY** in the launcher. The first launch
    prepares files and may take a while. New areas may stutter
    briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
@@ -188,7 +190,7 @@ Xbox and original PlayStation buttons on the launcher's **Mods** page.
 ## Help and source
 
 Open an [issue on this fork](https://github.com/Jgamrot/bloodborne_pc/issues) with your GPU,
-what happened, and `user\last_run.log` from the game folder. Build instructions are in
+what happened, and `user\last_run.log` from the `bbport-windows` folder. Build instructions are in
 [packaging/windows/README.md](packaging/windows/README.md).
 
 The port is free software under the repository's [LICENSE](LICENSE). The release includes
