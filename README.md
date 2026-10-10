@@ -156,8 +156,10 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
   creation. Going back and choosing New Game again can make it appear. Waiting on the first
   screen and changing the upscaler or resolution have not cleared it. The cause remains
   unisolated; a v1.6.1 executable showed the preview in one earlier test.
+- Display buffers are released before the game receives a flip-complete event, preventing a late
+  label reset from overwriting the next frame's label and triggering "Out of order flip IRQ".
 - The full package has a launcher that checks this fork for updates.
-- The 1.6.7 package includes the Xbox button prompts (every build now packages them from
+- The Windows package includes the Xbox button prompts (every build now packages them from
   `packaging/windows/mods`). Its updater adds them to an existing installation if that mod
   folder is missing, while leaving existing mods and settings alone.
 - Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
