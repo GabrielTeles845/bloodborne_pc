@@ -80,6 +80,12 @@ struct Values {
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};
+    /// Mouse camera (src/mouse_camera.c): the mouse turns the camera directly, 1:1, while the
+    /// game window holds it (a click captures it). Sensitivity in tenths: 10 = 900 counts per
+    /// radian. BB_MOUSE_CAMERA=0 turns it off.
+    std::atomic<bool> mouse_camera{true};
+    std::atomic<int> mouse_sensitivity{10};
+    std::atomic<bool> mouse_invert_y{false};
     std::atomic<int> active_render_width{1920}, active_render_height{1080};
     /// Applied at start (patches.py); the menu shows when a restart is needed.
     std::atomic<bool> effects[EffectCount]{};

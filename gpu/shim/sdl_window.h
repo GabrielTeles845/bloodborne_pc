@@ -41,6 +41,8 @@ private:
     std::mutex text_mutex;
     bool text_requested{}, text_active{};
     bool fullscreen_applied{}; // what the window was last set to (BbSettings::Values::fullscreen)
+    bool mouse_armed{};        // a click asked for the mouse camera (window.cpp)
+    bool mouse_captured{};     // relative mouse mode is on
     int text_state{};
     std::string text, text_prompt, base_title;
     void UpdateTextTitle();

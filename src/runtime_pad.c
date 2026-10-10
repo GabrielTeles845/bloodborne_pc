@@ -8,6 +8,7 @@
  * IJKL camera, Escape menu, Enter / Backspace menu confirm / back, Left Ctrl L3. */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include "mouse_camera.h"
 #include "gpu/bbgpu.h"
 #include "input_bindings.h"
 #include <stdio.h>
@@ -152,15 +153,21 @@ static void sample_host(PadData *d) {
     }
     BindOutput o;
     bb_bindings_apply(k,nkeys,mouse,&o);
-    if (!o.any) return;
-    d->buttons|=o.buttons;
-    if (o.buttons & BTN_L2) d->l2=255;
-    if (o.buttons & BTN_R2) d->r2=255;
-    if (o.touch_side>=0) touch_click(d,o.touch_side);
-    if (o.lx>=0) d->left_x=(uint8_t)o.lx;
-    if (o.ly>=0) d->left_y=(uint8_t)o.ly;
-    if (o.rx>=0) d->right_x=(uint8_t)o.rx;
-    if (o.ry>=0) d->right_y=(uint8_t)o.ry;
+    if (o.any) {
+        d->buttons|=o.buttons;
+        if (o.buttons & BTN_L2) d->l2=255;
+        if (o.buttons & BTN_R2) d->r2=255;
+        if (o.touch_side>=0) touch_click(d,o.touch_side);
+        if (o.lx>=0) d->left_x=(uint8_t)o.lx;
+        if (o.ly>=0) d->left_y=(uint8_t)o.ly;
+        if (o.rx>=0) d->right_x=(uint8_t)o.rx;
+        if (o.ry>=0) d->right_y=(uint8_t)o.ry;
+    }
+    /* The mouse camera (mouse_camera.h) gives way to the stick; locked on, a mouse flick is a
+     * right-stick flick. */
+    bb_mouse_camera_note_stick(d->right_x,d->right_y);
+    const int flick=bb_mouse_camera_stick_x();
+    if (flick>=0) d->right_x=(uint8_t)flick;
 }
 
 /* BB_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated

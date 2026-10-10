@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <cmath>
 #include <cstring>
 #include <SDL3/SDL.h>
 #include "common/assert.h"
@@ -9,8 +10,11 @@
 #include "sdl_window.h"
 #include "bbport_overlay.h"
 #include "bbport_settings.h"
+#include "../bbgpu.h"
 
 void NoteMouseWheel(float y); // below: wheel notches for the pad read
+void NoteMouseMotion(float x, float y); // below: motion for the mouse camera
+void SetMouseCaptured(bool captured);
 
 namespace Frontend {
 
@@ -105,6 +109,20 @@ bool WindowSDL::PollEvents() {
         fullscreen_applied = want_fullscreen;
         SDL_SetWindowFullscreen(window, want_fullscreen);
     }
+    // The mouse camera (src/mouse_camera.c) holds the mouse after a click in the window, while
+    // the setting is on and nothing else needs the pointer: focus elsewhere, the overlay or a
+    // text entry gives it back (a click takes it again).
+    const bool can_capture = BbSettings::Get().mouse_camera.load() && !text_active &&
+                             !bbgpu_overlay_captures_input() &&
+                             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+    if (!can_capture) {
+        mouse_armed = false;
+    }
+    if ((can_capture && mouse_armed) != mouse_captured) {
+        mouse_captured = can_capture && mouse_armed;
+        SDL_SetWindowRelativeMouseMode(window, mouse_captured);
+        SetMouseCaptured(mouse_captured);
+    }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (text_active && (event.type == SDL_EVENT_TEXT_INPUT || event.type == SDL_EVENT_KEY_DOWN)) {
@@ -146,6 +164,17 @@ bool WindowSDL::PollEvents() {
             height = h;
             break;
         }
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            mouse_armed = can_capture;
+            break;
+        case SDL_EVENT_MOUSE_MOTION:
+            if (mouse_captured) {
+                NoteMouseMotion(event.motion.xrel, event.motion.yrel);
+            }
+            break;
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            mouse_armed = false;
+            break;
         case SDL_EVENT_MOUSE_WHEEL:
             NoteMouseWheel(event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y);
             break;
@@ -188,6 +217,35 @@ extern "C" uint32_t bbgpu_mouse_wheel_take(void) {
         bits |= 2;
     }
     return bits;
+}
+
+// Mouse motion for the mouse camera, in 1/16 counts, taken once a camera update on the game's
+// thread. Motion that waited longer than 250 ms (a loading screen, a menu without the camera)
+// is dropped rather than turning the camera all at once afterwards.
+static std::atomic<long long> g_motion_x{0}, g_motion_y{0};
+static std::atomic<unsigned long long> g_motion_taken_ms{0};
+static std::atomic<bool> g_mouse_captured{false};
+void NoteMouseMotion(float x, float y) {
+    g_motion_x.fetch_add(std::llround(x * 16.0f), std::memory_order_relaxed);
+    g_motion_y.fetch_add(std::llround(y * 16.0f), std::memory_order_relaxed);
+}
+void SetMouseCaptured(bool captured) {
+    g_mouse_captured.store(captured, std::memory_order_relaxed);
+    g_motion_x.store(0, std::memory_order_relaxed);
+    g_motion_y.store(0, std::memory_order_relaxed);
+}
+extern "C" int bbgpu_mouse_captured(void) {
+    return g_mouse_captured.load(std::memory_order_relaxed);
+}
+extern "C" int bbgpu_mouse_motion_take(float* dx, float* dy) {
+    const unsigned long long now = SDL_GetTicks();
+    const unsigned long long last = g_motion_taken_ms.exchange(now, std::memory_order_relaxed);
+    const long long x = g_motion_x.exchange(0, std::memory_order_relaxed);
+    const long long y = g_motion_y.exchange(0, std::memory_order_relaxed);
+    const bool stale = now - last > 250;
+    *dx = stale ? 0.0f : float(x) / 16.0f;
+    *dy = stale ? 0.0f : float(y) / 16.0f;
+    return (*dx != 0.0f || *dy != 0.0f) ? 1 : 0;
 }
 
 // The in-game PC menu's Quit Game: the same as closing the window (SDL_PushEvent is safe from

@@ -60,6 +60,12 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.fsr4_auto_exposure = i != 0;
     } else if (key == "fsr4_invert_jitter") {
         v.fsr4_invert_jitter = i != 0;
+    } else if (key == "mouse_camera") {
+        v.mouse_camera = i != 0;
+    } else if (key == "mouse_sensitivity") {
+        v.mouse_sensitivity = std::clamp(i, 1, 50);
+    } else if (key == "mouse_invert_y") {
+        v.mouse_invert_y = i != 0;
     } else if (key == "model_lod") {
         v.model_lod = std::clamp(i, -2, 2);
     } else if (key == "live_resolution") {
@@ -118,7 +124,7 @@ void Load() {
         {"BB_REACTIVE_THRESHOLD", "reactive_threshold"}, {"BB_REACTIVE_MAX", "reactive_max"},
         {"BB_UPSCALE_PRESET", "preset"},            {"BB_OBJECT_MOTION", "object_motion"},
         {"BB_PC_MIRROR", "pc_mirror_appearance"},   {"BB_PC_TWO_INVADERS", "pc_two_invaders"},
-        {"BB_PC_REBIRTH", "pc_rebirth"},
+        {"BB_PC_REBIRTH", "pc_rebirth"},           {"BB_MOUSE_CAMERA", "mouse_camera"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env)) {
@@ -202,7 +208,8 @@ void Save() {
             for (const char* name : {"upscaler", "preset", "sharpen", "sharpness", "jitter", "reactive",
                                      "object_motion", "reactive_scale", "reactive_threshold", "reactive_max",
                                      "debug_view", "show_fps", "fsr4_auto_exposure", "fsr4_invert_jitter",
-                                     "model_lod", "output_res", "live_resolution"}) {
+                                     "model_lod", "output_res", "live_resolution",
+                                     "mouse_camera", "mouse_sensitivity", "mouse_invert_y"}) {
                 ours |= key == name;
             }
             for (int e = 0; e < EffectCount; ++e) ours |= key == Effects[e].key;
@@ -226,6 +233,8 @@ void Save() {
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
                  v.debug_view.load(), int(v.show_fps.load()),
                  int(v.fsr4_auto_exposure.load()), int(v.fsr4_invert_jitter.load()));
+    std::fprintf(file, "mouse_camera=%d\nmouse_sensitivity=%d\nmouse_invert_y=%d\n",
+                 int(v.mouse_camera.load()), v.mouse_sensitivity.load(), int(v.mouse_invert_y.load()));
     // Read by patches.py at start.
     for (int e = 0; e < EffectCount; ++e) {
         std::fprintf(file, "%s=%d\n", Effects[e].key, int(v.effects[e].load()));
@@ -257,6 +266,9 @@ bool Read(const Values& v, const std::string& k, int& out) {
     else if (k == "output_res") out = v.output_res.load();
     else if (k == "live_resolution") out = v.live_resolution.load();
     else if (k == "model_lod") out = v.model_lod.load();
+    else if (k == "mouse_camera") out = v.mouse_camera.load();
+    else if (k == "mouse_sensitivity") out = v.mouse_sensitivity.load();
+    else if (k == "mouse_invert_y") out = v.mouse_invert_y.load();
     else {
         for (int e = 0; e < EffectCount; ++e) {
             if (k == Effects[e].key) {

@@ -46,6 +46,24 @@ int bb_hook_entry(uint64_t at, const unsigned char *prologue, size_t n, void *ho
  * with nothing changed. */
 int bb_patch(uint64_t at, const void *expected, const void *replacement, size_t n);
 
+/* The game's general registers at a bb_hook_mid site, as the host sees (and may change) them. */
+typedef struct {
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8, rdi, rsi, rbp, rbx, rdx, rcx, rax, flags;
+} BbRegs;
+
+/* Runs `host` in the middle of a function, just before the `n` (>= 5) bytes at `at`, which must
+ * be exactly `original`: whole instructions that are not RIP-relative, not branches, and that
+ * no branch lands inside after the first. Every register, the flags and the vector registers
+ * (ymm0-15) are kept; the red zone below the game's stack pointer is left alone. */
+int bb_hook_mid(uint64_t at, const unsigned char *original, size_t n, void (BB_GUEST_ABI *host)(BbRegs *));
+
+/* Makes the `n` (>= 5) bytes at `at` (exactly `original`, under the same rules) skippable while
+ * the game runs: bb_skip(handle, 1) jumps over them, bb_skip(handle, 0) runs them again. The
+ * switch is one pointer-sized store, so it is safe from any thread. NULL when refused. */
+typedef struct BbSkip BbSkip;
+BbSkip *bb_hook_skip(uint64_t at, const unsigned char *original, size_t n);
+void bb_skip(BbSkip *site, int skip);
+
 /* Copies `n` bytes of the game's memory at a guest address without faulting on an unmapped one
  * (game objects a feature reads may not exist yet). Returns 1 when all were read. */
 int bb_read(uint64_t address, void *out, size_t n);

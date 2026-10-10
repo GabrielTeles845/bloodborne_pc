@@ -10,10 +10,11 @@
 #include <sys/mman.h>
 #endif
 
-enum { ARENA_SIZE = 0x10000, REACH = 0x7ff00000 };
+/* The arena's last page stays writable (bb_hook_skip's switches); the rest is code. */
+enum { ARENA_SIZE = 0x10000, DATA_SIZE = 0x1000, CODE_SIZE = ARENA_SIZE - DATA_SIZE, REACH = 0x7ff00000 };
 
 static unsigned char *g_image, *g_arena;
-static size_t g_image_size, g_used;
+static size_t g_image_size, g_used, g_data_used;
 static int g_sealed;
 static const char *g_error = "";
 
@@ -70,7 +71,7 @@ int bb_hooks_init(unsigned char *image, size_t size) {
     memset(g_arena, 0xcc, ARENA_SIZE);
     g_image = image;
     g_image_size = size;
-    g_used = 0;
+    g_used = g_data_used = 0;
     g_sealed = 0;
     return 0;
 }
@@ -79,16 +80,16 @@ void bb_hooks_seal(void) {
     if (!g_arena || g_sealed) return;
 #ifdef _WIN32
     DWORD old;
-    VirtualProtect(g_arena, ARENA_SIZE, PAGE_EXECUTE_READ, &old);
-    FlushInstructionCache(GetCurrentProcess(), g_arena, ARENA_SIZE);
+    VirtualProtect(g_arena, CODE_SIZE, PAGE_EXECUTE_READ, &old);
+    FlushInstructionCache(GetCurrentProcess(), g_arena, CODE_SIZE);
 #else
-    mprotect(g_arena, ARENA_SIZE, PROT_READ | PROT_EXEC);
+    mprotect(g_arena, CODE_SIZE, PROT_READ | PROT_EXEC);
 #endif
     g_sealed = 1;
 }
 
 static unsigned char *stub(size_t size) {
-    if (!g_arena || g_sealed || g_used + size > ARENA_SIZE) return NULL;
+    if (!g_arena || g_sealed || g_used + size > CODE_SIZE) return NULL;
     unsigned char *at = g_arena + g_used;
     g_used = (g_used + size + 15) & ~(size_t)15;
     return at;
@@ -207,4 +208,104 @@ int bb_hook_entry(uint64_t at, const unsigned char *prologue, size_t n, void *ho
     put_rel32(site + 1, site + 5, s);
     memset(site + 5, 0xcc, n - 5);  /* never reached: the stub returns past them */
     return 0;
+}
+
+static unsigned char *mid_site(uint64_t at, const unsigned char *original, size_t n) {
+    if (!bb_hooks_enabled()) return refuse("engine hooks are off (BB_ENGINE_HOOKS=0)"), NULL;
+    if (!original || n < 5 || n > 32) return refuse("bad hook arguments"), NULL;
+    if (!in_image(at, n)) return refuse("address outside the image"), NULL;
+    if (memcmp(g_image + at, original, n)) return refuse("unexpected bytes at the hook site"), NULL;
+    return g_image + at;
+}
+
+/* The site jumps to the stub; its other bytes are never run (the stub returns past them). */
+static void divert(unsigned char *site, size_t n, const unsigned char *to) {
+    site[0] = 0xe9;
+    put_rel32(site + 1, site + 5, to);
+    memset(site + 5, 0xcc, n - 5);
+}
+
+/* vmovdqu [rsp+32*i], ymm_i (store) or ymm_i, [rsp+32*i] (load). */
+static unsigned char *emit_ymm(unsigned char *p, int i, int store) {
+    const int32_t disp = 32 * i;
+    *p++ = 0xc5;
+    *p++ = i < 8 ? 0xfe : 0x7e;
+    *p++ = store ? 0x7f : 0x6f;
+    *p++ = (unsigned char)(0x84 | (i & 7) << 3);
+    *p++ = 0x24;
+    return emit(p, &disp, 4);
+}
+
+int bb_hook_mid(uint64_t at, const unsigned char *original, size_t n, void (BB_GUEST_ABI *host)(BbRegs *)) {
+    unsigned char *site = mid_site(at, original, n);
+    if (!site) return -1;
+    if (!host) return refuse("bad hook arguments");
+    /* Below the red zone, save the flags and the general registers (they form the BbRegs), align
+     * the stack to 32 for ymm0-15, call the host with the BbRegs, restore everything, run the
+     * displaced instructions and continue after them. rbx keeps the unaligned stack pointer
+     * (the host preserves it, as the System V ABI has it). */
+    static const unsigned char save[] = {
+        0x48, 0x8d, 0x64, 0x24, 0x80,                          /* lea rsp, [rsp-0x80] */
+        0x9c, 0x50, 0x51, 0x52, 0x53, 0x55, 0x56, 0x57,        /* pushfq; push rax rcx rdx rbx rbp rsi rdi */
+        0x41, 0x50, 0x41, 0x51, 0x41, 0x52, 0x41, 0x53,        /* push r8 r9 r10 r11 */
+        0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57,        /* push r12 r13 r14 r15 */
+        0x48, 0x89, 0xe7, 0x48, 0x89, 0xe3,                    /* mov rdi, rsp; mov rbx, rsp */
+        0x48, 0x83, 0xe4, 0xe0,                                /* and rsp, -32 */
+        0x48, 0x81, 0xec, 0x00, 0x02, 0x00, 0x00,              /* sub rsp, 0x200 */
+    };
+    static const unsigned char restore[] = {
+        0x48, 0x89, 0xdc,                                      /* mov rsp, rbx */
+        0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x41, 0x5c,        /* pop r15 r14 r13 r12 */
+        0x41, 0x5b, 0x41, 0x5a, 0x41, 0x59, 0x41, 0x58,        /* pop r11 r10 r9 r8 */
+        0x5f, 0x5e, 0x5d, 0x5b, 0x5a, 0x59, 0x58, 0x9d,        /* pop rdi rsi rbp rbx rdx rcx rax; popfq */
+        0x48, 0x8d, 0xa4, 0x24, 0x80, 0x00, 0x00, 0x00,        /* lea rsp, [rsp+0x80] */
+    };
+    unsigned char *s = stub(sizeof(save) + 16 * 9 + 13 + 3 + 16 * 9 + sizeof(restore) + n + 5);
+    if (!s) return refuse("no stub space (not initialised, sealed or full)");
+    unsigned char *p = emit(s, save, sizeof(save));
+    for (int i = 0; i < 16; ++i) p = emit_ymm(p, i, 1);
+    p = emit_movabs_r11(p, (const void *)host);
+    *p++ = 0x41; *p++ = 0xff; *p++ = 0xd3;  /* call r11 */
+    for (int i = 0; i < 16; ++i) p = emit_ymm(p, i, 0);
+    p = emit(p, restore, sizeof(restore));
+    p = emit(p, original, n);
+    *p++ = 0xe9;
+    put_rel32(p, p + 4, site + n);
+    divert(site, n, s);
+    return 0;
+}
+
+struct BbSkip {
+    const unsigned char *volatile target;  /* where the stub's indirect jump goes: run or skip */
+    const unsigned char *run, *skip;
+};
+
+BbSkip *bb_hook_skip(uint64_t at, const unsigned char *original, size_t n) {
+    unsigned char *site = mid_site(at, original, n);
+    if (!site) return NULL;
+    if (g_data_used + sizeof(BbSkip) > DATA_SIZE) return refuse("no switch space"), NULL;
+    unsigned char *s = stub(6 + n + 5 + 5);
+    if (!s) return refuse("no stub space (not initialised, sealed or full)"), NULL;
+    BbSkip *data = (BbSkip *)(g_arena + CODE_SIZE + g_data_used);
+    g_data_used += (sizeof(BbSkip) + 15) & ~(size_t)15;
+    /* jmp [data->target]; run: the instructions, then back; skip: straight back. */
+    unsigned char *p = s;
+    *p++ = 0xff; *p++ = 0x25;
+    put_rel32(p, p + 4, (const unsigned char *)&data->target);
+    p += 4;
+    data->run = p;
+    p = emit(p, original, n);
+    *p++ = 0xe9;
+    put_rel32(p, p + 4, site + n);
+    p += 4;
+    data->skip = p;
+    *p++ = 0xe9;
+    put_rel32(p, p + 4, site + n);
+    data->target = data->run;
+    divert(site, n, s);
+    return data;
+}
+
+void bb_skip(BbSkip *site, int skip) {
+    if (site) __atomic_store_n(&site->target, skip ? site->skip : site->run, __ATOMIC_RELEASE);
 }

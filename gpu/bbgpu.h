@@ -63,6 +63,10 @@ int bbgpu_achievement_get(int index, BbAchievement *out);
 int bbgpu_achievement_score(int *earned, int *total);
 /* Mouse wheel notches for the pad read, one a call: bit 0 up, bit 1 down (input_bindings.h). */
 uint32_t bbgpu_mouse_wheel_take(void);
+/* The mouse camera: whether the window holds the mouse (relative mode), and the motion since
+ * the last call in mouse counts (right and down positive); 1 when there was any. */
+int bbgpu_mouse_captured(void);
+int bbgpu_mouse_motion_take(float *dx, float *dy);
 /* Ends the game as closing its window does (the title menu's Quit Game). */
 void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
