@@ -11,14 +11,14 @@
 #
 # id	menu text (group 0xc8)	line help (group 0xc9)
 110006	PC Settings	Options added by the PC port.
-110013	PC Enhancements	Additions to the game: the mirror and two invaders. Each needs a restart.
-116004	Skip Company Logos	Skips the logos and the intro movie at startup. Applies on the next run.
+110013	PC Enhancements	The mirror and two invaders. Restart to apply.
+116004	Skip Company Logos	Skips the logos and intro movie. Applies next start.
 116007	FPS Counter	Frames per second, in the corner of the screen.
 116020	PC Settings
 124020	PC Enhancements
-124001	Hunter's Dream Mirror	Requires a restart. The Dream's mirror opens the appearance editor (the unused "Put on Disguise").
-124003	Two Invaders	Requires a restart. Two invaders in Mensis, Mergo's Loft, the Frontier and the DLC; all players need it.
-124002	Rebirth at the Altar	Requires a restart. With the Yharnam Stone, the Altar of Despair resets level and attributes.
+124001	Hunter's Dream Mirror	Dream mirror changes appearance. Restart to apply.
+124003	Two Invaders	Two invaders in late areas, if all players use it.
+124002	Rebirth at the Altar	Altar of Despair resets levels. Restart to apply.
 14000332	Rebirth in the Nightmare
 14000333	The altar is silent.\nIt awaits one who bears a sacred heirloom,\na consciousness that is only asleep.
 14000334	Too many Blood Echoes are held to be reborn.\nSpend some, then return to the altar.
