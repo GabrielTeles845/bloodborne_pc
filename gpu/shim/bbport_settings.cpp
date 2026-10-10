@@ -235,28 +235,74 @@ void Save() {
 }
 
 // The in-game PC menu (src/pc_menu.c) reads and writes the same settings through these.
-extern "C" int bbgpu_setting_get(const char* key) {
-    const auto& v = Get();
-    const std::string k = key;
-    if (k == "show_fps") return v.show_fps.load() ? 1 : 0;
-    for (int e = 0; e < EffectCount; ++e) {
-        if (k == Effects[e].key) return v.effects[e].load() ? 1 : 0;
+namespace {
+// A setting as the in-game PC menu sees it: on/off as 0/1, the upscaler as its index, the
+// output resolution as an index into OutputWidths, live resolution as -1 (auto), 0 or 1, the
+// model detail as -2..2. False for a key the menu does not handle.
+bool Read(const Values& v, const std::string& k, int& out) {
+    if (k == "show_fps") out = v.show_fps.load();
+    else if (k == "sharpen") out = v.sharpen.load();
+    else if (k == "jitter") out = v.jitter.load();
+    else if (k == "object_motion") out = v.object_motion.load();
+    else if (k == "upscaler") out = v.upscaler.load();
+    else if (k == "preset") out = v.preset.load();
+    else if (k == "output_res") out = v.output_res.load();
+    else if (k == "live_resolution") out = v.live_resolution.load();
+    else if (k == "model_lod") out = v.model_lod.load();
+    else {
+        for (int e = 0; e < EffectCount; ++e) {
+            if (k == Effects[e].key) {
+                out = v.effects[e].load();
+                return true;
+            }
+        }
+        return false;
     }
-    return -1;
+    return true;
+}
+} // namespace
+
+// The in-game PC menu (src/pc_menu.c) reads and writes the same settings through these.
+extern "C" int bbgpu_setting_get(const char* key, int* value) {
+    return Read(Get(), key, *value) ? 1 : 0;
 }
 
-extern "C" int bbgpu_setting_default(const char* key) {
+extern "C" int bbgpu_setting_default(const char* key, int* value) {
     const std::string k = key;
-    if (k == "show_fps") return Values{}.show_fps.load() ? 1 : 0;
     for (int e = 0; e < EffectCount; ++e) {
-        if (k == Effects[e].key) return Effects[e].default_on ? 1 : 0;
+        if (k == Effects[e].key) {
+            *value = Effects[e].default_on;
+            return 1;
+        }
     }
-    return -1;
+    static const Values defaults;
+    return Read(defaults, k, *value) ? 1 : 0;
 }
 
 extern "C" void bbgpu_setting_set(const char* key, int value) {
-    Set(Get(), key, value ? "1" : "0");
+    const std::string k = key;
+    std::string text = std::to_string(value);
+    if (k == "upscaler") {
+        text = UpscalerName(value);
+    } else if (k == "output_res") {
+        const int r = std::clamp(value, 0, OutputCount - 1);
+        text = std::to_string(OutputWidths[r]) + "x" + std::to_string(OutputHeights[r]);
+    } else if (k == "live_resolution" && value < 0) {
+        text = "auto";
+    }
+    Set(Get(), k, text);
     Save();
+}
+
+// Whether this GPU runs an upscaler (the menu offers only those).
+extern "C" int bbgpu_upscaler_supported(int upscaler) {
+    const auto& v = Get();
+    switch (upscaler) {
+    case UpscalerFsr4: return v.fsr4_supported.load();
+    case UpscalerFsr411: return v.fsr411_supported.load();
+    case UpscalerDlss: return v.dlss_supported.load();
+    default: return upscaler >= 0 && upscaler < UpscalerCount;
+    }
 }
 
 float PresetScale(int preset) {

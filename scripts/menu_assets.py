@@ -27,13 +27,22 @@ MOVIE = Path('menu') / 'optionsetting.gfx'
 TITLE_MOVIES = [Path('menu') / 'title.gfx', Path('menu') / 'title_dlc.gfx']  # the DLC edition uses the second
 MESSAGE_FILE = 'menu.msgbnd.dcx'
 
-# The sections: (instance name, title message id, depth on the main timeline, the slot the
-# game's own "Defaults" row lands in, widget rows dropped). ControllSetting has rows
-# Item_0_0..Item_5_0 and the label slot Item_6_0; a section keeps as many rows as it builds.
-SECTIONS = [
-    ('PCSetting', 116020, 383, 2, ['Item_2_0', 'Item_3_0', 'Item_4_0', 'Item_5_0']),
-    ('PCEnhance', 124020, 390, 2, ['Item_2_0', 'Item_3_0', 'Item_4_0', 'Item_5_0']),
+# The sections: (instance name, title message id, rows). ControllSetting has rows Item_0_0..
+# Item_5_0 and the label slot Item_6_0; a section keeps as many rows as it builds, and the
+# game's own "Defaults" row lands in the slot after them. Option sections do not scroll, so six
+# rows at most. The names and row counts must match src/pc_menu.c.
+SECTION_ROWS = [
+    ('PCGraphics', 117020, 5),
+    ('PCDisplay', 125020, 4),
+    ('PCEffects', 120020, 6),
+    ('PCSetting', 116020, 4),
+    ('PCGameplay', 126020, 5),
+    ('PCCheats', 127020, 5),
+    ('PCEnhance', 124020, 2),
 ]
+# (name, title, depth on the main timeline, Defaults slot, rows dropped)
+SECTIONS = [(name, title, 383 + i, rows, [f'Item_{k}_0' for k in range(rows, 6)])
+            for i, (name, title, rows) in enumerate(SECTION_ROWS)]
 # Where the System list's scroll bar goes, in pixels (bbhost's placement).
 SCROLLBAR_AT = (1290, 354.5)
 

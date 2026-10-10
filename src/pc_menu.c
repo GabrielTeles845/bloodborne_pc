@@ -1,14 +1,16 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * The in-game PC menu: "PC Settings" and "PC Enhancements" rows in the game's own System menu,
- * each opening a section drawn by the game like Controls or Language.
+ * The in-game PC menu: PC Graphics, PC Display, PC Effects, PC Settings, PC Gameplay, PC Cheats
+ * and PC Enhancements rows in the game's own System menu, each opening a section drawn by the
+ * game like Controls or Language, plus Restart to Apply and the title menu's Quit Game. It
+ * offers what the L3+R3 overlay offers, which stays available.
  *
  * Ported from droogie's bbhost (https://github.com/droogie/bbhost, GPL-3.0-or-later,
- * engine/option_menu.cpp), which has the full map of the engine's option screens. In short:
- * System is a command list - rows appended to a builder by sub_1f4e2a0 and finalised by
- * sub_1fea630. A row's std::function opens a section through sub_1fb4c70, whose opener calls
- * sub_1f20900(root, params, "<Name>", handler): that binds the movie's sprite of that name,
- * makes the dialog and calls handler(dialog, params), which builds the rows. The engine owns
- * the cursor, widgets, key guide and fade.
+ * engine/option_menu.cpp and engine/menu_pointer.cpp), which has the full map of the engine's
+ * option screens. In short: System is a command list - rows appended to a builder by
+ * sub_1f4e2a0 and finalised by sub_1fea630. A row's std::function opens a section through
+ * sub_1fb4c70, whose opener calls sub_1f20900(root, params, "<Name>", handler): that binds the
+ * movie's sprite of that name, makes the dialog and calls handler(dialog, params), which builds
+ * the rows. The engine owns the cursor, widgets, key guide and fade.
  *
  * So the menu adds its own rows to System (the one call that finalises the builder goes through
  * a hook) and its own opener and handlers. sub_1f20900 only opens names in a six-entry table, so
@@ -16,10 +18,17 @@
  * The sections' sprites and strings come from scripts/menu_assets.py (BB_PC_MENU_ASSETS=1).
  *
  * A row writes its value through a pointer into this file; once a frame the changes become
- * bbport.ini settings, the same ones the Insert menu and the launcher change. */
+ * bbport.ini settings, the same ones the Insert menu and the launcher change.
+ *
+ * Pick lists (Upscaler, Output Resolution, ...) open as a translucent drop-down over the rows
+ * below them, whose text would read through it. Every pick list is placed below a section's
+ * toggles, and while one is open the captions and values under it are blanked: the rows draw
+ * the raw UTF-16 pointers they were laid out with, so the menu lays them out with buffers of its
+ * own and empties those (the menus' list update, hooked, says which list has the input). */
 #include "pc_menu.h"
 #include "engine_hooks.h"
 #include "gpu/bbgpu.h"
+#include "runtime.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -32,6 +41,15 @@ enum {
     SCRATCH_INIT = 0x208af20,      /* a handler's scratch block */
     ADD_CHOICE_ROW = 0x1f2a100,    /* (dialog, captions, value*, list*, default*) */
     BUILD_ON_OFF = 0x1f2b3b0,      /* the game's two-entry On/Off list */
+    ADD_LIST_ROW = 0x1f29370,      /* a pick list: (dialog, captions, int32*, list*, default*) */
+    LIST_APPEND = 0x1f1c0c0,       /* (pick-list container, entry*) */
+    WSTR_COPY = 0x2d67040,         /* builds a wstring in place */
+    LAYOUT_ROWS = 0x1f28de0,       /* (dialog, 0): rows from the record vector */
+    LIST_REDRAW = 0x1ed06e0,       /* a list component's visible items, from their pointers */
+    LIST_UPDATE = 0x1ecff30,       /* a list component's update (pad, cursor) */
+    LIST_VTABLE = 0x5799fb0,       /* slot 3 is LIST_UPDATE */
+    DROPDOWN_VTABLE = 0x5739e90,   /* a pick-list row's widget */
+    DROPDOWN_REDRAW = 0x1f2b7c0,   /* its value text, from its entries */
     MSG_REPOSITORY = 0x1ee8cc0,    /* (caption*, group, id) */
     ADD_COMMAND_ROW = 0x1f4e2a0,   /* (builder, captions, std::function*, flag*) */
     ADD_EXIT_ROW = 0x1f4c9a0,      /* Exit Game's own adder (builder, captions, std::function*) */
@@ -43,11 +61,20 @@ enum {
     OPENER_FUNCTOR_VTABLE = 0x5743880,
     SECTION_NAME_TABLE = 0x57398b0,
     SECTION_COUNT_IMM = 0x1f20e21, /* the 6 in cmp rdx, 6 */
+    TITLE_FINALIZE = 0x1fea820, TITLE_FINALIZE_CALL = 0x1f4adb3,
+    BOX_FROM_CAPTION = 0x201ed10, COMMAND_FROM_ACTION = 0x1d5db60, POPUP_FROM_BOX = 0x201a070,
 };
-enum { MSG_MENU_TEXT = 0xc8, MSG_LINE_HELP = 0xc9, EXIT_GAME_ROW_ID = 0x1adb4 };
+/* The callers of LIST_UPDATE that do not go through the vtable (bbhost menu_pointer.cpp). */
+static const struct { uint32_t at; unsigned char op; } LIST_UPDATE_CALLS[] = {
+    {0x1f25226, 0xe8}, {0x1f26066, 0xe8}, {0x1f26f28, 0xe8}, {0x1f72c80, 0xe8}, {0x1f108c7, 0xe9},
+};
+enum { MSG_MENU_TEXT = 0xc8, MSG_LINE_HELP = 0xc9, MSG_DIALOG_TEXT = 0xcc, EXIT_GAME_ROW_ID = 0x1adb4 };
 enum { BUILDER_BEGIN = 0x68, BUILDER_END = 0x70, BUILDER_ROW = 0x180 };
-/* The menu's message ids (scripts/pc_menu_messages.tsv). */
-enum { ROW_SETTINGS = 110006, ROW_ENHANCE = 110013 };
+/* A section dialog: its row records (a caption pair and the widget), the rows' list component;
+ * a pick-list widget's drop-down list and the value pointer it is bound to. */
+enum { ITEMS_BEGIN = 0xe58, ITEMS_END = 0xe60, ITEM_STRIDE = 0x90, ITEM_WIDGET = 0x80,
+       DIALOG_ROWS = 0xa70, PICK_ITEMS = 0x100, PICK_BOUND = 0x3c8 };
+enum { ROW_QUIT = 122000, QUIT_QUESTION = 920001, ROW_RESTART = 110017, RESTART_QUESTION = 920002 };
 
 typedef int64_t (BB_GUEST_ABI *GuestFn)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 
@@ -57,11 +84,15 @@ static char g_open_name[32] = "PCSetting";
 static GuestFn fn(uint64_t bn) { return (GuestFn)bb_guest(BB_BN(bn)); }
 static uint64_t addr(uint64_t bn) { return (uint64_t)(uintptr_t)bb_guest(BB_BN(bn)); }
 static uint64_t ptr(const void *p) { return (uint64_t)(uintptr_t)p; }
+static void *at(uint64_t a) { return (void *)(uintptr_t)a; }
 static uint64_t rd64(const void *p) {
     uint64_t v;
     memcpy(&v, p, 8);
     return v;
 }
+static void wr64(void *p, uint64_t v) { memcpy(p, &v, 8); }
+
+/* --- Engine objects ----------------------------------------------------------------------- */
 
 /* A row's caption pair: the label at +0x00 and its line help at +0x40, each the raw UTF-16
  * pointer drawn at +0x00 and an MSVC wstring copy at +0x08. */
@@ -74,8 +105,8 @@ typedef struct {
 static void free_wstring(unsigned char *ws) {
     const uint64_t capacity = rd64(ws + 0x18), buffer = rd64(ws), allocator = rd64(ws + 0x20);
     if (capacity < 8 || !buffer || !allocator) return;
-    const uint64_t vtable = rd64((void *)(uintptr_t)allocator);
-    ((GuestFn)(uintptr_t)rd64((void *)(uintptr_t)(vtable + 0x70)))(allocator, buffer, 0, 0, 0, 0);
+    const uint64_t vtable = rd64(at(allocator));
+    ((GuestFn)at(rd64(at(vtable + 0x70))))(allocator, buffer, 0, 0, 0, 0);
 }
 
 static void captions_init(Captions *c, uint32_t id) {
@@ -89,106 +120,333 @@ static void captions_free(Captions *c) {
     free_wstring(c->buf + 0x48);
 }
 
+/* Copies a message's text (the repository's) into `out` (at most n - 1 units). */
+static void message_copy(uint32_t id, uint16_t *out, size_t n) {
+    Captions c;
+    captions_init(&c, id);
+    const uint16_t *text = at(rd64(c.buf));
+    size_t i = 0;
+    for (; text && text[i] && i + 1 < n; ++i) out[i] = text[i];
+    out[i] = 0;
+    captions_free(&c);
+}
+
 /* An engine std::function (MSVC): 0x20 bytes of inline storage holding the callable - its
- * vtable and the wrapped function pointer - then a pointer to that storage at +0x20. The
- * consumers copy it, so one on the stack is enough. */
+ * vtable and the wrapped function pointer - then a pointer to that storage at +0x20. */
 typedef struct {
     _Alignas(16) unsigned char buf[0x28];
 } GuestFunction;
 
 static void function_init(GuestFunction *f, uint64_t vtable_bn, const void *target) {
     memset(f, 0, sizeof(*f));
-    const uint64_t vtable = addr(vtable_bn), callee = ptr(target), self = ptr(f->buf);
-    memcpy(f->buf, &vtable, 8);
-    memcpy(f->buf + 8, &callee, 8);
-    memcpy(f->buf + 0x20, &self, 8);
+    wr64(f->buf, addr(vtable_bn));
+    wr64(f->buf + 8, ptr(target));
+    wr64(f->buf + 0x20, ptr(f->buf));
 }
 
-/* --- Settings ----------------------------------------------------------------------------- */
+/* DLReferenceCountObject: the count at +8; the last reference calls the deleting destructor. */
+static void release_ref(uint64_t object) {
+    if (!object) return;
+    int32_t count;
+    memcpy(&count, at(object + 8), 4);
+    const int32_t left = count - 1;
+    memcpy(at(object + 8), &left, 4);
+    if (count == 1) ((GuestFn)at(rd64(at(rd64(at(object))))))(object, 0, 0, 0, 0, 0);
+}
 
-/* One On/Off row: the bbport.ini key, its message id, the byte the row writes and the value
- * last pushed (a frame pushes a change only). */
+/* --- Rows and sections -------------------------------------------------------------------- */
+
+enum { TOGGLE, PICK };
+enum { MAX_OPTIONS = 8, TEXT = 48, MAX_ROWS = 6 };
+
 typedef struct {
-    const char *key;
-    uint32_t id;
-    uint8_t value, last;
-} Toggle;
+    int32_t value;
+    uint32_t id;  /* the choice's message */
+} Option;
 
-static Toggle g_settings[] = {
-    {"show_fps", 116007, 0, 0},
-    {"skip_intro", 116004, 0, 0},
-};
-static Toggle g_enhance[] = {
-    {"pc_mirror_appearance", 124001, 0, 0},
-    {"pc_two_invaders", 124003, 0, 0},
-};
-#define COUNT(a) (sizeof(a) / sizeof((a)[0]))
+typedef struct {
+    const char *key; /* the bbport.ini setting (bbgpu_setting_*) */
+    uint32_t id;     /* the row's caption and line help */
+    int kind;
+    const Option *options; /* PICK: every choice, in order */
+    int option_count;
+    /* While its section is open: the value the row writes, what was last pushed, the choices
+     * shown (a GPU without DLSS gets no DLSS) and their text, which the menu owns. */
+    uint8_t toggle;
+    int32_t pick, last;
+    Option shown[MAX_OPTIONS];
+    int shown_count;
+    uint16_t text[MAX_OPTIONS][TEXT];
+    uint16_t first[MAX_OPTIONS]; /* each text's first unit while blanked */
+} Row;
 
-static void seed(Toggle *t) {
-    const int value = bbgpu_setting_get(t->key);
-    t->value = t->last = value > 0;
+typedef struct {
+    const char *name;    /* the movie's sprite (menu_assets.py SECTION_ROWS) */
+    uint32_t system_row; /* the System row that opens it */
+    Row *rows;
+    int count;
+} Section;
+
+static const Option UPSCALERS[] = {{0, 117100}, {1, 117101}, {2, 117102}, {3, 117103}, {4, 117104}, {5, 117105}};
+static const Option PRESETS[] = {{0, 117110}, {1, 117111}, {2, 117112}, {3, 117113}, {4, 117114}};
+static const Option OUTPUTS[] = {{0, 125100}, {1, 125101}, {2, 125102}, {3, 125103}};
+static const Option LIVE[] = {{-1, 125110}, {0, 125111}, {1, 125112}};
+static const Option LODS[] = {{-2, 125120}, {0, 125121}, {1, 125122}, {2, 125123}};
+#define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
+#define TOGGLE_ROW(key, id) {key, id, TOGGLE, NULL, 0, 0, 0, 0, {{0, 0}}, 0, {{0}}, {0}}
+#define PICK_ROW(key, id, list) {key, id, PICK, list, COUNT(list), 0, 0, 0, {{0, 0}}, 0, {{0}}, {0}}
+
+/* Pick lists last in every section (their drop-down covers what is below them). */
+static Row g_graphics[] = {
+    TOGGLE_ROW("sharpen", 117000), TOGGLE_ROW("jitter", 117001), TOGGLE_ROW("object_motion", 117002),
+    PICK_ROW("upscaler", 117003, UPSCALERS), PICK_ROW("preset", 117004, PRESETS),
+};
+static Row g_display[] = {
+    TOGGLE_ROW("show_fps", 125000), PICK_ROW("output_res", 125001, OUTPUTS),
+    PICK_ROW("live_resolution", 125002, LIVE), PICK_ROW("model_lod", 125003, LODS),
+};
+static Row g_effects[] = {
+    TOGGLE_ROW("effect_chromatic_aberration", 120000), TOGGLE_ROW("effect_dof", 120001),
+    TOGGLE_ROW("effect_motion_blur", 120002), TOGGLE_ROW("effect_ssao", 120003),
+    TOGGLE_ROW("effect_game_aa", 120004), TOGGLE_ROW("effect_dynamic_shadows", 120005),
+};
+static Row g_settings[] = {
+    TOGGLE_ROW("skip_intro", 116004), TOGGLE_ROW("effect_ssr", 116008),
+    TOGGLE_ROW("debug_camera", 116009), TOGGLE_ROW("debug_menu", 116010),
+};
+static Row g_gameplay[] = {
+    TOGGLE_ROW("tweak_no_rally", 126000), TOGGLE_ROW("tweak_camera_distance", 126001),
+    TOGGLE_ROW("tweak_no_camera_rotation", 126002), TOGGLE_ROW("tweak_easy_run", 126003),
+    TOGGLE_ROW("tweak_ragdoll", 126004),
+};
+static Row g_cheats[] = {
+    TOGGLE_ROW("cheat_no_death", 127000), TOGGLE_ROW("cheat_stealth", 127001),
+    TOGGLE_ROW("cheat_silent", 127002), TOGGLE_ROW("cheat_rally_no_decay", 127003),
+    TOGGLE_ROW("cheat_enemy_control", 127004),
+};
+static Row g_enhance[] = {
+    TOGGLE_ROW("pc_mirror_appearance", 124001), TOGGLE_ROW("pc_two_invaders", 124003),
+};
+static Section g_sections[] = {
+    {"PCGraphics", 110007, g_graphics, COUNT(g_graphics)},
+    {"PCDisplay", 110014, g_display, COUNT(g_display)},
+    {"PCEffects", 110010, g_effects, COUNT(g_effects)},
+    {"PCSetting", 110006, g_settings, COUNT(g_settings)},
+    {"PCGameplay", 110015, g_gameplay, COUNT(g_gameplay)},
+    {"PCCheats", 110016, g_cheats, COUNT(g_cheats)},
+    {"PCEnhance", 110013, g_enhance, COUNT(g_enhance)},
+};
+
+static int setting(const char *key) {
+    int value = 0;
+    bbgpu_setting_get(key, &value);
+    return value;
 }
 
-static void push(Toggle *t) {
-    if (t->value == t->last) return;
-    t->last = t->value;
-    bbgpu_setting_set(t->key, t->value != 0);
-    printf("PC menu: %s %s\n", t->key, t->value ? "on" : "off");
+static int setting_default(const char *key) {
+    int value = 0;
+    bbgpu_setting_default(key, &value);
+    return value;
 }
 
-/* An On/Off row from the game's own list; `def` is what the section's Defaults row restores
- * (the base's default for the setting). */
-static void add_toggle_row(void *dialog, Toggle *t) {
+/* The row opens showing the setting as it is now. */
+static void seed(Row *r) {
+    if (r->kind == TOGGLE) {
+        r->toggle = setting(r->key) > 0;
+        r->last = r->toggle;
+        return;
+    }
+    r->shown_count = 0;
+    for (int i = 0; i < r->option_count; ++i) {
+        if (!strcmp(r->key, "upscaler") && !bbgpu_upscaler_supported(r->options[i].value)) continue;
+        r->shown[r->shown_count++] = r->options[i];
+    }
+    const int now = setting(r->key);
+    r->pick = r->shown_count ? r->shown[0].value : 0;
+    for (int i = 0; i < r->shown_count; ++i)
+        if (r->shown[i].value == now) r->pick = now;
+    r->last = r->pick;
+}
+
+static void push(Row *r) {
+    const int32_t value = r->kind == TOGGLE ? r->toggle : r->pick;
+    if (value == r->last) return;
+    r->last = value;
+    bbgpu_setting_set(r->key, value);
+    printf("PC menu: %s = %d\n", r->key, (int)value);
+}
+
+/* An On/Off row from the game's own list; its default is what the section's Defaults row
+ * restores (the base's default for the setting). */
+static void add_toggle_row(void *dialog, Row *r) {
     Captions captions;
-    captions_init(&captions, t->id);
+    captions_init(&captions, r->id);
     _Alignas(16) unsigned char list[0x100];
     memset(list, 0, sizeof(list));
-    uint8_t def = bbgpu_setting_default(t->key) > 0;
+    uint8_t def = setting_default(r->key) > 0;
     fn(BUILD_ON_OFF)(ptr(list), 0, 0, 0, 0, 0);
-    fn(ADD_CHOICE_ROW)(ptr(dialog), ptr(captions.buf), ptr(&t->value), ptr(list), ptr(&def), 0);
+    fn(ADD_CHOICE_ROW)(ptr(dialog), ptr(captions.buf), ptr(&r->toggle), ptr(list), ptr(&def), 0);
     const uint64_t entries = rd64(list + 0x98);
     for (uint64_t k = 0; k < entries && k < 2; ++k) free_wstring(list + k * 0x48 + 0x18);
     captions_free(&captions);
 }
 
-static void build_section(void *dialog, Toggle *rows, size_t count, const char *name) {
-    _Alignas(16) unsigned char scratch[0x100];
-    memset(scratch, 0, sizeof(scratch));
-    fn(SCRATCH_INIT)(ptr(scratch), 0, 0, 0, 0, 0);
-    for (size_t i = 0; i < count; ++i) {
-        seed(&rows[i]);
-        add_toggle_row(dialog, &rows[i]);
+/* A pick list. Its entries are 0x48 bytes: the int32 value at +0, the raw UTF-16 pointer drawn
+ * at +8 (the menu's own buffer), a wstring copy at +0x10 and a flag at +0x40; the container is
+ * an inline array with its count at +0x908 and deep-copies each entry. */
+static void add_pick_row(void *dialog, Row *r) {
+    Captions captions;
+    captions_init(&captions, r->id);
+    static _Alignas(16) unsigned char list[0x1000];
+    memset(list, 0, sizeof(list));
+    int32_t def = r->shown_count ? r->shown[0].value : 0;
+    const int wanted = setting_default(r->key);
+    for (int i = 0; i < r->shown_count; ++i) {
+        message_copy(r->shown[i].id, r->text[i], TEXT);
+        if (r->shown[i].value == wanted) def = wanted;
+        _Alignas(16) unsigned char entry[0x48];
+        memset(entry, 0, sizeof(entry));
+        memcpy(entry, &r->shown[i].value, 4);
+        wr64(entry + 8, ptr(r->text[i]));
+        fn(WSTR_COPY)(ptr(entry + 0x10), ptr(r->text[i]), 0, 0, 0, 0);
+        entry[0x40] = 1;
+        fn(LIST_APPEND)(ptr(list), ptr(entry), 0, 0, 0, 0);
+        free_wstring(entry + 0x18);
     }
-    printf("PC menu: %s opened\n", name);
+    fn(ADD_LIST_ROW)(ptr(dialog), ptr(captions.buf), ptr(&r->pick), ptr(list), ptr(&def), 0);
+    for (int i = 0; i < r->shown_count; ++i) free_wstring(list + i * 0x48 + 0x18);
+    captions_free(&captions);
 }
 
-static BB_GUEST_ABI void settings_handler(void *dialog, void *params) {
-    (void)params;
-    build_section(dialog, g_settings, COUNT(g_settings), "PC Settings");
+/* --- The open section, and blanking under a pick list ----------------------------------- */
+
+static struct {
+    Section *section;
+    unsigned char *dialog;
+    unsigned char *widget[MAX_ROWS];         /* each row's widget */
+    uint16_t caption[MAX_ROWS + 1][TEXT];     /* the rows' captions, then Defaults', ours */
+    uint16_t caption_first[MAX_ROWS + 1];
+    int records;                              /* rows laid out with our captions */
+    int blank_from;                           /* the first row blanked, or -1 */
+} g_open = {NULL, NULL, {NULL}, {{0}}, {0}, 0, -1};
+
+static unsigned char *record(int row) {
+    return (unsigned char *)at(rd64(g_open.dialog + ITEMS_BEGIN)) + (size_t)row * ITEM_STRIDE;
 }
 
-static BB_GUEST_ABI void enhance_handler(void *dialog, void *params) {
-    (void)params;
-    build_section(dialog, g_enhance, COUNT(g_enhance), "PC Enhancements");
+static int record_count(void) {
+    const uint64_t begin = rd64(g_open.dialog + ITEMS_BEGIN), end = rd64(g_open.dialog + ITEMS_END);
+    if (!begin || end < begin || (end - begin) % ITEM_STRIDE) return 0;
+    return (int)((end - begin) / ITEM_STRIDE);
+}
+
+/* The dialog is freed when it closes and its memory reused: it is still ours while every pick
+ * row's widget is a drop-down bound to that row's value. */
+static int open_alive(void) {
+    if (!g_open.dialog || !g_open.section || record_count() < g_open.section->count) return 0;
+    for (int r = 0; r < g_open.section->count; ++r) {
+        Row *row = &g_open.section->rows[r];
+        unsigned char *w = at(rd64(record(r) + ITEM_WIDGET));
+        if (w != g_open.widget[r]) return 0;
+        if (row->kind == PICK && (rd64(w) != addr(DROPDOWN_VTABLE) || rd64(w + PICK_BOUND) != ptr(&row->pick)))
+            return 0;
+    }
+    return 1;
+}
+
+/* After the dialog is made: the rows (and Defaults) draw captions from buffers of the menu's
+ * own, laid out again, so they can be emptied under an open pick list. */
+static void take_captions(void) {
+    const int n = record_count();
+    g_open.records = 0;
+    if (n < g_open.section->count || n > MAX_ROWS + 1) return;
+    for (int r = 0; r < n; ++r) {
+        unsigned char *rec = record(r);
+        const uint16_t *text = at(rd64(rec));
+        size_t i = 0;
+        for (; text && text[i] && i + 1 < TEXT; ++i) g_open.caption[r][i] = text[i];
+        g_open.caption[r][i] = 0;
+        wr64(rec, ptr(g_open.caption[r]));
+        if (r < g_open.section->count) g_open.widget[r] = at(rd64(rec + ITEM_WIDGET));
+    }
+    g_open.records = n;
+    fn(LAYOUT_ROWS)(ptr(g_open.dialog), 0, 0, 0, 0, 0);
+}
+
+static void set_blank(int from) {
+    if (from == g_open.blank_from) return;
+    const int restore = g_open.blank_from;
+    g_open.blank_from = from;
+    for (int r = 0; r < g_open.records; ++r) {
+        const int was = restore >= 0 && r >= restore, now = from >= 0 && r >= from;
+        if (was == now) continue;
+        if (now) {
+            g_open.caption_first[r] = g_open.caption[r][0];
+            g_open.caption[r][0] = 0;
+        } else {
+            g_open.caption[r][0] = g_open.caption_first[r];
+        }
+        if (r < g_open.section->count && g_open.section->rows[r].kind == PICK) {
+            Row *row = &g_open.section->rows[r];
+            for (int i = 0; i < row->shown_count; ++i) {
+                if (now) {
+                    row->first[i] = row->text[i][0];
+                    row->text[i][0] = 0;
+                } else {
+                    row->text[i][0] = row->first[i];
+                }
+            }
+            fn(DROPDOWN_REDRAW)(ptr(g_open.widget[r]), 0, 0, 0, 0, 0);
+        }
+    }
+    fn(LIST_REDRAW)(ptr(g_open.dialog + DIALOG_ROWS), 0, 0, 0, 0, 0);
+}
+
+/* Every menu list's update: a pick list taking the input blanks the rows under it; the rows
+ * taking it back restore them. Then the game's own update. */
+static BB_GUEST_ABI int64_t list_update(unsigned char *comp, unsigned char *input) {
+    if (g_open.dialog && input && *input) {
+        if (!open_alive()) {
+            g_open.dialog = NULL;
+            g_open.blank_from = -1;
+        } else if (comp == g_open.dialog + DIALOG_ROWS) {
+            set_blank(-1);
+        } else {
+            for (int r = 0; r < g_open.section->count; ++r)
+                if (g_open.section->rows[r].kind == PICK && comp == g_open.widget[r] + PICK_ITEMS)
+                    set_blank(r + 1);
+        }
+    }
+    return fn(LIST_UPDATE)(ptr(comp), ptr(input), 0, 0, 0, 0);
 }
 
 /* --- Opening a section -------------------------------------------------------------------- */
 
-static int64_t open_named(void *root, void *params, const char *name, const void *handler) {
-    snprintf(g_open_name, sizeof(g_open_name), "%s", name);
-    return fn(OPEN_SECTION)(ptr(root), ptr(params), ptr(g_open_name), ptr(handler), 0, 0);
+static void build_section(Section *s, void *dialog) {
+    _Alignas(16) unsigned char scratch[0x100];
+    memset(scratch, 0, sizeof(scratch));
+    fn(SCRATCH_INIT)(ptr(scratch), 0, 0, 0, 0, 0);
+    for (int i = 0; i < s->count; ++i) {
+        seed(&s->rows[i]);
+        if (s->rows[i].kind == TOGGLE) add_toggle_row(dialog, &s->rows[i]);
+        else add_pick_row(dialog, &s->rows[i]);
+    }
 }
 
-static BB_GUEST_ABI int64_t open_settings(void *root, void *params) {
-    return open_named(root, params, "PCSetting", (const void *)settings_handler);
+static int64_t open_section(Section *s, void *root, void *params, const void *handler) {
+    snprintf(g_open_name, sizeof(g_open_name), "%s", s->name);
+    g_open.dialog = NULL;
+    g_open.blank_from = -1;
+    const int64_t dialog = fn(OPEN_SECTION)(ptr(root), ptr(params), ptr(g_open_name), ptr(handler), 0, 0);
+    if (dialog) {
+        g_open.section = s;
+        g_open.dialog = at((uint64_t)dialog);
+        take_captions();
+        printf("PC menu: %s opened\n", s->name);
+    }
+    return dialog;
 }
 
-static BB_GUEST_ABI int64_t open_enhance(void *root, void *params) {
-    return open_named(root, params, "PCEnhance", (const void *)enhance_handler);
-}
-
-/* What a System row runs when chosen: the two lines sub_1fb4be0 runs for Language, with the
- * menu's opener in place of the game's. */
 static void *row_open(void *out, void *ctx, const void *opener) {
     GuestFunction f;
     function_init(&f, OPENER_FUNCTOR_VTABLE, opener);
@@ -196,16 +454,95 @@ static void *row_open(void *out, void *ctx, const void *opener) {
     return out;
 }
 
-static BB_GUEST_ABI void *settings_row(void *out, void *ctx) { return row_open(out, ctx, (const void *)open_settings); }
-static BB_GUEST_ABI void *enhance_row(void *out, void *ctx) { return row_open(out, ctx, (const void *)open_enhance); }
+/* One handler, opener and System row function per section. */
+#define SECTION_FUNCTIONS(n)                                                                      \
+    static BB_GUEST_ABI void handler_##n(void *dialog, void *params) {                            \
+        (void)params;                                                                             \
+        build_section(&g_sections[n], dialog);                                                    \
+    }                                                                                             \
+    static BB_GUEST_ABI int64_t opener_##n(void *root, void *params) {                            \
+        return open_section(&g_sections[n], root, params, (const void *)handler_##n);             \
+    }                                                                                             \
+    static BB_GUEST_ABI void *row_##n(void *out, void *ctx) {                                     \
+        return row_open(out, ctx, (const void *)opener_##n);                                     \
+    }
+SECTION_FUNCTIONS(0)
+SECTION_FUNCTIONS(1)
+SECTION_FUNCTIONS(2)
+SECTION_FUNCTIONS(3)
+SECTION_FUNCTIONS(4)
+SECTION_FUNCTIONS(5)
+SECTION_FUNCTIONS(6)
+static const void *const SECTION_ROWS[] = {
+    (const void *)row_0, (const void *)row_1, (const void *)row_2, (const void *)row_3,
+    (const void *)row_4, (const void *)row_5, (const void *)row_6,
+};
+_Static_assert(sizeof(SECTION_ROWS) / sizeof(SECTION_ROWS[0]) == sizeof(g_sections) / sizeof(g_sections[0]),
+               "one row function per section");
 
-/* --- The System list ---------------------------------------------------------------------- */
+/* --- Yes/no commands: Quit Game and Restart to Apply ------------------------------------- */
+/* Built like the game's own Exit Game opener (sub_200c9f0): a message box from a dialog caption
+ * (sub_201ed10), a YES command around an action (sub_1d5db60) and the popup of the two
+ * (sub_201a070), so the question is the menu's own, modal, with YES and NO. */
+
+static BB_GUEST_ABI int64_t quit_yes(int64_t a, int64_t b) {
+    (void)a, (void)b;
+    puts("PC menu: Quit Game");
+    bbgpu_request_quit();
+    return 0;
+}
+
+static BB_GUEST_ABI int64_t restart_yes(int64_t a, int64_t b) {
+    (void)a, (void)b;
+    puts("PC menu: Restart to Apply");
+    runtime_restart();
+    return 0;
+}
+
+static void *question(void *out, void *factory, uint32_t message, const void *yes) {
+    _Alignas(16) unsigned char caption[0x40];
+    memset(caption, 0, sizeof(caption));
+    fn(MSG_REPOSITORY)(ptr(caption), MSG_DIALOG_TEXT, message, 0, 0, 0);
+    uint64_t box = 0, command = 0;
+    fn(BOX_FROM_CAPTION)(ptr(&box), ptr(factory), ptr(caption), 0, 0, 0);
+    GuestFunction action;
+    function_init(&action, OPENER_FUNCTOR_VTABLE, yes);
+    fn(COMMAND_FROM_ACTION)(ptr(&command), ptr(action.buf), 2, 0, 0, 0);
+    fn(POPUP_FROM_BOX)(ptr(out), ptr(&box), ptr(&command), 0, 0, 0);
+    release_ref(command);
+    release_ref(box);
+    free_wstring(caption + 0x08);
+    return out;
+}
+
+static BB_GUEST_ABI void *quit_opener(void *out, void *factory) {
+    return question(out, factory, QUIT_QUESTION, (const void *)quit_yes);
+}
+
+static BB_GUEST_ABI void *restart_opener(void *out, void *factory) {
+    return question(out, factory, RESTART_QUESTION, (const void *)restart_yes);
+}
+
+static void add_command(void *builder, uint32_t id, const void *open, int section_opener) {
+    Captions captions;
+    GuestFunction f;
+    int64_t flag = 0;
+    captions_init(&captions, id);
+    function_init(&f, ROW_FUNCTOR_VTABLE, open);
+    if (section_opener)
+        fn(ADD_COMMAND_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), ptr(&flag), 0, 0);
+    else
+        fn(ADD_EXIT_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), 0, 0, 0);
+    captions_free(&captions);
+}
+
+/* --- The System and title lists ----------------------------------------------------------- */
 
 static unsigned char *builder_last_row(void *builder) {
     const unsigned char *b = builder;
     const uint64_t begin = rd64(b + BUILDER_BEGIN), end = rd64(b + BUILDER_END);
     if (!begin || end <= begin || (end - begin) % BUILDER_ROW) return NULL;
-    return (unsigned char *)(uintptr_t)(end - BUILDER_ROW);
+    return at(end - BUILDER_ROW);
 }
 
 /* Exit Game's row holds its opener somewhere in its 0x180 bytes. */
@@ -220,104 +557,57 @@ static int row_is_exit_game(const unsigned char *row) {
 static void pop_last_row(void *builder) {
     unsigned char *row = builder_last_row(builder);
     if (!row) return;
-    const uint64_t vtable = rd64(row);
-    ((GuestFn)(uintptr_t)rd64((void *)(uintptr_t)(vtable + 8)))(ptr(row), 0, 0, 0, 0, 0);
-    const uint64_t end = rd64((unsigned char *)builder + BUILDER_END) - BUILDER_ROW;
-    memcpy((unsigned char *)builder + BUILDER_END, &end, 8);
-}
-
-static void add_command_row(void *builder, uint32_t id, const void *open) {
-    Captions captions;
-    GuestFunction f;
-    int64_t flag = 0;
-    captions_init(&captions, id);
-    function_init(&f, ROW_FUNCTOR_VTABLE, open);
-    fn(ADD_COMMAND_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), ptr(&flag), 0, 0);
-    captions_free(&captions);
+    ((GuestFn)at(rd64(at(rd64(row) + 8))))(ptr(row), 0, 0, 0, 0, 0);
+    wr64((unsigned char *)builder + BUILDER_END, rd64((unsigned char *)builder + BUILDER_END) - BUILDER_ROW);
 }
 
 /* The System builder, just before it becomes a dialog: the menu's rows go last, except that
  * Exit Game (in game) comes off first and goes back on at the end, as the game's own code adds
- * and pops these rows. */
+ * and pops these rows. The list scrolls (the movie gives it a scroll bar). */
 static BB_GUEST_ABI void *system_finalize(void *out, void *builder, void *arg3) {
     unsigned char *last = builder_last_row(builder);
     const int move_exit = last && row_is_exit_game(last);
     if (move_exit) pop_last_row(builder);
-    add_command_row(builder, ROW_SETTINGS, (const void *)settings_row);
-    add_command_row(builder, ROW_ENHANCE, (const void *)enhance_row);
-    if (move_exit) {
-        Captions captions;
-        GuestFunction f;
-        captions_init(&captions, EXIT_GAME_ROW_ID);
-        function_init(&f, ROW_FUNCTOR_VTABLE, bb_guest(BB_BN(EXIT_GAME_OPENER)));
-        fn(ADD_EXIT_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), 0, 0, 0);
-        captions_free(&captions);
-    }
+    for (int i = 0; i < COUNT(g_sections); ++i) add_command(builder, g_sections[i].system_row, SECTION_ROWS[i], 1);
+    add_command(builder, ROW_RESTART, (const void *)restart_opener, 0);
+    if (move_exit) add_command(builder, EXIT_GAME_ROW_ID, bb_guest(BB_BN(EXIT_GAME_OPENER)), 0);
     fn(SYSTEM_FINALIZE)(ptr(out), ptr(builder), ptr(arg3), 0, 0, 0);
     return out;
 }
 
-/* --- Quit Game on the title menu ---------------------------------------------------------- */
-/* The title's command list (Continue, Load Game, New Game, System, ...) is finalised by one call;
- * a hook adds "Quit Game" first, the way System's Exit Game is added (sub_1f4c9a0). Its opener is
- * built like the game's own Exit Game opener (sub_200c9f0): a message box from a dialog caption
- * (sub_201ed10), a YES command around an action (sub_1d5db60) and the popup of the two
- * (sub_201a070), so the question is the menu's own, modal, with YES and NO. The row's line comes
- * from title.gfx / title_dlc.gfx (menu_assets.py, BB_PC_MENU_QUIT=1). */
-enum {
-    TITLE_FINALIZE = 0x1fea820, TITLE_FINALIZE_CALL = 0x1f4adb3,
-    BOX_FROM_CAPTION = 0x201ed10, COMMAND_FROM_ACTION = 0x1d5db60, POPUP_FROM_BOX = 0x201a070,
-    MSG_DIALOG_TEXT = 0xcc, ROW_QUIT = 122000, QUIT_QUESTION = 920001,
-};
-
-static BB_GUEST_ABI int64_t quit_yes(int64_t a, int64_t b) {
-    (void)a, (void)b;
-    puts("PC menu: Quit Game");
-    bbgpu_request_quit();
-    return 0;
-}
-
-/* DLReferenceCountObject: the count at +8; the last reference calls the deleting destructor. */
-static void release_ref(uint64_t object) {
-    if (!object) return;
-    int32_t count;
-    memcpy(&count, (void *)(uintptr_t)(object + 8), 4);
-    const int32_t left = count - 1;
-    memcpy((void *)(uintptr_t)(object + 8), &left, 4);
-    if (count == 1) {
-        const uint64_t vtable = rd64((void *)(uintptr_t)object);
-        ((GuestFn)(uintptr_t)rd64((void *)(uintptr_t)vtable))(object, 0, 0, 0, 0, 0);
-    }
-}
-
-static BB_GUEST_ABI void *quit_opener(void *out, void *factory) {
-    _Alignas(16) unsigned char caption[0x40];
-    memset(caption, 0, sizeof(caption));
-    fn(MSG_REPOSITORY)(ptr(caption), MSG_DIALOG_TEXT, QUIT_QUESTION, 0, 0, 0);
-    uint64_t box = 0, command = 0;
-    fn(BOX_FROM_CAPTION)(ptr(&box), ptr(factory), ptr(caption), 0, 0, 0);
-    GuestFunction action;
-    function_init(&action, OPENER_FUNCTOR_VTABLE, (const void *)quit_yes);
-    fn(COMMAND_FROM_ACTION)(ptr(&command), ptr(action.buf), 2, 0, 0, 0);
-    fn(POPUP_FROM_BOX)(ptr(out), ptr(&box), ptr(&command), 0, 0, 0);
-    release_ref(command);
-    release_ref(box);
-    free_wstring(caption + 0x08);
-    return out;
-}
-
+/* The title's command list (Continue, Load Game, New Game, System, ...): Quit Game last. Its
+ * line comes from title.gfx / title_dlc.gfx (menu_assets.py, BB_PC_MENU_QUIT=1). */
 static BB_GUEST_ABI void *title_finalize(void *out, void *builder, void *arg3) {
-    Captions captions;
-    GuestFunction f;
-    captions_init(&captions, ROW_QUIT);
-    function_init(&f, ROW_FUNCTOR_VTABLE, (const void *)quit_opener);
-    fn(ADD_EXIT_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), 0, 0, 0);
-    captions_free(&captions);
+    add_command(builder, ROW_QUIT, (const void *)quit_opener, 0);
     fn(TITLE_FINALIZE)(ptr(out), ptr(builder), ptr(arg3), 0, 0, 0);
     return out;
 }
 
 /* --- Install and frame -------------------------------------------------------------------- */
+
+/* The menus' list update: its vtable slot and its five direct callers go to list_update. All
+ * are checked before anything is written; a refusal leaves pick lists without blanking. */
+static int hook_list_update(void) {
+    const uint64_t slot = BB_BN(LIST_VTABLE) + 3 * 8, original = addr(LIST_UPDATE), ours = ptr((const void *)list_update);
+    for (int i = 0; i < COUNT(LIST_UPDATE_CALLS); ++i) {
+        const unsigned char *site = bb_guest(BB_BN(LIST_UPDATE_CALLS[i].at));
+        int32_t rel;
+        memcpy(&rel, site + 1, 4);
+        if (site[0] != LIST_UPDATE_CALLS[i].op ||
+            BB_BN(LIST_UPDATE_CALLS[i].at) + 5 + (int64_t)rel != BB_BN(LIST_UPDATE)) {
+            puts("PC menu: the list update's callers are not as expected; pick lists are not blanked");
+            return 0;
+        }
+    }
+    if (bb_patch(slot, &original, &ours, 8)) {
+        printf("PC menu: list vtable: %s; pick lists are not blanked\n", bb_hooks_error());
+        return 0;
+    }
+    int hooks = 1;
+    for (int i = 0; i < COUNT(LIST_UPDATE_CALLS); ++i)
+        hooks += !bb_hook_call(BB_BN(LIST_UPDATE_CALLS[i].at), BB_BN(LIST_UPDATE), (void *)list_update);
+    return hooks;
+}
 
 int bb_pc_menu_install(void) {
     const char *menu = getenv("BB_PC_MENU"), *assets = getenv("BB_PC_MENU_ASSETS");
@@ -333,8 +623,7 @@ int bb_pc_menu_install(void) {
      * the table goes to seven. Both are checked before anything is written. */
     static const unsigned char six = 6, seven = 7, empty[16] = {0};
     unsigned char slot[16] = {0};
-    const uint64_t name = ptr(g_open_name);
-    memcpy(slot, &name, 8);
+    wr64(slot, ptr(g_open_name));
     if (bb_patch(BB_BN(SECTION_COUNT_IMM), &six, &seven, 1)) {
         printf("PC menu: off - section loop: %s\n", bb_hooks_error());
         return 0;
@@ -350,11 +639,9 @@ int bb_pc_menu_install(void) {
         bb_patch(BB_BN(SECTION_COUNT_IMM), &seven, &six, 1);
         return 0;
     }
-    for (size_t i = 0; i < COUNT(g_settings); ++i) seed(&g_settings[i]);
-    for (size_t i = 0; i < COUNT(g_enhance); ++i) seed(&g_enhance[i]);
     g_installed = 1;
-    puts("PC menu: System gains PC Settings and PC Enhancements");
-    int hooks = 3;
+    int hooks = 3 + hook_list_update();
+    printf("PC menu: System gains %d PC sections and Restart to Apply\n", COUNT(g_sections));
     const char *quit = getenv("BB_PC_MENU_QUIT");
     if (!quit || strcmp(quit, "1"))
         puts("PC menu: no Quit Game on the title (its line was not made)");
@@ -368,7 +655,7 @@ int bb_pc_menu_install(void) {
 }
 
 void bb_pc_menu_frame(void) {
-    if (!g_installed) return;
-    for (size_t i = 0; i < COUNT(g_settings); ++i) push(&g_settings[i]);
-    for (size_t i = 0; i < COUNT(g_enhance); ++i) push(&g_enhance[i]);
+    if (!g_installed || !g_open.section) return;
+    /* Only the open (or last opened) section's rows can change. */
+    for (int i = 0; i < g_open.section->count; ++i) push(&g_open.section->rows[i]);
 }

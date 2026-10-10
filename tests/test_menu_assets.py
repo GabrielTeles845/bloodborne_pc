@@ -37,21 +37,37 @@ class FormatTests(unittest.TestCase):
 
     def test_messages_are_menu_or_event_text(self):
         rows = m.read_messages()
-        for mid in (110006, 110013, 116020, 124020, 116007, 116004, 124001, 124003):
+        for mid in (110006, 110013, 116020, 124020, 125000, 116004, 124001, 124003):
             self.assertTrue(rows[mid][0], mid)
         events = [mid for mid in rows if m.message_kind(mid) == 'event']
         self.assertEqual(events, [14000332, 14000333, 14000334, 14000335, 14000336])
-        self.assertEqual([mid for mid in rows if m.message_kind(mid) == 'dialog'], [920001])
+        self.assertEqual([mid for mid in rows if m.message_kind(mid) == 'dialog'], [920001, 920002])
         self.assertEqual(rows[122000][0], 'Quit Game')
 
-    def test_runtime_and_movie_agree_on_section_names_and_ids(self):
+    def test_runtime_and_movie_agree_on_sections_rows_and_strings(self):
+        import re
         runtime = (ROOT / 'src/pc_menu.c').read_text(encoding='utf-8')
         rows = m.read_messages()
-        for name, title, *_ in m.SECTIONS:
-            self.assertIn(f'"{name}"', runtime)
-            self.assertIn(title, rows)
-        for mid in (116007, 116004, 124001, 124003):
-            self.assertIn(str(mid), runtime)
+        arrays = dict(re.findall(r'static Row (g_\w+)\[\] = \{(.*?)\n\};', runtime, re.S))
+        sections = re.findall(r'\{"(\w+)", (\d+), (g_\w+), COUNT\(g_\w+\)\}', runtime)
+        self.assertEqual(sorted(n for n, *_ in sections), sorted(n for n, *_ in m.SECTION_ROWS))
+        counts = {name: rows_n for name, _title, rows_n in m.SECTION_ROWS}
+        for name, system, array in sections:
+            ids = [int(i) for i in re.findall(r'_ROW\("\w+", (\d+)', arrays[array])]
+            self.assertEqual(len(ids), counts[name], name)
+            self.assertLessEqual(len(ids), 6, name)
+            self.assertIn(int(system), rows, name)
+            for row_id in ids:
+                self.assertTrue(rows[row_id][1], f'{row_id} has no line help')
+            # Pick lists below every toggle (their drop-down covers what is under them).
+            kinds = re.findall(r'(TOGGLE|PICK)_ROW', arrays[array])
+            self.assertEqual(kinds, sorted(kinds, key=lambda k: k == 'PICK'), name)
+        options = ''.join(re.findall(r'static const Option \w+\[\] = \{(.*?)\};', runtime))
+        self.assertTrue(options)
+        for choice in re.findall(r'\{-?\d+, (\d+)\}', options):
+            self.assertIn(int(choice), rows)
+        for message in (110017, 920002, 122000, 920001):
+            self.assertIn(message, rows)
 
 
 @unittest.skipUnless(GAME, 'BB_TEST_GAME_DIR not set')

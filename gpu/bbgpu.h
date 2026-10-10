@@ -39,11 +39,14 @@ void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp);
 /* Called at the start of every frame submission (sceVideoOutSubmitFlip / SubmitEopFlip), on the
  * game's thread that submits it: the loader's per-frame work for the engine features. */
 void bbgpu_set_frame_callback(void (*callback)(void));
-/* bbport.ini settings by key, for the in-game PC menu (show_fps and the game effects/PC
- * enhancements): get returns 0/1 or -1 for an unknown key; set also saves the file. */
-int bbgpu_setting_get(const char *key);
-int bbgpu_setting_default(const char *key);
+/* bbport.ini settings by key, for the in-game PC menu: on/off as 0/1, upscaler as its index,
+ * output_res as an index, live_resolution -1 (auto)/0/1, model_lod -2..2. get and default
+ * return 0 for a key they do not handle; set also saves the file. */
+int bbgpu_setting_get(const char *key, int *value);
+int bbgpu_setting_default(const char *key, int *value);
 void bbgpu_setting_set(const char *key, int value);
+/* Whether this GPU runs the upscaler (BbSettings::Upscaler index). */
+int bbgpu_upscaler_supported(int upscaler);
 /* Ends the game as closing its window does (the title menu's Quit Game). */
 void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
