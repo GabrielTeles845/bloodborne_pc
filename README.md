@@ -145,15 +145,11 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
   [bbhost](https://github.com/droogie/bbhost).
 - **Achievements in the System menu (1.6.9):** a System row on the title screen and in game lists
   your local achievements and Gamerscore. Achievement images are not shown yet.
-- **Quit Game (1.6.9):** a row on the title menu.
 - **Rebirth (1.6.9, `pc_rebirth`, `BB_PC_REBIRTH=1`):** the Altar of Despair in the Nightmare lets you
   reallocate your stats. It is off by default and has not been tested in play yet.
 - **Keyboard and mouse (1.6.9):** play alongside the gamepad, with rebindable keys
   (`key_<action>=` lines in `bbport.ini`) and mouse-wheel actions. Mouse camera control and
   on-screen key prompts are not done yet.
-- **First-run setup and direct launch (1.6.9):** a setup wizard on first start, an option to
-  start the game straight away, and a reorganised Home/Advanced layout. Button prompts (Xbox
-  or PlayStation) are chosen on the Controller page.
 - Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
   off by default (the game as it shipped). Switch them on in the launcher's **Game** page or the
   in-game menu's **PC enhancements**; they apply after a restart and are made from your own game
