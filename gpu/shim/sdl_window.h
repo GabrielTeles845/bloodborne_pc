@@ -40,6 +40,7 @@ private:
     std::atomic<bool> is_open{true};
     std::mutex text_mutex;
     bool text_requested{}, text_active{};
+    bool fullscreen_applied{}; // what the window was last set to (BbSettings::Values::fullscreen)
     int text_state{};
     std::string text, text_prompt, base_title;
     void UpdateTextTitle();

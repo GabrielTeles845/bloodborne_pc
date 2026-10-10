@@ -6,6 +6,7 @@
 #include "common/logging/log.h"
 #include "sdl_window.h"
 #include "bbport_overlay.h"
+#include "bbport_settings.h"
 
 namespace Frontend {
 
@@ -22,8 +23,8 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
-    const char* fullscreen = std::getenv("BB_FULLSCREEN");
-    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen && fullscreen[0] == '1');
+    fullscreen_applied = BbSettings::Get().fullscreen.load(); // BB_FULLSCREEN, from the launcher
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, fullscreen_applied);
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -92,6 +93,13 @@ bool WindowSDL::PollEvents() {
     }
     if (!text_active) {
         BbOverlay::UpdateTextInput(window);
+    }
+    // Fullscreen follows the setting (the in-game PC menu changes it while playing). The size
+    // change arrives as a window event below and resizes the swapchain as a drag would.
+    const bool want_fullscreen = BbSettings::Get().fullscreen.load();
+    if (want_fullscreen != fullscreen_applied) {
+        fullscreen_applied = want_fullscreen;
+        SDL_SetWindowFullscreen(window, want_fullscreen);
     }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {

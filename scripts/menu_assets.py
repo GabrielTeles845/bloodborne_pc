@@ -33,7 +33,7 @@ MESSAGE_FILE = 'menu.msgbnd.dcx'
 # rows at most. The names and row counts must match src/pc_menu.c.
 SECTION_ROWS = [
     ('PCGraphics', 117020, 5),
-    ('PCDisplay', 125020, 4),
+    ('PCDisplay', 125020, 5),
     ('PCEffects', 120020, 6),
     ('PCSetting', 116020, 4),
     ('PCGameplay', 126020, 5),

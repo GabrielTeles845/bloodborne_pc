@@ -202,7 +202,7 @@ static Row g_graphics[] = {
     PICK_ROW("upscaler", 117003, UPSCALERS), PICK_ROW("preset", 117004, PRESETS),
 };
 static Row g_display[] = {
-    TOGGLE_ROW("show_fps", 125000), PICK_ROW("output_res", 125001, OUTPUTS),
+    TOGGLE_ROW("fullscreen", 125004), TOGGLE_ROW("show_fps", 125000), PICK_ROW("output_res", 125001, OUTPUTS),
     PICK_ROW("live_resolution", 125002, LIVE), PICK_ROW("model_lod", 125003, LODS),
 };
 static Row g_effects[] = {

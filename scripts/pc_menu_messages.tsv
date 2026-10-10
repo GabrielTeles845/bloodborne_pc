@@ -18,7 +18,7 @@
 110007	PC Graphics	Upscaling and image quality.
 110010	PC Effects	The game's post-processing. Restart to apply.
 110013	PC Enhancements	The mirror and two invaders. Restart to apply.
-110014	PC Display	Resolution, model detail and the FPS counter.
+110014	PC Display	Fullscreen, resolution, detail and the FPS counter.
 110015	PC Gameplay	Gameplay tweaks. Restart to apply.
 110016	PC Cheats	Cheats for this session. Restart to apply.
 110017	Restart to Apply	Restart the game so changed settings take effect.
@@ -52,6 +52,7 @@
 120004	Game Anti-aliasing	The game's own edge smoothing.
 120005	Dynamic Shadows	Shadows from moving lights. Costs GPU time.
 125020	PC Display
+125004	Fullscreen	Fullscreen or a window. Applies straight away.
 125000	FPS Counter	Frames per second, in the corner of the screen.
 125001	Output Resolution	The size of the final image. Restart if not live.
 125002	Live Resolution Changes	Change resolution without a restart.

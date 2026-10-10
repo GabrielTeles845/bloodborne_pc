@@ -8,6 +8,9 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 namespace BbSettings {
 
@@ -121,6 +124,9 @@ void Load() {
             Set(v, key, value);
         }
     }
+    // The window mode is the launcher's setting, passed at start.
+    const char* fullscreen = std::getenv("BB_FULLSCREEN");
+    v.fullscreen = fullscreen && fullscreen[0] == '1';
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;
     v.startup_object_motion = v.object_motion;
@@ -241,6 +247,7 @@ namespace {
 // model detail as -2..2. False for a key the menu does not handle.
 bool Read(const Values& v, const std::string& k, int& out) {
     if (k == "show_fps") out = v.show_fps.load();
+    else if (k == "fullscreen") out = v.fullscreen.load();
     else if (k == "sharpen") out = v.sharpen.load();
     else if (k == "jitter") out = v.jitter.load();
     else if (k == "object_motion") out = v.object_motion.load();
@@ -279,8 +286,43 @@ extern "C" int bbgpu_setting_default(const char* key, int* value) {
     return Read(defaults, k, *value) ? 1 : 0;
 }
 
+namespace {
+// Fullscreen belongs to the launcher (settings.json, passed as BB_FULLSCREEN): the window
+// follows the setting at once (window.cpp), a restart inherits the environment, and the
+// launcher's file keeps it for the next start.
+void SetFullscreen(bool on) {
+    Get().fullscreen = on;
+#ifdef _WIN32
+    _putenv_s("BB_FULLSCREEN", on ? "1" : "0");
+#else
+    setenv("BB_FULLSCREEN", on ? "1" : "0", 1);
+#endif
+    const char* appdata = std::getenv("APPDATA");
+    if (!appdata) return;
+    const std::filesystem::path file = std::filesystem::path(appdata) / "bbport-launcher" / "settings.json";
+    std::ifstream in(file);
+    if (!in) return;
+    nlohmann::json root = nlohmann::json::parse(in, nullptr, false);
+    in.close();
+    if (!root.is_object()) return;
+    root["fullscreen"] = on;
+    const auto part = file.string() + ".part";
+    {
+        std::ofstream out(part, std::ios::trunc);
+        out << root.dump(2);
+        if (!out) return;
+    }
+    std::error_code error;
+    std::filesystem::rename(part, file, error);
+}
+} // namespace
+
 extern "C" void bbgpu_setting_set(const char* key, int value) {
     const std::string k = key;
+    if (k == "fullscreen") {
+        SetFullscreen(value != 0);
+        return;
+    }
     std::string text = std::to_string(value);
     if (k == "upscaler") {
         text = UpscalerName(value);
