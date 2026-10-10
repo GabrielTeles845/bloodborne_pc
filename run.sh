@@ -42,14 +42,24 @@ if [[ ! -f $game/eboot.bin ]]; then echo "No eboot.bin in $game (set BB_GAME_DIR
 original_game=$game
 # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
 generated=()
-export BB_PC_MENU_ASSETS=0  # the in-game PC menu adds its rows only when its files were made
+# The in-game PC menu adds its rows only when its files were made, and the title's Quit Game
+# only when both title movies have its line.
+export BB_PC_MENU_ASSETS=0 BB_PC_MENU_QUIT=0
 while IFS= read -r folder; do
     [[ -n $folder ]] && generated+=(--generated "$folder")
-    [[ ${folder##*/} == pc-menu ]] && BB_PC_MENU_ASSETS=1
+    if [[ ${folder##*/} == pc-menu ]]; then
+        BB_PC_MENU_ASSETS=1
+        [[ -f $folder/dvdroot_ps4/menu/title.gfx && -f $folder/dvdroot_ps4/menu/title_dlc.gfx ]] && BB_PC_MENU_QUIT=1
+    fi
 done < <("$PYTHON" scripts/enhancements.py --game "$game" --out "$out/enhancements" --settings "$BB_CONFIG")
+# The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).
+bundled=()
+for folder in "mods/Xbox 360 Prompts (Elden Ring)" "packaging/windows/mods/Xbox 360 Prompts (Elden Ring)"; do
+    if [[ -d $folder ]]; then bundled=(--bundled "$folder"); break; fi
+done
 game=$("$PYTHON" scripts/mods.py "$game" --out "$out" \
     --mods-dir "${BB_MODS_DIR:-$data/mods}" --config "${BB_MODS_CONFIG:-$data/mods.json}" \
-    --enabled "${BB_MODS_ENABLED:-1}" ${generated[@]+"${generated[@]}"})
+    --enabled "${BB_MODS_ENABLED:-1}" ${generated[@]+"${generated[@]}"} ${bundled[@]+"${bundled[@]}"})
 # A private merged view lasts for this launch, including restarts. Cleanup only our own view.
 if [[ $game != "$(realpath "$original_game")" ]]; then
     mod_game=$game

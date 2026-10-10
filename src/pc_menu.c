@@ -257,6 +257,66 @@ static BB_GUEST_ABI void *system_finalize(void *out, void *builder, void *arg3) 
     return out;
 }
 
+/* --- Quit Game on the title menu ---------------------------------------------------------- */
+/* The title's command list (Continue, Load Game, New Game, System, ...) is finalised by one call;
+ * a hook adds "Quit Game" first, the way System's Exit Game is added (sub_1f4c9a0). Its opener is
+ * built like the game's own Exit Game opener (sub_200c9f0): a message box from a dialog caption
+ * (sub_201ed10), a YES command around an action (sub_1d5db60) and the popup of the two
+ * (sub_201a070), so the question is the menu's own, modal, with YES and NO. The row's line comes
+ * from title.gfx / title_dlc.gfx (menu_assets.py, BB_PC_MENU_QUIT=1). */
+enum {
+    TITLE_FINALIZE = 0x1fea820, TITLE_FINALIZE_CALL = 0x1f4adb3,
+    BOX_FROM_CAPTION = 0x201ed10, COMMAND_FROM_ACTION = 0x1d5db60, POPUP_FROM_BOX = 0x201a070,
+    MSG_DIALOG_TEXT = 0xcc, ROW_QUIT = 122000, QUIT_QUESTION = 920001,
+};
+
+static BB_GUEST_ABI int64_t quit_yes(int64_t a, int64_t b) {
+    (void)a, (void)b;
+    puts("PC menu: Quit Game");
+    bbgpu_request_quit();
+    return 0;
+}
+
+/* DLReferenceCountObject: the count at +8; the last reference calls the deleting destructor. */
+static void release_ref(uint64_t object) {
+    if (!object) return;
+    int32_t count;
+    memcpy(&count, (void *)(uintptr_t)(object + 8), 4);
+    const int32_t left = count - 1;
+    memcpy((void *)(uintptr_t)(object + 8), &left, 4);
+    if (count == 1) {
+        const uint64_t vtable = rd64((void *)(uintptr_t)object);
+        ((GuestFn)(uintptr_t)rd64((void *)(uintptr_t)vtable))(object, 0, 0, 0, 0, 0);
+    }
+}
+
+static BB_GUEST_ABI void *quit_opener(void *out, void *factory) {
+    _Alignas(16) unsigned char caption[0x40];
+    memset(caption, 0, sizeof(caption));
+    fn(MSG_REPOSITORY)(ptr(caption), MSG_DIALOG_TEXT, QUIT_QUESTION, 0, 0, 0);
+    uint64_t box = 0, command = 0;
+    fn(BOX_FROM_CAPTION)(ptr(&box), ptr(factory), ptr(caption), 0, 0, 0);
+    GuestFunction action;
+    function_init(&action, OPENER_FUNCTOR_VTABLE, (const void *)quit_yes);
+    fn(COMMAND_FROM_ACTION)(ptr(&command), ptr(action.buf), 2, 0, 0, 0);
+    fn(POPUP_FROM_BOX)(ptr(out), ptr(&box), ptr(&command), 0, 0, 0);
+    release_ref(command);
+    release_ref(box);
+    free_wstring(caption + 0x08);
+    return out;
+}
+
+static BB_GUEST_ABI void *title_finalize(void *out, void *builder, void *arg3) {
+    Captions captions;
+    GuestFunction f;
+    captions_init(&captions, ROW_QUIT);
+    function_init(&f, ROW_FUNCTOR_VTABLE, (const void *)quit_opener);
+    fn(ADD_EXIT_ROW)(ptr(builder), ptr(captions.buf), ptr(f.buf), 0, 0, 0);
+    captions_free(&captions);
+    fn(TITLE_FINALIZE)(ptr(out), ptr(builder), ptr(arg3), 0, 0, 0);
+    return out;
+}
+
 /* --- Install and frame -------------------------------------------------------------------- */
 
 int bb_pc_menu_install(void) {
@@ -294,7 +354,17 @@ int bb_pc_menu_install(void) {
     for (size_t i = 0; i < COUNT(g_enhance); ++i) seed(&g_enhance[i]);
     g_installed = 1;
     puts("PC menu: System gains PC Settings and PC Enhancements");
-    return 3;
+    int hooks = 3;
+    const char *quit = getenv("BB_PC_MENU_QUIT");
+    if (!quit || strcmp(quit, "1"))
+        puts("PC menu: no Quit Game on the title (its line was not made)");
+    else if (bb_hook_call(BB_BN(TITLE_FINALIZE_CALL), BB_BN(TITLE_FINALIZE), (void *)title_finalize))
+        printf("PC menu: no Quit Game on the title - %s\n", bb_hooks_error());
+    else {
+        puts("PC menu: the title menu gains Quit Game");
+        ++hooks;
+    }
+    return hooks;
 }
 
 void bb_pc_menu_frame(void) {

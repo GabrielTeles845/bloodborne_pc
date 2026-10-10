@@ -44,6 +44,8 @@ void bbgpu_set_frame_callback(void (*callback)(void));
 int bbgpu_setting_get(const char *key);
 int bbgpu_setting_default(const char *key);
 void bbgpu_setting_set(const char *key, int value);
+/* Ends the game as closing its window does (the title menu's Quit Game). */
+void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned bbgpu_symbol_count(void);
 #ifdef __cplusplus

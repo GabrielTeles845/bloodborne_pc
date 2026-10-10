@@ -39,8 +39,10 @@ class FormatTests(unittest.TestCase):
         rows = m.read_messages()
         for mid in (110006, 110013, 116020, 124020, 116007, 116004, 124001, 124003):
             self.assertTrue(rows[mid][0], mid)
-        events = [mid for mid in rows if m.FIRST_EVENT_ID <= mid <= m.LAST_EVENT_ID]
+        events = [mid for mid in rows if m.message_kind(mid) == 'event']
         self.assertEqual(events, [14000332, 14000333, 14000334, 14000335, 14000336])
+        self.assertEqual([mid for mid in rows if m.message_kind(mid) == 'dialog'], [920001])
+        self.assertEqual(rows[122000][0], 'Quit Game')
 
     def test_runtime_and_movie_agree_on_section_names_and_ids(self):
         runtime = (ROOT / 'src/pc_menu.c').read_text(encoding='utf-8')
@@ -78,6 +80,22 @@ class RealGameTests(unittest.TestCase):
                   if code in (m.PLACE2, m.PLACE3)]
         self.assertIn('ScrollBarV', inside)
 
+    def test_title_lists_gain_a_line_for_quit_game(self):
+        for relative in m.TITLE_MOVIES:
+            source, movie = (GAME / relative).read_bytes(), self.files[relative]
+            self.assertEqual(int.from_bytes(movie[4:8], 'little'), len(movie))
+            self.assertNotIn('Item_5_0', placed_names(source, (m.PLACE2,)) + self.list_rows(source))
+            self.assertIn('Item_5_0', self.list_rows(movie))
+
+    @staticmethod
+    def list_rows(movie):
+        rows = []
+        for code, _h, s, e in m.tags(movie, m.body_start(movie), len(movie)):
+            if code == m.DEFINE_SPRITE:
+                rows += [m.placement(movie, c, s2)[3] for c, _h2, s2, _e2 in m.tags(movie, s + 4, e)
+                         if c in (m.PLACE2, m.PLACE3)]
+        return [r for r in rows if r]
+
     def test_every_language_gains_the_strings_and_keeps_its_own(self):
         rows = m.read_messages()
         languages = [k for k in self.files if k.name == m.MESSAGE_FILE]
@@ -86,7 +104,7 @@ class RealGameTests(unittest.TestCase):
             before = Bnd4(dcx_decompress((GAME / relative).read_bytes()))
             after = Bnd4(dcx_decompress(self.files[relative]))
             self.assertEqual(after.names, before.names)
-            for group in (m.MENU_TEXT, m.LINE_HELP, m.EVENT_TEXT):
+            for group in m.GROUP_KIND:
                 old = m.fmg_read(before.files[before.ids.index(group)])
                 new = m.fmg_read(after.files[after.ids.index(group)])
                 self.assertEqual({k: v for k, v in new.items() if k in old}, old)  # nothing changed
@@ -94,6 +112,9 @@ class RealGameTests(unittest.TestCase):
             self.assertEqual(menu[110006].decode('utf-16-le'), rows[110006][0])
             events = m.fmg_read(after.files[after.ids.index(m.EVENT_TEXT)])
             self.assertEqual(events[14000335].decode('utf-16-le'), 'Accept Rebirth')
+            for group in (m.DIALOG_TEXT, m.SCREEN_DIALOG_TEXT):
+                dialog = m.fmg_read(after.files[after.ids.index(group)])
+                self.assertEqual(dialog[920001].decode('utf-16-le'), rows[920001][0])
 
 
 if __name__ == '__main__':

@@ -113,6 +113,17 @@ class ModTests(unittest.TestCase):
         self.assertEqual((run('0') / 'a.dcx').read_bytes(), b'generated')
         self.assertEqual((self.assets / 'a.dcx').read_bytes(), b'original')
 
+    def test_bundled_mods_are_added_once(self):
+        bundled = self.root / 'package' / 'Xbox Prompts'
+        (bundled / 'menu').mkdir(parents=True)
+        (bundled / 'menu/common.tpf.dcx').write_bytes(b'prompts')
+        mods.seed_bundled(self.moddir, [bundled])
+        self.assertEqual((self.moddir / 'Xbox Prompts/menu/common.tpf.dcx').read_bytes(), b'prompts')
+        import shutil
+        shutil.rmtree(self.moddir / 'Xbox Prompts')  # the player deletes it
+        mods.seed_bundled(self.moddir, [bundled])
+        self.assertFalse((self.moddir / 'Xbox Prompts').exists())
+
     def test_app0_wrapped_mod_discovered(self):
         self.moddir.mkdir()
         (self.moddir / 'Wrapped/app0/dvdroot_ps4').mkdir(parents=True)

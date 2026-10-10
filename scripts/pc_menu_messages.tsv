@@ -5,6 +5,8 @@
 # Environment, ... 115000 Language. Inside a block, N is a row and N+20 is the screen title.
 # The PC menu takes 116000 PC Settings and 124000 PC Enhancements, and 110006/110013 for the
 # System rows that open them; all are unused in the shipped bundle.
+# Ids 920000..929999 are dialog text (groups 78 and 204, yes/no questions); 122000 is the
+# title menu's Quit Game.
 # Ids 14000332..14000399 are event text (group 30): talk menu entries and the messages their
 # scripts show (the Altar of Despair's rebirth); the help column is unused.
 # A "\n" in the text is a line break.
@@ -24,3 +26,5 @@
 14000334	Too many Blood Echoes are held to be reborn.\nSpend some, then return to the altar.
 14000335	Accept Rebirth
 14000336	Undo Rebirth
+122000	Quit Game	Close the game and return to the desktop.
+920001	Quit the game and return to the desktop?	

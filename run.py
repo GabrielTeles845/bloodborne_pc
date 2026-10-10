@@ -17,6 +17,8 @@ import subprocess
 import sys
 
 PORT = Path(__file__).resolve().parent
+# The Xbox button prompts mod the package ships (packaging/windows/mods).
+XBOX_PROMPTS = 'Xbox 360 Prompts (Elden Ring)'
 
 
 # Co-op: the community service that answers Bloodborne's own game-server requests
@@ -156,13 +158,21 @@ def main():
     # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
     generated = run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
                            '--settings', config, capture=True).splitlines()
-    # The in-game PC menu adds its rows only when its sections and strings were made.
-    env['BB_PC_MENU_ASSETS'] = '1' if any(Path(folder).name == 'pc-menu' for folder in generated) else '0'
+    # The in-game PC menu adds its rows only when its sections and strings were made, and the
+    # title's Quit Game only when both title movies have its line.
+    menu = next((Path(folder) for folder in generated if Path(folder).name == 'pc-menu'), None)
+    env['BB_PC_MENU_ASSETS'] = '1' if menu else '0'
+    env['BB_PC_MENU_QUIT'] = '1' if menu and all(
+        (menu / 'dvdroot_ps4/menu' / name).is_file() for name in ('title.gfx', 'title_dlc.gfx')) else '0'
+    # The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).
+    bundled = [folder for folder in (PORT / 'mods' / XBOX_PROMPTS, PORT / 'packaging/windows/mods' / XBOX_PROMPTS)
+               if folder.is_dir()][:1]
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),
                            '--enabled', env.get('BB_MODS_ENABLED', '1'),
                            *(arg for folder in generated for arg in ('--generated', folder)),
+                           *(arg for folder in bundled for arg in ('--bundled', folder)),
                            capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     try:

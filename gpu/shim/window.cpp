@@ -146,3 +146,11 @@ bool WindowSDL::PollEvents() {
 }
 
 } // namespace Frontend
+
+// The in-game PC menu's Quit Game: the same as closing the window (SDL_PushEvent is safe from
+// any thread, here the game's menu thread).
+extern "C" void bbgpu_request_quit(void) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&event);
+}

@@ -11,7 +11,9 @@ engine/menu_assets.cpp):
   ScrollBarV, since it now has more rows than lines.
 - msg/<language>/menu.msgbnd.dcx: the menu's message ids added to the menu text (group 200),
   line help (201) and event text (30) FMGs of every language the game has. The game reads the
-  folder its region and language pick, so all of them get the (English) strings.
+  folder its region and language pick, so all of them get the (English) strings. Dialog text
+  (ids 920000..929999) goes to groups 78 and 204, the yes/no questions'.
+- menu/title.gfx and title_dlc.gfx: one more line in the title's command list, for Quit Game.
 """
 from pathlib import Path
 import struct
@@ -22,6 +24,7 @@ from fromsoft import Bnd4, FormatError, dcx_compress, dcx_decompress  # noqa: E4
 
 MESSAGES = Path(__file__).resolve().parent / 'pc_menu_messages.tsv'
 MOVIE = Path('menu') / 'optionsetting.gfx'
+TITLE_MOVIES = [Path('menu') / 'title.gfx', Path('menu') / 'title_dlc.gfx']  # the DLC edition uses the second
 MESSAGE_FILE = 'menu.msgbnd.dcx'
 
 # The sections: (instance name, title message id, depth on the main timeline, the slot the
@@ -492,6 +495,47 @@ def add_scrollbar(b, list_name, ax, ay, name='ScrollBarV'):
     return set_size(b[:head] + tag_bytes(DEFINE_SPRITE, sprite) + b[le:])
 
 
+def add_list_slot(b, list_name):
+    """One more line in a command list: the sprite placed as `list_name` gets an Item_<n>_0
+    placed like its last one, one pitch further down, at a free depth. The menu counts a list's
+    lines from its Item_*_0 children. (The title's CommandList: Item_0_0..Item_4_0.)"""
+    sprites = {u16(b, s): (head, s, e) for code, head, s, e in tags(b, body_start(b), len(b))
+               if code == DEFINE_SPRITE}
+    list_cid = None
+    for cid in sorted(sprites):
+        _h, s, e = sprites[cid]
+        for code, _h2, s2, _e2 in tags(b, s + 4, e):
+            if code in (PLACE2, PLACE3):
+                p = placement(b, code, s2)
+                if p[3] == list_name and p[1] is not None:
+                    list_cid = p[1]
+        if list_cid is not None:
+            break
+    if list_cid is None or list_cid not in sprites:
+        raise Fail(f'no sprite placed as {list_name}')
+    head, ls, le = sprites[list_cid]
+    rows, depths, first_show = {}, set(), None
+    for code, h, s, e in tags(b, ls + 4, le):
+        if code == PLACE2:
+            p = Place2(b, s, e)
+            depths.add(p.depth)
+            if p.name and p.name.startswith('Item_') and p.name.endswith('_0') and p.mat:
+                rows[int(p.name[5:-2])] = p
+        elif code == PLACE3:
+            depths.add(u16(b, s + 2))
+        if code == SHOW_FRAME and first_show is None:
+            first_show = h
+    if len(rows) < 2 or first_show is None:
+        raise Fail(f'{list_name} has fewer than two Item_*_0 rows')
+    order = sorted(rows)
+    last, prev = rows[order[-1]], rows[order[-2]]
+    mat = last.mat.copy()
+    mat.ty += last.mat.ty - prev.mat.ty
+    place = last.build(max(depths) + 1, mat, f'Item_{order[-1] + 1}_0')
+    sprite = b[ls:first_show] + tag_bytes(PLACE2, place) + b[first_show:le]
+    return set_size(b[:head] + tag_bytes(DEFINE_SPRITE, sprite) + b[le:])
+
+
 def build_option_movie(source):
     movie = bytes(source)
     for name, title, depth, defaults_slot, drop in SECTIONS:
@@ -501,8 +545,18 @@ def build_option_movie(source):
 
 # --- Messages --------------------------------------------------------------------------------
 
-MENU_TEXT, LINE_HELP, EVENT_TEXT = 200, 0xc9, 30
+MENU_TEXT, LINE_HELP, EVENT_TEXT, DIALOG_TEXT, SCREEN_DIALOG_TEXT = 200, 0xc9, 30, 78, 0xcc
 FIRST_EVENT_ID, LAST_EVENT_ID = 14000332, 14000399
+FIRST_DIALOG_ID, LAST_DIALOG_ID = 920000, 929999
+# Which ids each group carries: menu rows, event text, or dialog questions.
+GROUP_KIND = {MENU_TEXT: 'menu', LINE_HELP: 'menu', EVENT_TEXT: 'event', DIALOG_TEXT: 'dialog',
+              SCREEN_DIALOG_TEXT: 'dialog'}
+
+
+def message_kind(mid):
+    if FIRST_EVENT_ID <= mid <= LAST_EVENT_ID:
+        return 'event'
+    return 'dialog' if FIRST_DIALOG_ID <= mid <= LAST_DIALOG_ID else 'menu'
 
 
 def fmg_read(b):
@@ -576,17 +630,17 @@ def read_messages(path=MESSAGES):
 
 
 def build_menu_messages(packed, rows):
-    """The message bundle with the menu's ids: menu text and line help, and event text."""
+    """The message bundle with the menu's ids: menu text and line help, event text and the
+    dialog questions."""
     archive = Bnd4(dcx_decompress(packed))
     groups = {}
     for i, file_id in enumerate(archive.ids):
-        if file_id in (MENU_TEXT, LINE_HELP, EVENT_TEXT):
+        if file_id in GROUP_KIND:
             groups[file_id] = i
-    if set(groups) != {MENU_TEXT, LINE_HELP, EVENT_TEXT}:
-        raise Fail('the message bundle lacks the menu text, line help or event text group')
+    if set(groups) != set(GROUP_KIND):
+        raise Fail('the message bundle lacks the menu, line help, event or dialog text group')
     for file_id, index in groups.items():
-        event = file_id == EVENT_TEXT
-        wanted = {mid: row for mid, row in rows.items() if (FIRST_EVENT_ID <= mid <= LAST_EVENT_ID) == event}
+        wanted = {mid: row for mid, row in rows.items() if message_kind(mid) == GROUP_KIND[file_id]}
         ids = fmg_read(archive.files[index])
         clash = sorted(set(wanted) & set(ids))
         if clash:
@@ -620,4 +674,11 @@ def make(dvdroot, log=print):
     if not languages:
         log('PC menu: off - the game has no msg/*/menu.msgbnd.dcx')
         return {}
+    # Quit Game on the title: both title movies, or neither (the row needs its line).
+    try:
+        titles = {relative: add_list_slot((dvdroot / relative).read_bytes(), 'CommandList')
+                  for relative in TITLE_MOVIES}
+        files.update(titles)
+    except (OSError, FormatError, IndexError, struct.error) as error:
+        log(f'PC menu: no Quit Game on the title - {error}')
     return files
