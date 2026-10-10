@@ -5,6 +5,18 @@ created by Mohammed Albarghouthi. It runs your own decrypted Bloodborne game fil
 on Windows 10 or 11. It builds on [deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc)
 and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
+## Launcher
+
+The Windows launcher is built with Qt Quick. Its dark glass sidebar, cards and settings panels
+sit over the included Yharnam artwork. The sidebar opens graphics, display, game, controller,
+cheats, online, mods, advanced and log settings. Your settings still use the existing
+`settings.json`, `bbport.ini`, `mods.json` and `patches.json` files. The cards show the game
+version, save status, graphics card, output settings and selected button prompts.
+**Game Options** opens graphics settings. The classic launcher remains available with
+`Bloodborne.exe --classic-launcher` if you need it.
+
+![Qt Quick Bloodborne launcher with translucent panels](docs/images/launcher-cinematic.jpg)
+
 ## In-game guide and achievements
 
 Press **Insert** on a keyboard or **L3+R3** on a controller while the game is running to open
@@ -12,6 +24,11 @@ the guide. **Home** shows FPS and achievement progress; **Achievements** lists l
 trophies and Gamerscore; **Settings** and **Mods** contain the existing graphics and cheat
 controls. Press the same shortcut to close it. These screenshots show the guide running
 over the game at 1440p:
+
+The **Mods** tab can switch between the bundled Xbox prompt pack and the game's original
+PlayStation buttons. Choose a style, then select **Apply mods and restart**. The same button
+applies gameplay patch changes. Other loose-file mods and their load order remain in the
+launcher's **Mods & patches** page.
 
 ![Xbox-guide-inspired menu running over Bloodborne](docs/images/guide-in-game.jpg)
 
@@ -31,27 +48,25 @@ or save file. Real unlocks say *Achievement unlocked*.
 
 ## Which download do I click?
 
-On the [release page](https://github.com/Jgamrot/bloodborne_pc/releases/tag/windows-v1.6.5),
-click **[Bloodborne-Windows-v1.6.5-Jgamrot.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.5/Bloodborne-Windows-v1.6.5-Jgamrot.zip)**
-if this is your first installation. It contains the launcher, the working game executable,
-and Xbox button prompts. You do **not** need the other assets.
-
-The separate `bb-probe.exe` is only for replacing the executable in an existing installation
-of **this same fork**. The Xbox prompt zip is for manual mod updates. If you have a different
-launcher, use the full package and the switching guide below. The two **Source code**
-downloads are for developers; they are not the game.
+On the [QML launcher preview release](https://github.com/Jgamrot/bloodborne_pc/releases/tag/qml-launcher-preview-1),
+download **[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/qml-launcher-preview-1/bbport-windows.zip)**.
+It contains the launcher, game executable and Xbox button prompts. Extract the whole archive.
+The two **Source code** downloads are for developers; they are not the game.
 None of these downloads includes Bloodborne's game files.
+
+This is a **prerelease**. A game launch with an already configured game folder has been checked;
+first-run folder selection and trophy-key import still need wider testing.
 
 ## First-time setup
 
-1. Right-click **Bloodborne-Windows-v1.6.5-Jgamrot.zip** in Downloads and choose
+1. Right-click **bbport-windows.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
 2. Get your own extracted Bloodborne **CUSA03173 version 1.09** game folder ready. It is a
    *different* folder from `bbport-windows`. The correct folder has `eboot.bin` directly
    inside it, alongside `dvdroot_ps4`, `sce_module`, and `sce_sys`.
 3. Open `bbport-windows` and double-click **Bloodborne.exe**. In the launcher, open
-   **Game & effects**. Beside **Game folder**, choose the folder that contains `eboot.bin`.
+   **Game**. Beside **Game folder**, choose the folder that contains `eboot.bin`.
    Select the folder itself, not `eboot.bin` and not the port's `bbport-windows` folder.
 4. Click **PLAY**. The first launch prepares files and may take a while. New areas may stutter
    briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
@@ -116,9 +131,8 @@ fork's full package in a **new** folder:
 This works for Supermedo's launcher and other bbport-derived launchers that use the same
 extracted game folder. A separate shadPS4 installation can use the same game files, but its
 save layout may differ; keep the old saves backed up and check the new launcher's **Saves
-folder** before copying anything. The package includes Xbox button prompts; the separate
-[prompt mod zip](https://github.com/Jgamrot/bloodborne_pc/releases/download/windows-v1.6.5/Xbox-360-Prompts-Elden-Ring.zip)
-is for manual mod updates only.
+folder** before copying anything. The package includes Xbox button prompts; switch between
+Xbox and original PlayStation buttons on the launcher's **Mods** page.
 
 ## What's changed
 
@@ -183,5 +197,9 @@ translation goes to the author of [PR #13](https://github.com/Supermedo/bloodbor
 The Xbox prompts are by **Dommo**, from
 [Xbox (and switch) UI for Bloodborne](https://www.nexusmods.com/bloodborne/mods/30),
 redistributed under the upload permission on the mod page.
+[Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19) is an optional manual
+download. Its author does not permit redistribution, so it is not in this package. Put it in
+the launcher’s `mods` folder to enable it; its own features are configured in game through
+the Doll or Prime Hunter's Mark. It changes gameplay and is optional for a 60 FPS setup.
 Bloodborne itself belongs to Sony Interactive Entertainment and FromSoftware; this project
 is not affiliated with them.

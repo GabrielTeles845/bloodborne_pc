@@ -12,22 +12,25 @@ Requirements
   Nothing else: Python and the libraries are inside this folder.
 
 Starting
-- Bloodborne.exe opens the launcher. On "Game & effects" pick your game folder, adjust the
-  settings, press PLAY. The "Play" page checks the game version, saves, graphics card and
-  FSR 4 assets.
+- Bloodborne.exe opens the launcher. On "Game" choose the folder containing eboot.bin,
+  adjust settings, then press PLAY. The Home page shows the game version, saves, graphics
+  card and FSR 4 assets. The new Qt Quick panels let the background show through.
 - Play Bloodborne.exe starts the game straight away with the settings saved in the launcher,
   without opening it. Set things up once in Bloodborne.exe, then use Play Bloodborne.exe (or a
-  shortcut to it, or "Add to Steam" on the Play page). If no game folder is chosen
+  shortcut to it, or "Add to Steam" on the Advanced page). If no game folder is chosen
   yet it opens the launcher. Bloodborne.exe --play does the same. The log goes to
   user\last_run.log.
 - Advanced -> "Desktop shortcut" puts Bloodborne on the desktop.
-- Updates: when a new version is out, the launcher shows it at the bottom left; "Update"
-  downloads and installs it and opens the launcher again (saves, settings and mods are kept).
+- Updates: when a new version is out, the launcher shows a notice; Advanced ->
+  "Install update" downloads and installs it. Saves, settings and mods are kept.
   Advanced -> "Check for updates" checks by hand.
-- Advanced -> "Launcher language": English, Russian, Arabic, Spanish, Portuguese, French,
-  German, Italian, Polish, Turkish, Chinese, Japanese, Korean (default: the Windows language).
+- The Qt Quick launcher currently displays English labels. The classic launcher retains its
+  English, Russian, Arabic, Spanish, Portuguese, French, German, Italian, Polish, Turkish,
+  Chinese, Japanese and Korean translations. Run Bloodborne.exe --classic-launcher to use it.
 - In the game, Insert (or L3+R3 on a gamepad) opens the guide menu: Home, Achievements,
   Settings, and Mods/Cheats. Use LB/RB to switch sections, A to select, and B to go back.
+  In Mods, choose Xbox or original PlayStation button prompts, then select
+  "Apply mods and restart". This also applies gameplay patch changes.
   Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
   Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
 - Earned trophies show an achievement popup and appear in the guide's Achievements section.
@@ -41,7 +44,7 @@ Switching from another launcher
 - Close the old launcher and game. Back up its user folder, bbport.ini, and mods if present.
 - Extract this entire package to a NEW folder. Do not copy only Bloodborne.exe into an older
   launcher folder; the matching bin, scripts, patches, and support files are also needed.
-- Open this package's Bloodborne.exe. Under "Game & effects", choose the existing folder that
+- Open this package's Bloodborne.exe. Under "Game", choose the existing folder that
   contains eboot.bin as "Game folder". Set "Saves folder" to the old user folder if you want
   those saves, or copy your backed-up saves into the new user folder while both apps are closed.
 - Copy only the mods you want into the new mods folder, enable them, and press PLAY.
@@ -53,8 +56,8 @@ Data
 
 Online play (beta)
 - Register a shadNet account at https://shadnet.shadps4.net. In the launcher open
-  "Online co-op", tick "Play online", enter the account name (not the email) and password,
-  press "Test connection", then PLAY and choose online at the title screen.
+  "Online", tick "Play online", enter the account name (not the email) and password,
+  use "Test connection", then PLAY and choose online at the title screen.
 - Messages, bloodstains and ghosts come from The Hunter's Dream (https://thehuntersdream.com);
   bells and summons go through the shadNet server. Everyone needs game version 1.09 and the
   same co-op server. Summoning between players is not confirmed yet.
@@ -88,6 +91,10 @@ Mods and patches
   Developer Mode the port links folders with junctions and files with hard links; when the game
   is on another drive, the temporary mod view is made next to the game folder.
 - Third-party patches: shadPS4/GoldHEN XML files for 1.09 in patches\.
+- Bloodborne Enhanced (Nexus mod 19) is an optional manual download from its author.
+  The mod's permissions do not allow this package to include it. Place it in mods\
+  and enable it in the launcher; configure its own features in game via the Doll or
+  Prime Hunter's Mark.
 
 Credits
 - Online play: shadp2p by Wozzardman (https://github.com/Wozzardman/shadp2p), shadNet by the

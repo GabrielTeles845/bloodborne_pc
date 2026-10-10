@@ -6,6 +6,7 @@
 #include <array>
 #include <cfloat>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -15,8 +16,10 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 #include <SDL3/SDL.h>
 #include "bbport_settings.h"
@@ -69,6 +72,8 @@ std::atomic<std::int64_t> menu_opened_ms{0};
 bool l3_down = false, r3_down = false;
 int active_tab = 0; // Home, Achievements, Settings, Mods / Cheats
 bool dirty = false; // settings changed while open: saved on close
+bool mod_selection_changed = false;
+std::string mod_selection_error;
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
 bool text_entry_active = false;
 std::string text_entry_prompt, text_entry_text;
@@ -480,17 +485,108 @@ void SettingsTab() {
     Checkbox("Show FPS counter", s.show_fps);
 }
 
+std::filesystem::path ModConfigPath() {
+    if (const char* value = std::getenv("BB_MODS_CONFIG"); value && *value) return value;
+    return std::filesystem::current_path() / "mods.json";
+}
+
+std::optional<std::string> XboxPromptFolder() {
+    const char* configured = std::getenv("BB_MODS_DIR");
+    const auto root = configured && *configured ? std::filesystem::path(configured) :
+                      std::filesystem::current_path() / "mods";
+    std::error_code ec;
+    if (!std::filesystem::is_directory(root, ec)) return std::nullopt;
+    for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+        if (!entry.is_directory(ec)) continue;
+        auto name = entry.path().filename().string();
+        std::transform(name.begin(), name.end(), name.begin(),
+                       [](unsigned char c) { return char(std::tolower(c)); });
+        if (name.find("xbox") != std::string::npos && name.find("prompt") != std::string::npos)
+            return entry.path().filename().string();
+    }
+    return std::nullopt;
+}
+
+nlohmann::json ModProfile() {
+    std::ifstream file(ModConfigPath());
+    if (!file) return nlohmann::json::object();
+    try {
+        auto profile = nlohmann::json::parse(file);
+        return profile.is_object() ? profile : nlohmann::json::object();
+    } catch (const nlohmann::json::exception&) {
+        return nlohmann::json::object();
+    }
+}
+
+bool PromptEnabled(const std::string& folder) {
+    const auto profile = ModProfile();
+    const auto it = profile.find("disabled");
+    if (it == profile.end() || !it->is_array()) return true;
+    return std::find(it->begin(), it->end(), folder) == it->end();
+}
+
+bool SetPromptEnabled(const std::string& folder, bool enabled) {
+    nlohmann::json profile = nlohmann::json::object();
+    std::ifstream existing(ModConfigPath());
+    if (existing) {
+        try {
+            profile = nlohmann::json::parse(existing);
+            if (!profile.is_object()) return false;
+        } catch (const nlohmann::json::exception&) { return false; }
+    }
+    auto& disabled = profile["disabled"];
+    if (!disabled.is_array()) disabled = nlohmann::json::array();
+    nlohmann::json next = nlohmann::json::array();
+    for (const auto& name : disabled)
+        if (!name.is_string() || name.get<std::string>() != folder) next.push_back(name);
+    if (!enabled) next.push_back(folder);
+    profile["disabled"] = std::move(next);
+    std::ofstream file(ModConfigPath(), std::ios::trunc);
+    if (!file) return false;
+    file << profile.dump(2) << '\n';
+    return bool(file);
+}
+
 void ModsTab() {
     auto& s = BbSettings::Get();
     ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Mods / Cheats");
-    ImGui::TextWrapped("These switches use the existing game patches. Changes apply after a restart.");
+    ImGui::TextWrapped("Select button prompts and gameplay patches, then restart to apply them.");
+    if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
+        ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Mod loading is off in the launcher. Enable it there first.");
+    ImGui::SeparatorText("Button prompts");
+    static const auto xbox_folder = XboxPromptFolder();
+    static std::optional<bool> xbox_enabled;
+    if (xbox_folder) {
+        if (!xbox_enabled) xbox_enabled = PromptEnabled(*xbox_folder);
+        int choice = *xbox_enabled ? 1 : 0;
+        if (ImGui::RadioButton("Original PlayStation buttons", choice == 0)) choice = 0;
+        if (ImGui::RadioButton("Xbox buttons", choice == 1)) choice = 1;
+        if (bool(choice) != *xbox_enabled) {
+            if (SetPromptEnabled(*xbox_folder, choice == 1)) {
+                xbox_enabled = choice == 1;
+                mod_selection_changed = true;
+                mod_selection_error.clear();
+            } else mod_selection_error = "Could not save mods.json. Check the port folder permissions.";
+        }
+        ImGui::TextDisabled("Xbox prompts: %s", xbox_folder->c_str());
+    } else {
+        ImGui::TextDisabled("Original PlayStation buttons");
+        ImGui::TextDisabled("Install an Xbox prompt mod in the launcher's Mods folder to enable Xbox buttons.");
+    }
+    if (!mod_selection_error.empty())
+        ImGui::TextColored(ImVec4(.95f,.35f,.35f,1), "%s", mod_selection_error.c_str());
     ImGui::SeparatorText("Gameplay and debug");
     for (int e = 8; e < BbSettings::EffectCount; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
     Hint("Free camera: hold Cross/A and press L3 (keyboard: Space + Z). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
     ImGui::Separator();
-    RestartPrompt();
-    ImGui::TextDisabled("Mod order and the FPS cap are set in the launcher before starting the game.");
+    if (mod_selection_changed || RestartNeeded())
+        ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Changes are ready. Restart to apply them.");
+    if (ImGui::Button("Apply mods and restart", ImVec2(-1, 0))) {
+        BbSettings::Save();
+        runtime_restart();
+    }
+    ImGui::TextDisabled("Other mod choices and load order are managed in the launcher.");
 }
 
 std::string UnlockDate(std::int64_t timestamp) {
@@ -820,6 +916,18 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     style.FrameRounding = 4.0f;
     style.GrabRounding = 4.0f;
     style.Colors[ImGuiCol_WindowBg].w = 0.92f;
+    // Slate controls, crimson interaction, Xbox green checks and a muted violet focus ring.
+    // Explicitly override ImGui's default blue slider and frame palette.
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(.16f, .19f, .23f, 1);
+    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(.25f, .22f, .28f, 1);
+    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(.32f, .20f, .25f, 1);
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(.57f, .31f, .39f, 1);
+    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(.73f, .36f, .47f, 1);
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(.40f, .83f, .48f, 1);
+    style.Colors[ImGuiCol_NavHighlight] = ImVec4(.66f, .43f, .78f, 1);
+    style.Colors[ImGuiCol_Separator] = ImVec4(.33f, .35f, .40f, 1);
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(.35f, .36f, .41f, 1);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(.48f, .40f, .48f, 1);
 
     ImFontConfig font_config;
     font_config.FontDataOwnedByAtlas = false;

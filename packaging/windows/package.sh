@@ -43,7 +43,7 @@ done
 "$venv/Scripts/python.exe" -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
     --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/assets/hunter-icon.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
-    "$(cygpath -w "$PWD/launcher/bbport_launcher_qml.py")"
+    "$(cygpath -w "$PWD/launcher/bbport_launcher_win.py")"
 # Qt Quick needs the VC runtime shipped with the PySide6 wheel. PyInstaller can pick an older
 # root copy from Windows Python. It can also collect an unrelated ICU from the build host's PATH;
 # that DLL shadows Windows' ICU and prevents Qt6Core from loading in the packaged launcher.

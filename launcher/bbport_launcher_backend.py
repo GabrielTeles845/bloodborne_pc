@@ -498,7 +498,7 @@ class LauncherBackend(QObject):
         def work():
             try:
                 version, url, page = core.latest_release()
-                if core.version_tuple(version) > core.version_tuple(core.VERSION):
+                if core.release_is_newer(version):
                     self.updateAvailable.emit(version, url or '', page)
                 elif manual:
                     self.workerNotice.emit(f'You have the latest version ({core.VERSION}).')

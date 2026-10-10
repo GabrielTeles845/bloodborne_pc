@@ -46,7 +46,9 @@ STRIP_ART = PORT_DIR / 'launcher' / 'art' / 'strip.png'
 # Co-op: the community server that answers the game's own server requests.
 COMMUNITY_SERVER = 'https://thehuntersdream.com'
 RELEASES_API = 'https://api.github.com/repos/Jgamrot/bloodborne_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/Jgamrot/bloodborne_pc/releases/latest'
+RELEASES_PAGE = 'https://github.com/Jgamrot/bloodborne_pc/releases'
+CURRENT_RELEASE_TAG = 'qml-launcher-preview-1'
+PREVIEW_TAG_PREFIX = 'qml-launcher-preview-'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'bbport-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'bbport.ini', 'mods.json', 'patches.json', 'last_run.log')
@@ -1740,7 +1742,7 @@ class Launcher:
             return
 
         def show():
-            if version_tuple(version) > version_tuple(VERSION):
+            if release_is_newer(version):
                 self.offer_update(version, url, page)
             elif manual:
                 self.messagebox.showinfo('Bloodborne', _('You have the latest version ({}).',
@@ -1943,13 +1945,36 @@ def version_tuple(text):
     return tuple(int(number) for number in re.findall(r'\d+', text or ''))
 
 
+def release_is_newer(tag):
+    """Preview builds update only within this fork's preview series."""
+    if CURRENT_RELEASE_TAG.startswith(PREVIEW_TAG_PREFIX):
+        if not tag.startswith(PREVIEW_TAG_PREFIX):
+            return False
+        try:
+            return int(tag.removeprefix(PREVIEW_TAG_PREFIX)) > int(CURRENT_RELEASE_TAG.removeprefix(PREVIEW_TAG_PREFIX))
+        except ValueError:
+            return False
+    return version_tuple(tag) > version_tuple(VERSION)
+
+
 def latest_release():
-    """(version, zip URL, page URL) of the newest GitHub release."""
-    request = urllib.request.Request(RELEASES_API, headers={'Accept': 'application/vnd.github+json',
-                                                            'User-Agent': 'bbport-launcher'})
+    """(tag/version, zip URL, page URL) from this fork's matching GitHub release channel."""
+    preview = CURRENT_RELEASE_TAG.startswith(PREVIEW_TAG_PREFIX)
+    api = RELEASES_API.removesuffix('/latest') + '?per_page=30' if preview else RELEASES_API
+    request = urllib.request.Request(api, headers={'Accept': 'application/vnd.github+json',
+                                                  'User-Agent': 'bbport-launcher'})
     with urllib.request.urlopen(request, timeout=15) as response:
-        release = json.load(response)
-    version = '.'.join(re.findall(r'\d+', release['tag_name']))
+        result = json.load(response)
+    if preview:
+        candidates = [item for item in result if item.get('tag_name', '').startswith(PREVIEW_TAG_PREFIX)
+                      and item.get('tag_name', '').removeprefix(PREVIEW_TAG_PREFIX).isdigit()]
+        if not candidates:
+            return CURRENT_RELEASE_TAG, None, RELEASES_PAGE
+        release = max(candidates, key=lambda item: int(item['tag_name'].removeprefix(PREVIEW_TAG_PREFIX)))
+        version = release['tag_name']
+    else:
+        release = result
+        version = '.'.join(re.findall(r'\d+', release['tag_name']))
     url = next((asset['browser_download_url'] for asset in release.get('assets', [])
                 if asset.get('name', '').lower().endswith('.zip')), None)
     return version, url, release.get('html_url') or RELEASES_PAGE
