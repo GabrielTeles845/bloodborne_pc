@@ -160,6 +160,22 @@ ImU32 GradeColor(BbTrophies::Grade grade, float alpha = 1.0f) {
     return ImGui::ColorConvertFloat4ToU32(color);
 }
 
+void TrophyGlyph(ImDrawList* draw, ImVec2 center, float size, float alpha) {
+    const ImU32 white = IM_COL32(255, 255, 255, int(255 * alpha));
+    const float x = center.x, y = center.y, s = size;
+    const ImVec2 bowl[] = {{x - .30f*s, y - .24f*s}, {x + .30f*s, y - .24f*s},
+                           {x + .22f*s, y + .13f*s}, {x, y + .25f*s},
+                           {x - .22f*s, y + .13f*s}};
+    draw->AddConvexPolyFilled(bowl, 5, white);
+    draw->AddLine({x - .29f*s, y - .15f*s}, {x - .43f*s, y - .15f*s}, white, .065f*s);
+    draw->AddLine({x - .43f*s, y - .15f*s}, {x - .35f*s, y + .09f*s}, white, .065f*s);
+    draw->AddLine({x + .29f*s, y - .15f*s}, {x + .43f*s, y - .15f*s}, white, .065f*s);
+    draw->AddLine({x + .43f*s, y - .15f*s}, {x + .35f*s, y + .09f*s}, white, .065f*s);
+    draw->AddRectFilled({x - .055f*s, y + .23f*s}, {x + .055f*s, y + .42f*s}, white);
+    draw->AddRectFilled({x - .25f*s, y + .39f*s}, {x + .25f*s, y + .46f*s}, white,
+                        .035f*s);
+}
+
 int64_t ClockMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -592,36 +608,53 @@ void Menu() {
                                     0.0f, 1.0f);
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
-        IM_COL32(0, 0, 0, int(125 * appear)));
-    const float width = std::min(760.0f * base_scale, viewport->WorkSize.x * .78f);
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x - (1.0f - appear) *
-                                   24.0f * base_scale, viewport->WorkPos.y));
-    ImGui::SetNextWindowSize(ImVec2(width, viewport->WorkSize.y));
-    ImGui::SetNextWindowBgAlpha(.94f * appear);
+        IM_COL32(0, 0, 0, int(145 * appear)));
+    const float margin = 24.0f * base_scale;
+    const float width = std::min(610.0f * base_scale, viewport->WorkSize.x - margin * 2.0f);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + margin -
+                                   (1.0f - appear) * 36.0f * base_scale,
+                                   viewport->WorkPos.y + margin));
+    ImGui::SetNextWindowSize(ImVec2(width, viewport->WorkSize.y - margin * 2.0f));
+    ImGui::SetNextWindowBgAlpha(.97f * appear);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, .6f + .4f * appear);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f * base_scale);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(18.0f * base_scale, 20.0f * base_scale));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.065f, .075f, .072f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.15f, .34f, .18f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.19f, .42f, .22f, 1));
+                        ImVec2(20.0f * base_scale, 18.0f * base_scale));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.13f, .13f, .14f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.23f, .22f, .26f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.27f, .25f, .31f, 1));
+    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(.70f, .48f, .94f, 1));
     ImGui::Begin("##bloodborne_guide", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
-    ImGui::TextColored(ImVec4(.43f, .92f, .5f, 1), "BLOODBORNE GUIDE");
-    ImGui::Separator();
-    const float nav_width = 150.0f * base_scale;
-    ImGui::BeginChild("##guide_nav", ImVec2(nav_width, -28.0f * base_scale), false);
-    const char* tabs[] = {"Home", "Achievements", "Settings", "Mods / Cheats"};
-    for (int i = 0; i < 4; ++i) {
-        ImGui::PushStyleColor(ImGuiCol_Button, i == active_tab ?
-            ImVec4(.18f, .37f, .21f, 1) : ImVec4(.10f, .12f, .11f, 1));
-        if (ImGui::Button(tabs[i], ImVec2(-1, 42.0f * base_scale))) active_tab = i;
-        ImGui::PopStyleColor();
-    }
-    ImGui::EndChild();
+    ImGui::TextColored(ImVec4(.90f, .91f, .91f, 1), "BLOODBORNE");
     ImGui::SameLine();
-    ImGui::BeginChild("##guide_content", ImVec2(0, -28.0f * base_scale), false);
+    ImGui::TextDisabled("/ GUIDE");
+    ImGui::Spacing();
+    const char* tabs[] = {"Home", "Achievements", "Settings", "Mods"};
+    const float tab_width = (ImGui::GetContentRegionAvail().x -
+                             ImGui::GetStyle().ItemSpacing.x * 3.0f) / 4.0f;
+    for (int i = 0; i < 4; ++i) {
+        if (i) ImGui::SameLine();
+        const bool selected = i == active_tab;
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * base_scale);
+        ImGui::PushStyleColor(ImGuiCol_Button, selected ?
+            ImVec4(.23f, .22f, .26f, 1) : ImVec4(.16f, .16f, .17f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.29f, .27f, .32f, 1));
+        if (ImGui::Button(tabs[i], ImVec2(tab_width, 46.0f * base_scale))) active_tab = i;
+        if (selected) {
+            const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(min.x + 14.0f * base_scale, max.y - 3.0f * base_scale),
+                ImVec2(max.x - 14.0f * base_scale, max.y), IM_COL32(166, 107, 224, 255),
+                2.0f * base_scale);
+        }
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::BeginChild("##guide_content", ImVec2(0, -35.0f * base_scale), false);
     switch (active_tab) {
     case 0: HomeTab(); break;
     case 1: AchievementsTab(); break;
@@ -630,9 +663,9 @@ void Menu() {
     }
     ImGui::EndChild();
     ImGui::Separator();
-    ImGui::TextDisabled("D-pad / stick: move    A: select    B: back    LB/RB: tabs");
+    ImGui::TextDisabled("D-pad / stick  Move     A  Select     B  Back     LB/RB  Tabs");
     ImGui::End();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(3);
 }
 
@@ -706,43 +739,41 @@ void TrophyToast() {
     const float alpha = std::min(appear, disappear);
     const auto entry = BbTrophies::Find(active_toast.load());
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float w = std::min(520.0f * base_scale, viewport->WorkSize.x - 24.0f * base_scale);
-    const float h = 84.0f * base_scale;
+    const float w = std::min(590.0f * base_scale, viewport->WorkSize.x - 24.0f * base_scale);
+    const float h = 92.0f * base_scale;
     const float slide = (1.0f - appear) * 28.0f * base_scale;
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * .5f - w * .5f,
                                    viewport->WorkPos.y + viewport->WorkSize.y - h -
                                        30.0f * base_scale + slide));
     ImGui::SetNextWindowSize(ImVec2(w, h));
-    ImGui::SetNextWindowBgAlpha(.91f * alpha);
+    ImGui::SetNextWindowBgAlpha(.96f * alpha);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, h * .5f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.055f, .48f, .065f, 1));
     ImGui::Begin("##trophy_toast", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImVec2 pos = ImGui::GetWindowPos();
-    const float icon = 54.0f * base_scale;
-    const ImVec2 icon_min(pos.x + 15.0f * base_scale, pos.y + (h - icon) * .5f);
-    const ImVec2 icon_max(icon_min.x + icon, icon_min.y + icon);
-    const ImVec2 center((icon_min.x + icon_max.x) * .5f, (icon_min.y + icon_max.y) * .5f);
-    const auto texture = IconRef(entry.id);
-    if (texture._TexData || texture._TexID != ImTextureID_Invalid)
-        draw->AddImageRounded(texture, icon_min, icon_max, ImVec2(0, 0), ImVec2(1, 1),
-                              IM_COL32(255, 255, 255, int(255 * alpha)), icon * .5f);
-    else
-        draw->AddCircleFilled(center, icon * .48f, IM_COL32(37, 50, 42, int(255 * alpha)));
-    draw->AddCircle(center, icon * .5f, GradeColor(entry.grade, alpha), 0, 3.0f * base_scale);
-    const float text_x = icon_max.x + 15.0f * base_scale;
-    draw->AddText(ImVec2(text_x, pos.y + 16.0f * base_scale),
-                  IM_COL32(158, 235, 164, int(255 * alpha)), "Achievement unlocked");
+    const float icon = 72.0f * base_scale;
+    const ImVec2 center(pos.x + 49.0f * base_scale, pos.y + h * .5f);
+    draw->AddCircleFilled(center, icon * .5f, IM_COL32(64, 170, 37, int(255 * alpha)));
+    draw->AddCircle(center, icon * .49f, GradeColor(entry.grade, alpha), 0,
+                    2.0f * base_scale);
+    TrophyGlyph(draw, center, 45.0f * base_scale, alpha);
+    const float text_x = pos.x + 103.0f * base_scale;
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.03f,
+                  ImVec2(text_x, pos.y + 19.0f * base_scale),
+                  IM_COL32(255, 255, 255, int(255 * alpha)), "Achievement unlocked");
     const std::string title = entry.score >= 0 ?
         std::to_string(entry.score) + "G - " + entry.name : entry.name;
-    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                  ImVec2(text_x, pos.y + 42.0f * base_scale),
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.12f,
+                  ImVec2(text_x, pos.y + 49.0f * base_scale),
                   IM_COL32(255, 255, 255, int(255 * alpha)), title.c_str(), nullptr,
                   w - (text_x - pos.x) - 18.0f * base_scale);
     ImGui::End();
+    ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 }
 

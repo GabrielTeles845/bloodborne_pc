@@ -102,8 +102,9 @@ and extract its folder into `mods`; it appears under **Mods & patches** in the l
   a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
   The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
   we have not measured its FPS effect on this Windows build.
-- Source builds after v1.6.4 show a guide-style Insert/L3+R3 menu with Home, Achievements,
-  Settings, and Mods/Cheats tabs. Trophy unlocks show a queued Xbox-style toast. The port
+- Source builds after v1.6.4 show a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
+  with Home, Achievements, Settings, and Mods/Cheats tabs. Trophy unlocks show a queued
+  green achievement toast. The port
   extracts the trophy icons from your own game files and keeps local unlock dates in
   `user\trophies.txt`. For names, descriptions, grades, secret achievements, and a 1000G
   score, put **your own** PS4 trophy key in `user\keys.json` using shadPS4's format:
