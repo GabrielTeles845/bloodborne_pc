@@ -35,7 +35,7 @@ SECTION_ROWS = [
     ('PCGraphics', 117020, 5),
     ('PCDisplay', 125020, 5),
     ('PCEffects', 120020, 6),
-    ('PCSetting', 116020, 6),
+    ('PCSetting', 116020, 5),
     ('PCGameplay', 126020, 6),
     ('PCCheats', 127020, 5),
     ('PCEnhance', 124020, 3),
