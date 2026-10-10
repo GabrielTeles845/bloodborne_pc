@@ -1,14 +1,15 @@
-/* libScePad on SDL3 gamepads, with a keyboard fallback. SDL events are pumped
+/* libScePad on SDL3 gamepads, with keyboard and mouse on top. SDL events are pumped
  * by the window thread (gpu/shim/window.cpp); here state is only sampled.
  *
- * Keyboard layout (when no gamepad is connected):
- *   WASD left stick, arrow keys right stick, Space Cross, LShift Circle,
- *   E Square, Q Triangle, 1 L1, 3 R1, R L2, F R2, Z L3, C R3,
- *   Enter Options, Tab left touchpad, Backspace right touchpad,
- *   IJKL d-pad (I up, K down, J left, L right). */
+ * Keyboard and mouse follow bindings (input_bindings.h; bbport.ini key_<action>=...), by
+ * default Dark Souls III PC's: WASD move, Left Alt walk, Space dodge/sprint, Q lock on, left
+ * mouse attack (Left Shift + it: strong), V strong attack, C / middle mouse transform, X / right
+ * mouse firearm, R blood vial, F item, E interact, arrows d-pad, G gestures, T personal effects,
+ * IJKL camera, Escape menu, Enter / Backspace menu confirm / back, Left Ctrl L3. */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/bbgpu.h"
+#include "input_bindings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,7 +98,8 @@ static void sample_host(PadData *d) {
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
     if (bbgpu_overlay_captures_input()) return; /* settings menu open: neutral input */
-    const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
+    int nkeys=0;
+    const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(&nkeys) : NULL;
     if (g) {
         static const struct { SDL_GamepadButton sdl; uint32_t ps; } map[]={
             {SDL_GAMEPAD_BUTTON_SOUTH,BTN_CROSS}, {SDL_GAMEPAD_BUTTON_EAST,BTN_CIRCLE},
@@ -128,27 +130,37 @@ static void sample_host(PadData *d) {
         }
         // Back/Select on pads without a touch surface is a left-side click.
         if ((d->buttons & BTN_TOUCHPAD) && !d->touch_count) touch_click(d,0);
-        if (k && k[SDL_SCANCODE_TAB]) touch_click(d,0);
-        if (k && k[SDL_SCANCODE_BACKSPACE]) touch_click(d,1);
-        return;
     }
-    if (!k) return;
-    static const struct { SDL_Scancode key; uint32_t ps; } keys[]={
-        {SDL_SCANCODE_SPACE,BTN_CROSS}, {SDL_SCANCODE_LSHIFT,BTN_CIRCLE}, {SDL_SCANCODE_E,BTN_SQUARE},
-        {SDL_SCANCODE_Q,BTN_TRIANGLE}, {SDL_SCANCODE_1,BTN_L1}, {SDL_SCANCODE_3,BTN_R1},
-        {SDL_SCANCODE_R,BTN_L2}, {SDL_SCANCODE_F,BTN_R2}, {SDL_SCANCODE_Z,BTN_L3}, {SDL_SCANCODE_C,BTN_R3},
-        {SDL_SCANCODE_RETURN,BTN_OPTIONS},
-        {SDL_SCANCODE_I,BTN_UP}, {SDL_SCANCODE_K,BTN_DOWN}, {SDL_SCANCODE_J,BTN_LEFT}, {SDL_SCANCODE_L,BTN_RIGHT},
-    };
-    for (size_t i=0;i<sizeof(keys)/sizeof(*keys);++i) if (k[keys[i].key]) d->buttons|=keys[i].ps;
-    if (k[SDL_SCANCODE_TAB]) touch_click(d,0);
-    if (k[SDL_SCANCODE_BACKSPACE]) touch_click(d,1);
-    if (d->buttons & BTN_L2) d->l2=255;
-    if (d->buttons & BTN_R2) d->r2=255;
-    d->left_x=(uint8_t)(128-(k[SDL_SCANCODE_A] ? 128 : 0)+(k[SDL_SCANCODE_D] ? 127 : 0));
-    d->left_y=(uint8_t)(128-(k[SDL_SCANCODE_W] ? 128 : 0)+(k[SDL_SCANCODE_S] ? 127 : 0));
-    d->right_x=(uint8_t)(128-(k[SDL_SCANCODE_LEFT] ? 128 : 0)+(k[SDL_SCANCODE_RIGHT] ? 127 : 0));
-    d->right_y=(uint8_t)(128-(k[SDL_SCANCODE_UP] ? 128 : 0)+(k[SDL_SCANCODE_DOWN] ? 127 : 0));
+    /* Keyboard and mouse (input_bindings.h, bbport.ini key_*), on top of the gamepad: both
+     * work at once. Mouse input counts only while the game window has the focus. */
+    static int bindings_loaded;
+    if (!bindings_loaded) {
+        bindings_loaded=1;
+        bb_bindings_load(getenv("BB_CONFIG"));
+    }
+    uint32_t mouse=0;
+    if (SDL_WasInit(SDL_INIT_VIDEO) && SDL_GetKeyboardFocus()) {
+        const SDL_MouseButtonFlags b=SDL_GetMouseState(NULL,NULL);
+        if (b & SDL_BUTTON_LMASK) mouse|=1u<<0;
+        if (b & SDL_BUTTON_RMASK) mouse|=1u<<1;
+        if (b & SDL_BUTTON_MMASK) mouse|=1u<<2;
+        if (b & SDL_BUTTON_X1MASK) mouse|=1u<<3;
+        if (b & SDL_BUTTON_X2MASK) mouse|=1u<<4;
+        mouse|=bbgpu_mouse_wheel_take()<<5; /* a notch is a short press (bit 5 up, 6 down) */
+    } else {
+        k=NULL;
+    }
+    BindOutput o;
+    bb_bindings_apply(k,nkeys,mouse,&o);
+    if (!o.any) return;
+    d->buttons|=o.buttons;
+    if (o.buttons & BTN_L2) d->l2=255;
+    if (o.buttons & BTN_R2) d->r2=255;
+    if (o.touch_side>=0) touch_click(d,o.touch_side);
+    if (o.lx>=0) d->left_x=(uint8_t)o.lx;
+    if (o.ly>=0) d->left_y=(uint8_t)o.ly;
+    if (o.rx>=0) d->right_x=(uint8_t)o.rx;
+    if (o.ry>=0) d->right_y=(uint8_t)o.ry;
 }
 
 /* BB_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated

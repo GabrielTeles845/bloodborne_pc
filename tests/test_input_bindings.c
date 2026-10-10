@@ -1,0 +1,68 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * input_bindings.c: the default PC layout, the strong-attack modifier, mouse buttons and the
+ * wheel, walking, and bbport.ini key_* lines with one key per action. */
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <SDL3/SDL.h>
+#include "input_bindings.h"
+
+static bool keys[SDL_SCANCODE_COUNT];
+
+static BindOutput press(const char *key, uint32_t mouse) {
+    memset(keys, 0, sizeof(keys));
+    if (key) keys[SDL_GetScancodeFromName(key)] = true;
+    BindOutput o;
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, mouse, &o);
+    return o;
+}
+
+int main(void) {
+    bb_bindings_load(NULL); /* the defaults */
+    BindOutput o = press(NULL, 0);
+    assert(!o.any && o.lx < 0 && o.touch_side < 0);
+    o = press("E", 0);
+    assert(o.buttons == 0x4000);                    /* interact: Cross */
+    o = press("Space", 0);
+    assert(o.buttons == 0x2000);                    /* dodge: Circle */
+    o = press(NULL, 1u << 0);
+    assert(o.buttons == 0x800);                     /* left mouse: R1 */
+    o = press("Left Shift", 1u << 0);
+    assert(o.buttons == 0x200);                     /* Shift + left mouse: R2 */
+    o = press(NULL, 1u << 1);
+    assert(o.buttons == 0x100);                     /* right mouse: L2 (firearm) */
+    o = press("W", 0);
+    assert(o.ly == 1 && o.lx < 0);                  /* forward: a full push up */
+    memset(keys, 0, sizeof(keys));
+    keys[SDL_GetScancodeFromName("W")] = keys[SDL_GetScancodeFromName("D")] = keys[SDL_GetScancodeFromName("Left Alt")] = true;
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
+    assert(o.lx > 128 && o.lx < 170 && o.ly < 128 && o.ly > 86);  /* a walk, diagonally */
+    o = press("G", 0);
+    assert(o.buttons == 0x100000 && o.touch_side == 0);  /* gestures: the touchpad's left */
+
+    /* key_firearm=X, WheelUp: the wheel's notch fires; right mouse is free then. */
+    assert(bb_bindings_parse("firearm", "X, WheelUp"));
+    o = press(NULL, 1u << (MOUSE_WHEEL_UP - 1));
+    assert(o.buttons == 0x100);
+    o = press(NULL, 1u << 1);
+    assert(!o.any);
+    /* One key, one action: E moves from interact to blood vial. */
+    assert(bb_bindings_parse("blood_vial", "E"));
+    o = press("E", 0);
+    assert(o.buttons == 0x1000);
+    assert(bb_binding_key(BIND_INTERACT) == 0);
+    assert(bb_bindings_parse("interact", "none") && !bb_bindings_parse("no_such_action", "E"));
+
+    /* An ini file: only key_ lines are read. */
+    const char *path = "test_input_bindings.ini";
+    FILE *f = fopen(path, "w");
+    fputs("upscaler=dlss\nkey_roll = Left Ctrl\n# key_attack=Mouse2\n", f);
+    fclose(f);
+    bb_bindings_load(path);
+    remove(path);
+    o = press("Left Ctrl", 0);
+    assert(o.buttons == 0x2000);                    /* roll moved to Left Ctrl, L3 gave it up */
+    assert(bb_binding_mouse(BIND_ATTACK) == 1);     /* the commented line changed nothing */
+    puts("input bindings: ok");
+    return 0;
+}

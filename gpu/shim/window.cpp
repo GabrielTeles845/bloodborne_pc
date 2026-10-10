@@ -1,4 +1,6 @@
 // bbport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+#include <atomic>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <SDL3/SDL.h>
@@ -7,6 +9,8 @@
 #include "sdl_window.h"
 #include "bbport_overlay.h"
 #include "bbport_settings.h"
+
+void NoteMouseWheel(float y); // below: wheel notches for the pad read
 
 namespace Frontend {
 
@@ -142,6 +146,9 @@ bool WindowSDL::PollEvents() {
             height = h;
             break;
         }
+        case SDL_EVENT_MOUSE_WHEEL:
+            NoteMouseWheel(event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y);
+            break;
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             is_open = false;
@@ -154,6 +161,34 @@ bool WindowSDL::PollEvents() {
 }
 
 } // namespace Frontend
+
+// Mouse wheel notches since the pad last took one: the pad read makes each a short press of the
+// action bound to WheelUp / WheelDown (input_bindings.h).
+static std::atomic<int> g_wheel_up{0}, g_wheel_down{0};
+void NoteMouseWheel(float y) {
+    if (y > 0) g_wheel_up.fetch_add(1, std::memory_order_relaxed);
+    if (y < 0) g_wheel_down.fetch_add(1, std::memory_order_relaxed);
+}
+
+// One notch a read, each direction: bit 0 up, bit 1 down. A notch is held for one read and
+// released the next, so two in a row read as two presses.
+extern "C" uint32_t bbgpu_mouse_wheel_take(void) {
+    static bool up_held, down_held;
+    uint32_t bits = 0;
+    if (up_held) up_held = false;
+    else if (g_wheel_up.load(std::memory_order_relaxed) > 0) {
+        g_wheel_up.fetch_sub(1, std::memory_order_relaxed);
+        up_held = true;
+        bits |= 1;
+    }
+    if (down_held) down_held = false;
+    else if (g_wheel_down.load(std::memory_order_relaxed) > 0) {
+        g_wheel_down.fetch_sub(1, std::memory_order_relaxed);
+        down_held = true;
+        bits |= 2;
+    }
+    return bits;
+}
 
 // The in-game PC menu's Quit Game: the same as closing the window (SDL_PushEvent is safe from
 // any thread, here the game's menu thread).

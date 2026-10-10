@@ -61,6 +61,8 @@ int bbgpu_achievement_count(void);
 int bbgpu_achievement_get(int index, BbAchievement *out);
 /* Earned and total Gamerscore; returns 0 while the total is not the full 1000. */
 int bbgpu_achievement_score(int *earned, int *total);
+/* Mouse wheel notches for the pad read, one a call: bit 0 up, bit 1 down (input_bindings.h). */
+uint32_t bbgpu_mouse_wheel_take(void);
 /* Ends the game as closing its window does (the title menu's Quit Game). */
 void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */

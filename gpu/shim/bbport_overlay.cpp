@@ -578,7 +578,7 @@ void ModsTab() {
     ImGui::SeparatorText("Gameplay and debug");
     for (int e = 8; e < BbSettings::FirstEnhancement; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
-    Hint("Free camera: hold Cross/A and press L3 (keyboard: Space + Z). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
+    Hint("Free camera: hold Cross/A and press L3 (keyboard: E + Left Ctrl). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
     ImGui::SeparatorText("PC enhancements (restart required)");
     for (int e = BbSettings::FirstEnhancement; e < BbSettings::EffectCount; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
