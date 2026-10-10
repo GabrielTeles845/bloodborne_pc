@@ -40,7 +40,7 @@ static std::string EncryptXml(std::string xml, const std::array<unsigned char, 1
     return std::string(reinterpret_cast<const char*>(iv.data()), iv.size()) + encrypted;
 }
 int main(int argc, char** argv) {
-    assert(argc == 2 || argc == 3);
+    assert(argc >= 2 && argc <= 4);
     const fs::path root = fs::path(argv[1]) / "trophy-data-fixture";
     const auto game = root / "game", user = root / "user";
     std::error_code ec;
@@ -100,18 +100,28 @@ int main(int argc, char** argv) {
     incomplete[1].id = 1;
     BbTrophies::AssignScores(incomplete);
     assert(incomplete[0].score == 10 && incomplete[1].score == -1);
-    if (argc == 3) {
+    if (argc >= 3) {
         const auto actual_user = root / "actual-user";
+        if (argc == 4) {
+            fs::create_directories(actual_user);
+            fs::copy_file(argv[3], actual_user / "keys.json",
+                          fs::copy_options::overwrite_existing);
+        }
         BbTrophies::Configure(argv[2], actual_user, 1);
         const auto actual = BbTrophies::Entries();
         assert(!actual.empty());
-        assert(!BbTrophies::HasMetadata());
+        assert(BbTrophies::HasMetadata() == (argc == 4));
         for (const auto& entry : actual) {
             assert(entry.id >= 0 && entry.id < 128);
             assert(!entry.icon.empty() && fs::is_regular_file(entry.icon));
-            assert(entry.score == -1);
+            if (argc == 4) {
+                assert(entry.grade != BbTrophies::Grade::Unknown);
+                assert(entry.score >= 0 && entry.name != "Trophy #" + std::to_string(entry.id));
+            } else assert(entry.score == -1);
         }
-        std::cout << "real pack fallback: " << actual.size() << " icons extracted\n";
+        if (argc == 4) assert(BbTrophies::TotalScore() == 1000);
+        std::cout << "real pack: " << actual.size() << " icons, metadata="
+                  << BbTrophies::HasMetadata() << ", total=" << BbTrophies::TotalScore() << "G\n";
     }
     fs::remove_all(root, ec);
     std::cout << "trophy data: TRP icons, decryption, language, cache, timestamps, 1000G passed\n";
