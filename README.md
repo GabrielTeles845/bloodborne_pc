@@ -152,10 +152,10 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
   in [upstream PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
 - Menu checkboxes and sliders save the value you selected, from
   [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
-- A v1.6.1 executable passed our fresh character-creation test: the preview appeared and the
-  character looked right in the game on one RTX 4060 Laptop GPU at 1440p with DLSS. The
-  v1.6.6 executable has not repeated that character-creation test. The earlier preview
-  problem's cause remains unisolated.
+- The character preview may be blank or show white ghosting on the first visit to character
+  creation. Going back and choosing New Game again can make it appear. Waiting on the first
+  screen and changing the upscaler or resolution have not cleared it. The cause remains
+  unisolated; a v1.6.1 executable showed the preview in one earlier test.
 - The full package has a launcher that checks this fork for updates.
 - The 1.6.7 package includes the Xbox button prompts (every build now packages them from
   `packaging/windows/mods`). Its updater adds them to an existing installation if that mod
