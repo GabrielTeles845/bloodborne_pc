@@ -3,14 +3,15 @@
  * (in-game PC menu, enhancements, keyboard and mouse) add themselves to these lists. */
 #include "engine_features.h"
 #include "engine_hooks.h"
+#include "pc_menu.h"
 
 #include <stddef.h>
 
 typedef int (*Install)(void);
 typedef void (*Frame)(void);
 
-static const Install installs[] = {NULL};
-static const Frame frames[] = {NULL};
+static const Install installs[] = {bb_pc_menu_install};
+static const Frame frames[] = {bb_pc_menu_frame};
 
 int bb_engine_install(void) {
     int hooks = 0;

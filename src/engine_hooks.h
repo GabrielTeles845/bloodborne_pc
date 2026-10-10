@@ -42,6 +42,10 @@ int bb_hook_call(uint64_t at, uint64_t target, void *host);
  * bytes expected there; they must not be RIP-relative, since they run from the stub. */
 int bb_hook_entry(uint64_t at, const unsigned char *prologue, size_t n, void *host);
 
+/* Writes `n` bytes at `at` when they are exactly `expected` (data or code). Returns 0, or -1
+ * with nothing changed. */
+int bb_patch(uint64_t at, const void *expected, const void *replacement, size_t n);
+
 /* Why the last hook was refused (static text). */
 const char *bb_hooks_error(void);
 

@@ -42,8 +42,10 @@ if [[ ! -f $game/eboot.bin ]]; then echo "No eboot.bin in $game (set BB_GAME_DIR
 original_game=$game
 # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
 generated=()
+export BB_PC_MENU_ASSETS=0  # the in-game PC menu adds its rows only when its files were made
 while IFS= read -r folder; do
     [[ -n $folder ]] && generated+=(--generated "$folder")
+    [[ ${folder##*/} == pc-menu ]] && BB_PC_MENU_ASSETS=1
 done < <("$PYTHON" scripts/enhancements.py --game "$game" --out "$out/enhancements" --settings "$BB_CONFIG")
 game=$("$PYTHON" scripts/mods.py "$game" --out "$out" \
     --mods-dir "${BB_MODS_DIR:-$data/mods}" --config "${BB_MODS_CONFIG:-$data/mods.json}" \

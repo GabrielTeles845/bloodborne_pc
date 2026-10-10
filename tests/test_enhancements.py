@@ -36,15 +36,20 @@ def emevd(events):
 
 class SettingsTests(unittest.TestCase):
     def test_off_unless_switched_on_and_environment_wins(self):
-        self.assertEqual(enhancements.enabled({}, {}), [])
-        self.assertEqual(enhancements.enabled({'pc_two_invaders': '1'}, {}), ['pc_two_invaders'])
-        self.assertEqual(enhancements.enabled({'pc_two_invaders': '1'}, {'BB_PC_TWO_INVADERS': '0'}), [])
-        self.assertEqual(enhancements.enabled({}, {'BB_PC_MIRROR': '1'}), ['pc_mirror_appearance'])
+        menu_off = {'pc_menu': '0'}
+        self.assertEqual(enhancements.enabled(menu_off, {}), [])
+        self.assertEqual(enhancements.enabled({**menu_off, 'pc_two_invaders': '1'}, {}), ['pc_two_invaders'])
+        self.assertEqual(enhancements.enabled({**menu_off, 'pc_two_invaders': '1'}, {'BB_PC_TWO_INVADERS': '0'}), [])
+        self.assertEqual(enhancements.enabled(menu_off, {'BB_PC_MIRROR': '1'}), ['pc_mirror_appearance'])
+
+    def test_the_menu_is_on_unless_switched_off(self):
+        self.assertEqual(enhancements.enabled({}, {}), ['pc_menu'])
+        self.assertEqual(enhancements.enabled({}, {'BB_PC_MENU': '0'}), [])
 
     def test_overlay_and_launcher_offer_the_same_keys(self):
         header = (ROOT / 'gpu/shim/bbport_settings.h').read_text(encoding='utf-8')
         launcher = (ROOT / 'launcher/bbport_launcher_win.py').read_text(encoding='utf-8')
-        for key in enhancements.FEATURES:
+        for key in set(enhancements.FEATURES) - enhancements.DEFAULT_ON:
             self.assertIn(f'{{"{key}", ', header)
             self.assertIn(f"('{key}', ", launcher)
 
@@ -76,7 +81,7 @@ class RealGameTests(unittest.TestCase):
     def test_rewrites_match_bbhost_and_are_reused(self):
         with tempfile.TemporaryDirectory() as folder:
             out = Path(folder)
-            made = enhancements.make(GAME, out, list(enhancements.FEATURES))
+            made = enhancements.make(GAME, out, ['pc_two_invaders', 'pc_mirror_appearance'])
             self.assertEqual(sorted(m.name for m in made), ['dream-mirror', 'two-invaders'])
             for name, _sha_in, sha_out, *_ in enhancements.MAIDEN_MAPS:
                 packed = (out / f'two-invaders/dvdroot_ps4/event/{name}.emevd.dcx').read_bytes()

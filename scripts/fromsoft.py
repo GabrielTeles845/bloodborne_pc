@@ -64,7 +64,7 @@ class Bnd4:
             raise FormatError(f'unsupported BND4 file header size {self.header_size:#x}')
         self.unicode = bool(data[0x30])
         self._data = data
-        self.names, self.files, offsets = [], [], []
+        self.names, self.files, self.ids, offsets = [], [], [], []
         size_at, _, offset_at = self._LAYOUTS[self.header_size]
         for i in range(count):
             at = 0x40 + i * self.header_size
@@ -72,6 +72,9 @@ class Bnd4:
             offset, = struct.unpack_from('<I', data, at + offset_at)
             name_at, = struct.unpack_from('<I', data, at + self.header_size - 4)
             self.names.append(self._name(name_at))
+            # The file id follows the data offset in the 0x24-byte headers (None without one).
+            self.ids.append(struct.unpack_from('<i', data, at + offset_at + 4)[0]
+                            if self.header_size == 0x24 else None)
             self.files.append(bytes(data[offset:offset + size]))
             offsets.append(offset)
         self._offsets = offsets

@@ -17,8 +17,11 @@ engine/maiden_events.cpp and engine/dream_mirror_layout.cpp.
   pc_mirror_appearance  (BB_PC_MIRROR)        the Hunter's Dream mirror opens the appearance
                                               editor (the developers' unused mirror character)
 
-Rebirth in the Nightmare follows with the in-game PC menu: its altar entries are new message ids
-that the menu's message files add.
+  pc_menu               (BB_PC_MENU)          the in-game PC menu's assets (menu_assets.py): its
+                                              sections in the options movie and its strings in
+                                              every language. On by default: it only adds rows.
+
+Rebirth in the Nightmare follows: its altar entries use message ids the PC menu's files add.
 """
 import argparse
 import bisect
@@ -36,9 +39,12 @@ from fromsoft import FormatError, dcx_compress, dcx_decompress  # noqa: E402
 FEATURES = {
     'pc_two_invaders': ('BB_PC_TWO_INVADERS', 'two-invaders', 'Two invaders in the late areas'),
     'pc_mirror_appearance': ('BB_PC_MIRROR', 'dream-mirror', "Hunter's Dream mirror: change appearance"),
+    'pc_menu': ('BB_PC_MENU', 'pc-menu', 'In-game PC menu (System > PC Settings)'),
 }
+# Off unless switched on, except these: they change nothing the game does by themselves.
+DEFAULT_ON = {'pc_menu'}
 # Bumped when a rewrite changes, so every install makes its files again.
-VERSION = 'enhancements 1'
+VERSION = 'enhancements 2'  # 2: the PC menu's assets
 
 
 def sha256(data):
@@ -236,14 +242,19 @@ def dream_mirror(dvdroot):
         return {}
 
 
-MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror}
+def pc_menu(dvdroot):
+    import menu_assets
+    return menu_assets.make(dvdroot, log=lambda line: print(f'Enhancements: {line}', file=sys.stderr))
+
+
+MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror, 'pc_menu': pc_menu}
 
 
 def enabled(settings, env):
     """The features switched on: the environment overrides bbport.ini; both default to off."""
     on = []
     for key, (variable, _folder, _label) in FEATURES.items():
-        value = env.get(variable, settings.get(key, '0'))
+        value = env.get(variable, settings.get(key, '1' if key in DEFAULT_ON else '0'))
         if str(value).strip() == '1':
             on.append(key)
     return on
@@ -261,9 +272,21 @@ def read_settings(path):
     return values
 
 
+def generator():
+    """The generator's own identity: its version and the scripts and strings it runs."""
+    here = Path(__file__).resolve().parent
+    digest = hashlib.sha256()
+    for name in ('enhancements.py', 'menu_assets.py', 'fromsoft.py', 'pc_menu_messages.tsv'):
+        try:
+            digest.update((here / name).read_bytes())
+        except OSError:
+            pass
+    return f'{VERSION} {digest.hexdigest()[:16]}'
+
+
 def stamp_for(dvdroot, files):
     """What a feature's folder was made from: the generator and the dump's source files."""
-    lines = [VERSION]
+    lines = [generator()]
     for relative in sorted(files):
         try:
             info = (dvdroot / relative).stat()
@@ -284,7 +307,7 @@ def make(game, out, keys):
             previous = stamp_file.read_text(encoding='utf-8')
         except OSError:
             previous = None
-        if previous and previous.splitlines()[0] == VERSION:
+        if previous and previous.splitlines()[0] == generator():
             made = [Path(line.rsplit(' ', 2)[0]) for line in previous.splitlines()[1:]]
             if made and stamp_for(dvdroot, made) == previous and \
                     all((folder / 'dvdroot_ps4' / m).is_file() for m in made):

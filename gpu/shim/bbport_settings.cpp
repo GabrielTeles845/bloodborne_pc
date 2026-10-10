@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace BbSettings {
 
@@ -180,6 +181,28 @@ bool ResolutionNeedsRestart() {
 
 void Save() {
     const auto& v = Get();
+    // Lines this function does not write (keys other tools own, such as pc_menu) are kept.
+    std::vector<std::string> kept;
+    if (FILE* old = std::fopen(Path(), "r")) {
+        char line[256];
+        while (std::fgets(line, sizeof(line), old)) {
+            std::string text{line};
+            text.erase(text.find_last_not_of(" \t\r\n") + 1);
+            const auto eq = text.find('=');
+            if (text.empty() || text[0] == '#' || eq == std::string::npos) continue;
+            const std::string key = text.substr(0, eq);
+            bool ours = false;
+            for (const char* name : {"upscaler", "preset", "sharpen", "sharpness", "jitter", "reactive",
+                                     "object_motion", "reactive_scale", "reactive_threshold", "reactive_max",
+                                     "debug_view", "show_fps", "fsr4_auto_exposure", "fsr4_invert_jitter",
+                                     "model_lod", "output_res", "live_resolution"}) {
+                ours |= key == name;
+            }
+            for (int e = 0; e < EffectCount; ++e) ours |= key == Effects[e].key;
+            if (!ours) kept.push_back(text);
+        }
+        std::fclose(old);
+    }
     FILE* file = std::fopen(Path(), "w");
     if (!file) {
         std::printf("Settings: cannot write %s\n", Path());
@@ -205,7 +228,35 @@ void Save() {
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
+    for (const std::string& line : kept) {
+        std::fprintf(file, "%s\n", line.c_str());
+    }
     std::fclose(file);
+}
+
+// The in-game PC menu (src/pc_menu.c) reads and writes the same settings through these.
+extern "C" int bbgpu_setting_get(const char* key) {
+    const auto& v = Get();
+    const std::string k = key;
+    if (k == "show_fps") return v.show_fps.load() ? 1 : 0;
+    for (int e = 0; e < EffectCount; ++e) {
+        if (k == Effects[e].key) return v.effects[e].load() ? 1 : 0;
+    }
+    return -1;
+}
+
+extern "C" int bbgpu_setting_default(const char* key) {
+    const std::string k = key;
+    if (k == "show_fps") return Values{}.show_fps.load() ? 1 : 0;
+    for (int e = 0; e < EffectCount; ++e) {
+        if (k == Effects[e].key) return Effects[e].default_on ? 1 : 0;
+    }
+    return -1;
+}
+
+extern "C" void bbgpu_setting_set(const char* key, int value) {
+    Set(Get(), key, value ? "1" : "0");
+    Save();
 }
 
 float PresetScale(int preset) {

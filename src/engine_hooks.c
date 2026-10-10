@@ -128,6 +128,14 @@ int bb_hook_call(uint64_t at, uint64_t target, void *host) {
     return 0;
 }
 
+int bb_patch(uint64_t at, const void *expected, const void *replacement, size_t n) {
+    if (!bb_hooks_enabled()) return refuse("engine hooks are off (BB_ENGINE_HOOKS=0)");
+    if (!expected || !replacement || !n || !in_image(at, n)) return refuse("address outside the image");
+    if (memcmp(g_image + at, expected, n)) return refuse("unexpected bytes at the patch site");
+    memcpy(g_image + at, replacement, n);
+    return 0;
+}
+
 int bb_hook_entry(uint64_t at, const unsigned char *prologue, size_t n, void *host) {
     if (!bb_hooks_enabled()) return refuse("engine hooks are off (BB_ENGINE_HOOKS=0)");
     if (!host || !prologue || n < 5 || n > 32) return refuse("bad hook arguments");

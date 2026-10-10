@@ -39,6 +39,11 @@ void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp);
 /* Called at the start of every frame submission (sceVideoOutSubmitFlip / SubmitEopFlip), on the
  * game's thread that submits it: the loader's per-frame work for the engine features. */
 void bbgpu_set_frame_callback(void (*callback)(void));
+/* bbport.ini settings by key, for the in-game PC menu (show_fps and the game effects/PC
+ * enhancements): get returns 0/1 or -1 for an unknown key; set also saves the file. */
+int bbgpu_setting_get(const char *key);
+int bbgpu_setting_default(const char *key);
+void bbgpu_setting_set(const char *key, int value);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned bbgpu_symbol_count(void);
 #ifdef __cplusplus

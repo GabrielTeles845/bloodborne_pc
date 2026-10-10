@@ -156,6 +156,8 @@ def main():
     # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
     generated = run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
                            '--settings', config, capture=True).splitlines()
+    # The in-game PC menu adds its rows only when its sections and strings were made.
+    env['BB_PC_MENU_ASSETS'] = '1' if any(Path(folder).name == 'pc-menu' for folder in generated) else '0'
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),

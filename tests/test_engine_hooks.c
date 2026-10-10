@@ -57,6 +57,13 @@ int main(void) {
     assert(bb_hook_call(SUM, SUM, (void *)replace_sum) == -1);
     assert(!memcmp(before, image, IMAGE));  /* refusals change nothing */
 
+    /* A guarded data write: only over the expected bytes, nothing changed otherwise. */
+    const unsigned char pad[4] = {0xcc, 0xcc, 0xcc, 0xcc}, data[4] = {1, 2, 3, 4}, other[4] = {9, 9, 9, 9};
+    assert(bb_patch(0x1800, other, data, 4) == -1 && !memcmp(before, image, IMAGE));
+    assert(bb_patch(IMAGE - 2, pad, data, 4) == -1);
+    assert(bb_patch(0x1800, pad, data, 4) == 0 && !memcmp(image + 0x1800, data, 4));
+    assert(bb_patch(0x1800, pad, data, 4) == -1);  /* already written */
+
     assert(bb_hook_entry(SUM, sum_code, 8, (void *)on_sum) == 0);
     assert(bb_hook_entry(ADD, add_code, sizeof(add_code), (void *)on_add) == 0);
     assert(bb_hook_call(CALLER, SUM, (void *)replace_sum) == 0);

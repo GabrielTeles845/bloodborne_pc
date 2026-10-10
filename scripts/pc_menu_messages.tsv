@@ -1,0 +1,26 @@
+# The in-game PC menu's strings (scripts/menu_assets.py adds them to every language's
+# menu.msgbnd.dcx). Ids and wording after droogie's bbhost (tools/pc_option_messages.tsv).
+#
+# Bloodborne's option screens own one thousand-id block each: 110000 System, 111000
+# Environment, ... 115000 Language. Inside a block, N is a row and N+20 is the screen title.
+# The PC menu takes 116000 PC Settings and 124000 PC Enhancements, and 110006/110013 for the
+# System rows that open them; all are unused in the shipped bundle.
+# Ids 14000332..14000399 are event text (group 30): talk menu entries and the messages their
+# scripts show (the Altar of Despair's rebirth); the help column is unused.
+# A "\n" in the text is a line break.
+#
+# id	menu text (group 0xc8)	line help (group 0xc9)
+110006	PC Settings	Options added by the PC port.
+110013	PC Enhancements	Additions to the game: the mirror and two invaders. Each needs a restart.
+116004	Skip Company Logos	Skips the logos and the intro movie at startup. Applies on the next run.
+116007	FPS Counter	Frames per second, in the corner of the screen.
+116020	PC Settings
+124020	PC Enhancements
+124001	Hunter's Dream Mirror	Requires a restart. The Dream's mirror opens the appearance editor (the unused "Put on Disguise").
+124003	Two Invaders	Requires a restart. Two invaders in Mensis, Mergo's Loft, the Frontier and the DLC; all players need it.
+124002	Rebirth at the Altar	Requires a restart. With the Yharnam Stone, the Altar of Despair resets level and attributes.
+14000332	Rebirth in the Nightmare
+14000333	The altar is silent.\nIt awaits one who bears a sacred heirloom,\na consciousness that is only asleep.
+14000334	Too many Blood Echoes are held to be reborn.\nSpend some, then return to the altar.
+14000335	Accept Rebirth
+14000336	Undo Rebirth
