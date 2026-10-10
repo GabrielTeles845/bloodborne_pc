@@ -42,8 +42,11 @@ SECTION_ROWS = [
     ('PCAchieve', 128020, 6),
 ]
 # (name, title, depth on the main timeline, Defaults slot, rows dropped)
+# The in-game movie crashes with seven or eight instantiated PC sections.
+# Cheats and Achievements remain in the overlay and launcher.
+NATIVE_SECTIONS = [row for row in SECTION_ROWS if row[0] not in ('PCCheats', 'PCAchieve')]
 SECTIONS = [(name, title, 383 + i, rows, [f'Item_{k}_0' for k in range(rows, 6)])
-            for i, (name, title, rows) in enumerate(SECTION_ROWS)]
+            for i, (name, title, rows) in enumerate(NATIVE_SECTIONS)]
 # Where the System list's scroll bar goes, in pixels (bbhost's placement).
 SCROLLBAR_AT = (1290, 354.5)
 

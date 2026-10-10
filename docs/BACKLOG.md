@@ -51,12 +51,13 @@ screenshots and features; adopt the presets concept, not its values.
 
 ## Native menus instead of the L3+R3 overlay
 
-Done on `feature/native-menus` (checked in game, 2026-10-10): System offers Achievements, PC
-Graphics, PC Display (with live Fullscreen), PC Effects, PC Settings, PC Gameplay, PC Cheats, PC
-Enhancements and Restart to Apply, on the title screen and in game; the title menu has Quit
-Game. Approach: genuine game menus extended through hooks and generated movie/message assets
-(`src/pc_menu.c`, `scripts/menu_assets.py`). Sections do not scroll (six rows each); pick lists
-sit below toggles and blank the rows under them while open. The L3+R3 overlay still works.
+The 1.6.10 in-game System menu offers PC Graphics, PC Display (with live Fullscreen),
+PC Effects, PC Settings, PC Gameplay, PC Enhancements and Restart to Apply. The title menu
+has Quit Game. The native movie crashes in gameplay with seven or eight added sprites, so
+Achievements and PC Cheats remain in the overlay and launcher. The game menus use hooks and
+generated movie/message assets (src/pc_menu.c, scripts/menu_assets.py). Sections do not
+scroll (six rows each); pick lists sit below toggles and blank the rows under them while
+open. The L3+R3 overlay still works.
 
 Still open:
 

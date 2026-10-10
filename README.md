@@ -146,17 +146,17 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
 
 ## What's changed
 
-- **In-game PC menus (1.6.9):** the L3+R3 overlay's settings now also appear in the game's own
-  Options menu as PC Graphics, Display (including fullscreen), Effects, Settings, Gameplay,
-  Cheats and PC enhancements, with a Restart to Apply row. The menu engine is ported from
-  [bbhost](https://github.com/droogie/bbhost).
-- **Achievements in the System menu (1.6.9):** a System row on the title screen and in game lists
-  your local achievements and Gamerscore. Achievement images are not shown yet.
+- **In-game PC menus (1.6.10):** the game's System menu offers PC Graphics, Display,
+  Effects, Settings, Gameplay and Enhancements, plus Restart to Apply. All six sections
+  were checked in gameplay. Cheats and Achievements remain in the L3+R3 overlay and launcher
+  because a seventh generated section crashes the in-game movie. The menu engine is ported
+  from [bbhost](https://github.com/droogie/bbhost).
 - **Rebirth (1.6.9, `pc_rebirth`, `BB_PC_REBIRTH=1`):** the Altar of Despair in the Nightmare lets you
   reallocate your stats. It is off by default and has not been tested in play yet.
-- **Keyboard and mouse (1.6.9):** play alongside the gamepad, with rebindable keys
-  (`key_<action>=` lines in `bbport.ini`) and mouse-wheel actions. Mouse camera control and
-  on-screen key prompts are not done yet.
+- **Keyboard and mouse (1.6.10):** play alongside the gamepad with rebindable keys
+  (key_<action>= lines in bport.ini), mouse-wheel actions and mouse camera control.
+  Mouse settings are on the launcher's Controller page and in bport.ini. On-screen
+  keyboard prompts are not done yet.
 - Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
   off by default (the game as it shipped). Switch them on in the launcher's **Game** page or the
   in-game menu's **PC enhancements**; they apply after a restart and are made from your own game

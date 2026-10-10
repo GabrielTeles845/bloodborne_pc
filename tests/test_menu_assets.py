@@ -57,6 +57,12 @@ class FormatTests(unittest.TestCase):
         for row_id in range(128000, 128006):
             self.assertIn(row_id, rows)
         self.assertEqual(sorted([n for n, *_ in sections] + ['PCAchieve']), sorted(n for n, *_ in m.SECTION_ROWS))
+        native = re.search(r'NATIVE_SECTION_INDEX\[\] = \{([^}]+)\}', runtime)
+        self.assertIsNotNone(native)
+        indices = [int(index) for index in native.group(1).split(',')]
+        self.assertEqual([sections[index][0] for index in indices],
+                         [name for name, *_ in m.NATIVE_SECTIONS])
+        self.assertEqual(len(m.NATIVE_SECTIONS), 6)  # in-game GFX capacity checked in play
         counts = {name: rows_n for name, _title, rows_n in m.SECTION_ROWS}
         for name, system, array in sections:
             ids = [int(i) for i in re.findall(r'_ROW\("\w+", (\d+)', arrays[array])]
