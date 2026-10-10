@@ -36,6 +36,9 @@ int bbgpu_overlay_captures_input(void);
 void bbgpu_trophy_configure(const char *game_dir, const char *user_dir, int32_t language);
 void bbgpu_trophy_load(const int64_t *timestamps, uint32_t count);
 void bbgpu_trophy_unlocked(int32_t id, int64_t timestamp);
+/* Called at the start of every frame submission (sceVideoOutSubmitFlip / SubmitEopFlip), on the
+ * game's thread that submits it: the loader's per-frame work for the engine features. */
+void bbgpu_set_frame_callback(void (*callback)(void));
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned bbgpu_symbol_count(void);
 #ifdef __cplusplus

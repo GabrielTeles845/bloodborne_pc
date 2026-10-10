@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+
 #include "common/assert.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
@@ -14,6 +16,17 @@
 #include "video_core/renderer_vulkan/vk_presenter.h"
 
 extern std::unique_ptr<Vulkan::Presenter> presenter;
+
+// bbport: the loader's per-frame callback (bbgpu.h), run on the game's submitting thread.
+static std::atomic<void (*)()> g_frame_callback{nullptr};
+extern "C" void bbgpu_set_frame_callback(void (*callback)(void)) {
+    g_frame_callback.store(callback, std::memory_order_release);
+}
+static void RunFrameCallback() {
+    if (const auto callback = g_frame_callback.load(std::memory_order_acquire)) {
+        callback();
+    }
+}
 
 namespace Libraries::VideoOut {
 
@@ -153,6 +166,7 @@ s32 PS4_SYSV_ABI sceVideoOutIsFlipPending(s32 handle) {
 }
 
 s32 PS4_SYSV_ABI sceVideoOutSubmitFlip(s32 handle, s32 bufferIndex, s32 flipMode, s64 flipArg) {
+    RunFrameCallback();
     auto* port = driver->GetPort(handle);
     if (!port) {
         LOG_ERROR(Lib_VideoOut, "Invalid handle = {}", handle);
@@ -343,6 +357,7 @@ s32 PS4_SYSV_ABI sceVideoOutGetBufferLabelAddress(s32 handle, uintptr_t* label_a
 }
 
 s32 sceVideoOutSubmitEopFlip(s32 handle, u32 buf_id, u32 mode, s64 flip_arg, void** unk) {
+    RunFrameCallback();
     auto* port = driver->GetPort(handle);
     if (!port) {
         return ORBIS_VIDEO_OUT_ERROR_INVALID_HANDLE;

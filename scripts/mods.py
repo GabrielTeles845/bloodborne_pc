@@ -223,8 +223,12 @@ def main():
     parser.add_argument('--mods-dir', required=True, type=Path)
     parser.add_argument('--config', type=Path)
     parser.add_argument('--enabled', choices=('0', '1'), default='1')
+    # Files the port's own features make from the game (PC enhancements, menu assets), each a
+    # folder with a dvdroot_ps4 layout. They lie under the player's mods, which still win, and
+    # apply with mods off: every feature has its own switch.
+    parser.add_argument('--generated', type=Path, action='append', default=[])
     args = parser.parse_args()
-    layers = []
+    layers = [(folder.name, folder) for folder in args.generated if content_root(folder)]
     if args.enabled == '1':
         # shadPS4's loose overlay convention, beside the original game.
         legacy = Path(str(args.game.resolve()) + '-mods')

@@ -13,6 +13,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include "respawn_patch.h"
+#include "engine_hooks.h"
+#include "engine_features.h"
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -622,8 +624,20 @@ int main(int argc, char **argv) {
             else
                 puts("Respawn loading: unsupported or modified instructions; minimum-delay fix skipped");
         }
+        /* PC features hooked into the engine (engine_features.c): each checks its own bytes. */
+        if (!bb_hooks_enabled())
+            puts("Engine hooks: off (BB_ENGINE_HOOKS=0)");
+        else if (bb_hooks_init(image, (size_t)size))
+            printf("Engine hooks: unavailable (%s)\n", bb_hooks_error());
+        else {
+            printf("Engine hooks: %d installed\n", bb_engine_install());
+            bbgpu_set_frame_callback(bb_engine_frame);
+        }
     }
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
+#endif
+#ifdef _WIN32
+    bb_hooks_seal();
 #endif
     protect(traps, round_page((import_count + 1) * 32), 5);
     protect(image, round_page(size), 0);

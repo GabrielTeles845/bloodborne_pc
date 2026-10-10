@@ -97,6 +97,22 @@ class ModTests(unittest.TestCase):
                 capture_output=True, text=True, check=True)
             self.assertEqual((Path(result.stdout.strip()) / 'dvdroot_ps4/chr/a.dcx').read_bytes(), expected)
 
+    def test_generated_files_lie_under_player_mods_and_apply_with_mods_off(self):
+        generated = self.root / 'generated' / 'feature'
+        (generated / 'dvdroot_ps4/chr').mkdir(parents=True)
+        (generated / 'dvdroot_ps4/chr/a.dcx').write_bytes(b'generated')
+        (generated / 'dvdroot_ps4/chr/b.dcx').write_bytes(b'generated b')
+        self.mod('Player', b'player')
+        def run(enabled):
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/mods.py'), str(self.game),
+                '--out', str(self.root / 'out'), '--mods-dir', str(self.moddir), '--enabled', enabled,
+                '--generated', str(generated)], capture_output=True, text=True, check=True)
+            return Path(result.stdout.strip()) / 'dvdroot_ps4/chr'
+        self.assertEqual((run('1') / 'a.dcx').read_bytes(), b'player')
+        self.assertEqual((run('1') / 'b.dcx').read_bytes(), b'generated b')
+        self.assertEqual((run('0') / 'a.dcx').read_bytes(), b'generated')
+        self.assertEqual((self.assets / 'a.dcx').read_bytes(), b'original')
+
     def test_app0_wrapped_mod_discovered(self):
         self.moddir.mkdir()
         (self.moddir / 'Wrapped/app0/dvdroot_ps4').mkdir(parents=True)
