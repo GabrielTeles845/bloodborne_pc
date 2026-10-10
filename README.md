@@ -111,6 +111,13 @@ the 1.09 update did not apply. The installer uses the independently licensed
 [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus/releases/tag/PKG_EXTRACTOR_1_1)
 bundled in this release; the game's own files are never uploaded to this repository.
 
+**DLC.** The Game of the Year edition (CUSA03173) already includes The Old Hunters. With a
+base-game dump, also dump your add-ons. Each is a folder named like `SPEXPANSIONDLC03` with
+only `sce_sys` inside, because their data ships with the 1.09 update. Put them in one folder and
+choose it as **DLC folder** on the **Game** page, or copy them to `user\addcont\<title id>\`
+(the layout shadPS4 uses). From [upstream PR #26](https://github.com/Supermedo/bloodborne_pc/pull/26)
+by ayozetr.
+
 ## Already have another launcher or a working game installation?
 
 You can use the game files you already extracted. **Do not download or extract them again.**

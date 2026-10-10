@@ -57,6 +57,7 @@ FIELDS = {
     'Game': [
         row('game_dir', 'Game folder (contains eboot.bin)', 'folder'),
         row('user_dir', 'Saves folder', 'folder'),
+        row('dlc_dir', 'DLC folder (base-game dumps only, e.g. SPEXPANSIONDLC03)', 'folder'),
         row('language', 'Game language', 'choice', core.LANGUAGES),
         row('player_name', 'Hunter name'),
         *[row(key, title[0], 'toggle') for key, title, _ in core.EXTRAS[:1]],
@@ -467,7 +468,7 @@ class LauncherBackend(QObject):
         self.changed.emit()
     @Slot(str)
     def browse(self, key):
-        if key not in ('game_dir', 'user_dir', 'mods_dir', 'patches_dir'):
+        if key not in ('game_dir', 'user_dir', 'dlc_dir', 'mods_dir', 'patches_dir'):
             return
         folder = QFileDialog.getExistingDirectory(None, f'Choose {key.replace("_", " ")}', str(self.value(key) or core.DATA_DIR))
         if folder:
