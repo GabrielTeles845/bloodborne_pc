@@ -624,6 +624,9 @@ void Menu() {
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.23f, .22f, .26f, 1));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.27f, .25f, .31f, 1));
     ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(.70f, .48f, .94f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.20f, .20f, .22f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.28f, .26f, .31f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.34f, .28f, .40f, 1));
     ImGui::Begin("##bloodborne_guide", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
@@ -665,7 +668,7 @@ void Menu() {
     ImGui::Separator();
     ImGui::TextDisabled("D-pad / stick  Move     A  Select     B  Back     LB/RB  Tabs");
     ImGui::End();
-    ImGui::PopStyleColor(4);
+    ImGui::PopStyleColor(7);
     ImGui::PopStyleVar(3);
 }
 
