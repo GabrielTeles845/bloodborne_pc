@@ -50,9 +50,10 @@ inline constexpr Effect Effects[] = {
     // keeps the game as it shipped. Kept last: the menu lists them in their own section.
     {"pc_mirror_appearance", "Hunter's Dream mirror: change appearance", false},
     {"pc_two_invaders", "Two invaders in the late areas (every player needs it)", false},
+    {"pc_rebirth", "Rebirth in the Nightmare at the Altar of Despair", false},
 };
 inline constexpr int EffectCount = int(sizeof(Effects) / sizeof(Effects[0]));
-inline constexpr int EnhancementCount = 2;
+inline constexpr int EnhancementCount = 3;
 inline constexpr int FirstEnhancement = EffectCount - EnhancementCount;
 /// Live output resolutions: the upscaler's output and the UI host targets.
 inline constexpr int OutputWidths[] = {1280, 1920, 2560, 3840};

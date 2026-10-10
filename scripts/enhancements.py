@@ -17,11 +17,15 @@ engine/maiden_events.cpp and engine/dream_mirror_layout.cpp.
   pc_mirror_appearance  (BB_PC_MIRROR)        the Hunter's Dream mirror opens the appearance
                                               editor (the developers' unused mirror character)
 
+  pc_rebirth            (BB_PC_REBIRTH)       Rebirth in the Nightmare at the Altar of Despair:
+                                              with the Yharnam Stone, level and attributes go back
+                                              to the origin's and the echoes are refunded
+                                              (src/rebirth.c does the runtime half)
   pc_menu               (BB_PC_MENU)          the in-game PC menu's assets (menu_assets.py): its
                                               sections in the options movie and its strings in
                                               every language. On by default: it only adds rows.
 
-Rebirth in the Nightmare follows: its altar entries use message ids the PC menu's files add.
+Rebirth's altar entries use message ids the PC menu's files add (pc_menu_messages.tsv).
 """
 import argparse
 import bisect
@@ -39,6 +43,7 @@ from fromsoft import FormatError, dcx_compress, dcx_decompress  # noqa: E402
 FEATURES = {
     'pc_two_invaders': ('BB_PC_TWO_INVADERS', 'two-invaders', 'Two invaders in the late areas'),
     'pc_mirror_appearance': ('BB_PC_MIRROR', 'dream-mirror', "Hunter's Dream mirror: change appearance"),
+    'pc_rebirth': ('BB_PC_REBIRTH', 'rebirth', 'Rebirth in the Nightmare at the Altar of Despair'),
     'pc_menu': ('BB_PC_MENU', 'pc-menu', 'In-game PC menu (System > PC Settings)'),
 }
 # Off unless switched on, except these: they change nothing the game does by themselves.
@@ -242,12 +247,111 @@ def dream_mirror(dvdroot):
         return {}
 
 
+# --- Rebirth in the Nightmare (bbhost engine/rebirth_script.cpp) -----------------------------
+#
+# t242307 (script/talk/m24_02_00_00.talkesdbnd.dcx) is the Altar of Despair's menu: "Offer
+# Flesh To Altar" and "Do Nothing". A third entry, "Rebirth in the Nightmare", goes ahead of "Do
+# Nothing": without the Yharnam Stone a message; with it the script sets REQ_RESET and waits for
+# the port's runtime (src/rebirth.c) to reset the hunter to their origin's level and refund the
+# echoes (FAIL set when it could not), opens the doll's level-up menu (MENU set until it has
+# closed), then asks to accept or undo (REQ_UNDO). The four flags are unused by the game's
+# scripts; the runtime clears them at every world load. The menu texts are the PC menu's
+# (pc_menu_messages.tsv, group 30).
+REBIRTH_IN = 'e56163a1bb8f46ae59368160e522e11f970e2268f6d356b823e4d72a7c969ff1'
+REBIRTH_OUT = 'e726dec68e8d73c5d5b6ba1875fabd6a85320b6b14f95ca3d6729143a3c362b2'
+REQ_RESET, REQ_UNDO, FAIL, MENU = 72500390, 72500391, 72500392, 72500393
+YHARNAM_STONE = 4330
+TEXT_OPTION, TEXT_NO_STONE, TEXT_FAIL, TEXT_ACCEPT, TEXT_UNDO = 14000332, 14000333, 14000334, 14000335, 14000336
+BUILD_GROUP, HANDLE_GROUP = 2147483640, 2147483641  # fills the talk list / shows it and acts
+
+
+def rebirth_script(data):
+    import esd
+    if sha256(data) != REBIRTH_IN:
+        raise Skip('not the 1.09 t242307 (the Altar of Despair)')
+    s = esd.parse(data)
+    build, handle = s.group(BUILD_GROUP), s.group(HANDLE_GROUP)
+    if not build or not handle:
+        raise Skip("the altar's menu groups are missing")
+    list_rest, choice, end = s.state_in(build, 3), s.state_in(handle, 1), s.state_in(handle, 6)
+    if min(list_rest, choice, end) < 0:
+        raise Skip("the altar's menu states are missing")
+    EQ, REG0 = b'\x95', b'\xaf'
+
+    def eq(lhs, rhs):
+        return esd.done(lhs + esd.lit(rhs) + EQ)
+
+    def cmd(id, args):
+        return s.cmd(1, id, [esd.done(esd.lit(v)) for v in args])
+
+    # The entry, ahead of "Do Nothing".
+    rest = s.states[list_rest]
+    rest.entry = s.run([cmd(19, [3, TEXT_OPTION, -1])] + s.runs[rest.entry].items)
+    st = {}
+    for id in range(7, 16):  # the new states, 7..15 of the handling group
+        st[id] = s.state(id)
+        handle.states.append(st[id])
+
+    def set_state(state, conds=-1, entry=-1, whiles=-1):
+        x = s.states[state]
+        if conds >= 0:
+            x.conds = conds
+        if entry >= 0:
+            x.entry = entry
+        if whiles >= 0:
+            x.whiles = whiles
+    wait = s.cmd(1, 68, [b'\x81' + struct.pack('<d', 0.33) + b'\xa1'])  # the altar's own c1_68(0.33)
+    truth = esd.done(esd.lit(1))
+    dialog_closed = eq(esd.call(58, [0]), 0)
+    # Chosen: the stone, or a message.
+    set_state(st[7], s.run([s.cond(st[9], eq(esd.call(47, [3, YHARNAM_STONE, 5, 0, 0]), 1)), s.cond(st[8], truth)]))
+    set_state(st[8], s.run([s.cond(end, dialog_closed)]), s.run([cmd(17, [7, TEXT_NO_STONE, 1, 0, 1])]))
+    # The runtime's reset.
+    set_state(st[9], s.run([s.cond(st[10], eq(esd.call(15, [REQ_RESET]), 0))]),
+              s.run([cmd(11, [FAIL, 0]), cmd(11, [REQ_RESET, 1])]), s.run([wait]))
+    set_state(st[10], s.run([s.cond(st[11], eq(esd.call(15, [FAIL]), 1)), s.cond(st[12], truth)]))
+    set_state(st[11], s.run([s.cond(end, dialog_closed)]), s.run([cmd(11, [FAIL, 0]), cmd(17, [7, TEXT_FAIL, 1, 0, 1])]))
+    # The level-up menu, until the runtime says it has closed.
+    set_state(st[12], s.run([s.cond(st[13], eq(esd.call(15, [MENU]), 0))]), s.run([cmd(11, [MENU, 1]), s.cmd(1, 31, [])]))
+    # Leaving it: accept or undo; closing the choice goes back to the menu.
+    set_state(st[13], s.run([s.cond(st[14], truth)]),
+              s.run([s.cmd(1, 20, []), cmd(19, [1, TEXT_ACCEPT, -1]), cmd(19, [2, TEXT_UNDO, -1])]))
+    set_state(st[14],
+              s.run([s.cond(end, esd.done(esd.lit(23) + b'\x84\xa7' + esd.lit(1) + EQ)),  # reg0 = f23(); == 1: accept
+                     s.cond(st[15], eq(REG0, 2)),                                          # undo
+                     s.cond(st[12], eq(esd.call(53, []), 0))]),                            # closed: back to the menu
+              s.run([s.cmd(1, 76, [])]), s.run([wait]))
+    set_state(st[15], s.run([s.cond(end, eq(esd.call(15, [REQ_UNDO]), 0))]), s.run([cmd(11, [REQ_UNDO, 1])]), s.run([wait]))
+    # The choice: entry 3 goes to the new states, ahead of "Do Nothing / closed".
+    old = s.runs[s.states[choice].conds].items
+    s.states[choice].conds = s.run([old[0], s.cond(st[7], eq(REG0, 3))] + old[1:])
+    out = esd.serialize(s)
+    if sha256(out) != REBIRTH_OUT:
+        raise Skip('the rewrite is not the known result')
+    return out
+
+
+def rebirth(dvdroot):
+    from fromsoft import Bnd4
+    relative = Path('script') / 'talk' / 'm24_02_00_00.talkesdbnd.dcx'
+    try:
+        packed = (dvdroot / relative).read_bytes()
+        archive = Bnd4(dcx_decompress(packed))
+        index = archive.index('t242307.esd')
+        archive.files[index] = rebirth_script(archive.files[index])
+        return {relative: dcx_compress(archive.to_bytes(), template=packed)}
+    except (OSError, FormatError, Skip, ValueError) as error:
+        print(f'Enhancements: Rebirth: the altar keeps its menu ({error})', file=sys.stderr)
+        return {}
+
+
 def pc_menu(dvdroot):
     import menu_assets
     return menu_assets.make(dvdroot, log=lambda line: print(f'Enhancements: {line}', file=sys.stderr))
 
 
-MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror, 'pc_menu': pc_menu}
+MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror, 'pc_rebirth': rebirth,
+          'pc_menu': pc_menu}
 
 
 def enabled(settings, env):
@@ -276,7 +380,7 @@ def generator():
     """The generator's own identity: its version and the scripts and strings it runs."""
     here = Path(__file__).resolve().parent
     digest = hashlib.sha256()
-    for name in ('enhancements.py', 'menu_assets.py', 'fromsoft.py', 'pc_menu_messages.tsv'):
+    for name in ('enhancements.py', 'menu_assets.py', 'fromsoft.py', 'esd.py', 'pc_menu_messages.tsv'):
         try:
             digest.update((here / name).read_bytes())
         except OSError:

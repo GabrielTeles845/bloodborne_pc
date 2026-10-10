@@ -227,6 +227,7 @@ static Row g_cheats[] = {
 };
 static Row g_enhance[] = {
     TOGGLE_ROW("pc_mirror_appearance", 124001), TOGGLE_ROW("pc_two_invaders", 124003),
+    TOGGLE_ROW("pc_rebirth", 124002),
 };
 static Section g_sections[] = {
     {"PCGraphics", 110007, g_graphics, COUNT(g_graphics)},

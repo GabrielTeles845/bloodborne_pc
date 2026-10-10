@@ -128,6 +128,39 @@ int bb_hook_call(uint64_t at, uint64_t target, void *host) {
     return 0;
 }
 
+int bb_read(uint64_t address, void *out, size_t n) {
+    if (!address || !out) return 0;
+#ifdef _WIN32
+    SIZE_T got = 0;
+    return ReadProcessMemory(GetCurrentProcess(), (const void *)(uintptr_t)address, out, n, &got) && got == n;
+#else
+    memcpy(out, (const void *)(uintptr_t)address, n);
+    return 1;
+#endif
+}
+
+/* The frame-time manager's update (SprjFlipper::Update), once a frame on the main thread; its
+ * first 17 bytes, as bbhost's engine/frame_rate.cpp checks them. */
+enum { FRAME_MANAGER = 0x2434770, MAX_TICKS = 8 };
+static const unsigned char frame_manager_prologue[] = {0x55, 0x48, 0x89, 0xe5, 0x41, 0x57, 0x41, 0x56, 0x41,
+                                                      0x55, 0x41, 0x54, 0x53, 0x48, 0x83, 0xec, 0x38};
+static void (*g_ticks[MAX_TICKS])(void);
+static int g_tick_count;
+
+void bb_on_main_frame(void (*tick)(void)) {
+    if (tick && g_tick_count < MAX_TICKS) g_ticks[g_tick_count++] = tick;
+}
+
+static BB_GUEST_ABI void main_frame(void) {
+    for (int i = 0; i < g_tick_count; ++i) g_ticks[i]();
+}
+
+int bb_main_frame_install(void) {
+    if (!g_tick_count) return 0;
+    return !bb_hook_entry(BB_BN(FRAME_MANAGER), frame_manager_prologue, sizeof(frame_manager_prologue),
+                          (void *)main_frame);
+}
+
 int bb_patch(uint64_t at, const void *expected, const void *replacement, size_t n) {
     if (!bb_hooks_enabled()) return refuse("engine hooks are off (BB_ENGINE_HOOKS=0)");
     if (!expected || !replacement || !n || !in_image(at, n)) return refuse("address outside the image");

@@ -162,6 +162,8 @@ def main():
     # title's Quit Game only when both title movies have its line.
     menu = next((Path(folder) for folder in generated if Path(folder).name == 'pc-menu'), None)
     env['BB_PC_MENU_ASSETS'] = '1' if menu else '0'
+    # Rebirth's runtime half acts only with the altar's rewritten script in place.
+    env['BB_PC_REBIRTH_ACTIVE'] = '1' if any(Path(f).name == 'rebirth' for f in generated) else '0'
     env['BB_PC_MENU_QUIT'] = '1' if menu and all(
         (menu / 'dvdroot_ps4/menu' / name).is_file() for name in ('title.gfx', 'title_dlc.gfx')) else '0'
     # The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).

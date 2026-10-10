@@ -118,6 +118,7 @@ void Load() {
         {"BB_REACTIVE_THRESHOLD", "reactive_threshold"}, {"BB_REACTIVE_MAX", "reactive_max"},
         {"BB_UPSCALE_PRESET", "preset"},            {"BB_OBJECT_MOTION", "object_motion"},
         {"BB_PC_MIRROR", "pc_mirror_appearance"},   {"BB_PC_TWO_INVADERS", "pc_two_invaders"},
+        {"BB_PC_REBIRTH", "pc_rebirth"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env)) {

@@ -4,20 +4,22 @@
 #include "engine_features.h"
 #include "engine_hooks.h"
 #include "pc_menu.h"
+#include "rebirth.h"
 
 #include <stddef.h>
 
 typedef int (*Install)(void);
 typedef void (*Frame)(void);
 
-static const Install installs[] = {bb_pc_menu_install};
+static const Install installs[] = {bb_pc_menu_install, bb_rebirth_install};
 static const Frame frames[] = {bb_pc_menu_frame};
 
 int bb_engine_install(void) {
     int hooks = 0;
     for (size_t i = 0; i < sizeof(installs) / sizeof(*installs); ++i)
         if (installs[i]) hooks += installs[i]();
-    return hooks;
+    /* The main-thread tick, when a feature registered one (bb_on_main_frame). */
+    return hooks + bb_main_frame_install();
 }
 
 void bb_engine_frame(void) {

@@ -63,6 +63,16 @@ class RewriteTests(unittest.TestCase):
         _bank, _ins, at, length = found[0]
         self.assertEqual(data[at:at + length], bytes([1, 1, 0, 0]))
 
+    def test_talk_script_bytecode(self):
+        import esd
+        self.assertEqual(esd.lit(3), b'\x43')
+        self.assertEqual(esd.lit(-1), b'\x3f')
+        self.assertEqual(esd.lit(72500390), b'\x82' + struct.pack('<i', 72500390))
+        self.assertEqual(esd.call(15, [4330]), b'\x4f\x82' + struct.pack('<i', 4330) + b'\x85\xa6')
+        self.assertEqual(esd.done(b'\x41'), b'\x41\xa1')
+        with self.assertRaises(esd.EsdError):
+            esd.parse(b'fsSL' + b'\0' * 0x10)
+
     def test_unknown_files_are_left_alone(self):
         with tempfile.TemporaryDirectory() as folder:
             game = Path(folder) / 'game'
@@ -78,6 +88,22 @@ class RewriteTests(unittest.TestCase):
 
 @unittest.skipUnless(GAME, 'BB_TEST_GAME_DIR not set')
 class RealGameTests(unittest.TestCase):
+    def test_every_talk_script_round_trips_and_the_altar_matches_bbhost(self):
+        import esd
+        from fromsoft import Bnd4
+        scripts = 0
+        for archive in sorted((GAME / 'dvdroot_ps4/script/talk').glob('*.talkesdbnd.dcx')):
+            bnd = Bnd4(dcx_decompress(archive.read_bytes()))
+            for name, data in zip(bnd.names, bnd.files):
+                if name.lower().endswith('.esd'):
+                    self.assertEqual(esd.serialize(esd.parse(data)), data, name)
+                    scripts += 1
+        self.assertEqual(scripts, 271)
+        files = enhancements.rebirth(GAME / 'dvdroot_ps4')
+        archive = Bnd4(dcx_decompress(next(iter(files.values()))))
+        altar = archive.files[archive.index('t242307.esd')]
+        self.assertEqual(hashlib.sha256(altar).hexdigest(), enhancements.REBIRTH_OUT)
+
     def test_rewrites_match_bbhost_and_are_reused(self):
         with tempfile.TemporaryDirectory() as folder:
             out = Path(folder)

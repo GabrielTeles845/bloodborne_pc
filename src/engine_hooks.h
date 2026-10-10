@@ -46,6 +46,16 @@ int bb_hook_entry(uint64_t at, const unsigned char *prologue, size_t n, void *ho
  * with nothing changed. */
 int bb_patch(uint64_t at, const void *expected, const void *replacement, size_t n);
 
+/* Copies `n` bytes of the game's memory at a guest address without faulting on an unmapped one
+ * (game objects a feature reads may not exist yet). Returns 1 when all were read. */
+int bb_read(uint64_t address, void *out, size_t n);
+
+/* Registers a function run once a frame on the game's main thread, at the start of its
+ * frame-time manager's update (sub_2434770). Call from an install function. */
+void bb_on_main_frame(void (*tick)(void));
+/* Installs that hook when something registered; returns 1 when it went in. */
+int bb_main_frame_install(void);
+
 /* Why the last hook was refused (static text). */
 const char *bb_hooks_error(void);
 

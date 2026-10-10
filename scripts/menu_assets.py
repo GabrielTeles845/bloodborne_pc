@@ -38,7 +38,7 @@ SECTION_ROWS = [
     ('PCSetting', 116020, 4),
     ('PCGameplay', 126020, 5),
     ('PCCheats', 127020, 5),
-    ('PCEnhance', 124020, 2),
+    ('PCEnhance', 124020, 3),
     ('PCAchieve', 128020, 6),
 ]
 # (name, title, depth on the main timeline, Defaults slot, rows dropped)
