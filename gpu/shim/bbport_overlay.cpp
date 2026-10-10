@@ -576,9 +576,13 @@ void ModsTab() {
     if (!mod_selection_error.empty())
         ImGui::TextColored(ImVec4(.95f,.35f,.35f,1), "%s", mod_selection_error.c_str());
     ImGui::SeparatorText("Gameplay and debug");
-    for (int e = 8; e < BbSettings::EffectCount; ++e)
+    for (int e = 8; e < BbSettings::FirstEnhancement; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
     Hint("Free camera: hold Cross/A and press L3 (keyboard: Space + Z). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
+    ImGui::SeparatorText("PC enhancements (restart required)");
+    for (int e = BbSettings::FirstEnhancement; e < BbSettings::EffectCount; ++e)
+        Checkbox(BbSettings::Effects[e].label, s.effects[e]);
+    Hint("Made from your own game files at start; off is the game as it shipped. The mirror in the Hunter's Dream opens the appearance editor. Two invaders: Mensis, Mergo's Loft, the Nightmare Frontier and the Old Hunters' areas allow two, as the chalice dungeons do. After bbhost by droogie.");
     ImGui::Separator();
     if (mod_selection_changed || RestartNeeded())
         ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Changes are ready. Restart to apply them.");

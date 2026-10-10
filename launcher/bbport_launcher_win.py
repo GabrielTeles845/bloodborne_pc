@@ -164,11 +164,20 @@ TWEAKS = [
     ('tweak_ragdoll', ('Dark Souls-style ragdoll physics (corpses fly further)',
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]
-INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS)}
+# PC enhancements (scripts/enhancements.py, after bbhost): game files made at start; off is the
+# game as it shipped. BB_PC_MIRROR / BB_PC_TWO_INVADERS override them.
+ENHANCEMENTS = [
+    ('pc_mirror_appearance', ("Hunter's Dream mirror: change appearance",
+                              'Зеркало в Сне охотника: смена внешности'), False),
+    ('pc_two_invaders', ('Two invaders in the late areas (every player needs it)',
+                         'Два захватчика в поздних локациях (нужно всем игрокам)'), False),
+]
+INI_FLAGS = {'sharpen', 'object_motion', 'show_fps',
+             *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}
 INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'model_lod': '0',
                 'live_resolution': 'auto',
-                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS}}
+                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',

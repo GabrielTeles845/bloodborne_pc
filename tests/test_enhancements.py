@@ -1,0 +1,96 @@
+from paths import ROOT
+import hashlib
+import os
+from pathlib import Path
+import struct
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, str(ROOT / 'scripts'))
+import enhancements  # noqa: E402
+from fromsoft import dcx_compress, dcx_decompress  # noqa: E402
+
+# BB_TEST_GAME_DIR=<CUSA03173>: also rewrite the real 1.09 files.
+GAME = Path(os.environ['BB_TEST_GAME_DIR']) if os.environ.get('BB_TEST_GAME_DIR') else None
+
+
+def emevd(events):
+    """A minimal 64-bit EMEVD: events [(id, [(bank, id, argument bytes)])]."""
+    header = 0x90
+    event_table = header
+    ins_table = event_table + 0x30 * len(events)
+    instructions, args, rows = b'', b'', b''
+    for event_id, items in events:
+        rows += struct.pack('<qqq', event_id, len(items), len(instructions)) + b'\0' * 0x18
+        for bank, ins_id, data in items:
+            instructions += struct.pack('<iiqq', bank, ins_id, len(data), len(args)) + b'\0' * 8
+            args += data
+    args_at = ins_table + len(instructions)
+    head = bytearray(header)
+    struct.pack_into('<qq', head, 0x10, len(events), event_table)
+    struct.pack_into('<q', head, 0x28, ins_table)
+    struct.pack_into('<q', head, 0x78, args_at)
+    return bytes(head) + rows + instructions + args
+
+
+class SettingsTests(unittest.TestCase):
+    def test_off_unless_switched_on_and_environment_wins(self):
+        self.assertEqual(enhancements.enabled({}, {}), [])
+        self.assertEqual(enhancements.enabled({'pc_two_invaders': '1'}, {}), ['pc_two_invaders'])
+        self.assertEqual(enhancements.enabled({'pc_two_invaders': '1'}, {'BB_PC_TWO_INVADERS': '0'}), [])
+        self.assertEqual(enhancements.enabled({}, {'BB_PC_MIRROR': '1'}), ['pc_mirror_appearance'])
+
+    def test_overlay_and_launcher_offer_the_same_keys(self):
+        header = (ROOT / 'gpu/shim/bbport_settings.h').read_text(encoding='utf-8')
+        launcher = (ROOT / 'launcher/bbport_launcher_win.py').read_text(encoding='utf-8')
+        for key in enhancements.FEATURES:
+            self.assertIn(f'{{"{key}", ', header)
+            self.assertIn(f"('{key}', ", launcher)
+
+
+class RewriteTests(unittest.TestCase):
+    def test_event_instructions_reads_arguments(self):
+        data = emevd([(0, [(2000, 0, struct.pack('<ii', 5, 13404710) + b'\0' * 8)]),
+                      (13404710, [(3, 29, bytes([1, 1, 0, 0])), (1, 1, b'')])])
+        found = enhancements.event_instructions(data, 13404710)
+        self.assertEqual([(bank, ins) for bank, ins, _at, _n in found], [(3, 29)])
+        _bank, _ins, at, length = found[0]
+        self.assertEqual(data[at:at + length], bytes([1, 1, 0, 0]))
+
+    def test_unknown_files_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as folder:
+            game = Path(folder) / 'game'
+            (game / 'dvdroot_ps4/event').mkdir(parents=True)
+            (game / 'dvdroot_ps4/map/MapStudio').mkdir(parents=True)
+            for name in ('m26_00_00_00', 'm33_00_00_00'):
+                (game / f'dvdroot_ps4/event/{name}.emevd.dcx').write_bytes(dcx_compress(emevd([])))
+            (game / 'dvdroot_ps4/map/MapStudio/m21_00_00_00.msb.dcx').write_bytes(dcx_compress(b'MSB not 1.09'))
+            made = enhancements.make(game, Path(folder) / 'out', list(enhancements.FEATURES))
+            self.assertEqual(made, [])
+            self.assertFalse((Path(folder) / 'out/two-invaders').exists())
+
+
+@unittest.skipUnless(GAME, 'BB_TEST_GAME_DIR not set')
+class RealGameTests(unittest.TestCase):
+    def test_rewrites_match_bbhost_and_are_reused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            made = enhancements.make(GAME, out, list(enhancements.FEATURES))
+            self.assertEqual(sorted(m.name for m in made), ['dream-mirror', 'two-invaders'])
+            for name, _sha_in, sha_out, *_ in enhancements.MAIDEN_MAPS:
+                packed = (out / f'two-invaders/dvdroot_ps4/event/{name}.emevd.dcx').read_bytes()
+                self.assertEqual(hashlib.sha256(dcx_decompress(packed)).hexdigest(), sha_out)
+                original = (GAME / f'dvdroot_ps4/event/{name}.emevd.dcx').read_bytes()
+                self.assertEqual(packed[:0x1c], original[:0x1c])  # the game's own DCX header
+            msb = dcx_decompress((out / 'dream-mirror/dvdroot_ps4/map/MapStudio/m21_00_00_00.msb.dcx').read_bytes())
+            self.assertEqual(hashlib.sha256(msb).hexdigest(), enhancements.MIRROR_OUT)
+            stamp = out / 'dream-mirror/stamp.txt'
+            before = stamp.stat().st_mtime_ns
+            again = enhancements.make(GAME, out, ['pc_mirror_appearance'])
+            self.assertEqual([m.name for m in again], ['dream-mirror'])
+            self.assertEqual(stamp.stat().st_mtime_ns, before)  # up to date: not made again
+
+
+if __name__ == '__main__':
+    unittest.main()

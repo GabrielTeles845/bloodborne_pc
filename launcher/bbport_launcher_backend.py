@@ -60,6 +60,8 @@ FIELDS = {
         row('language', 'Game language', 'choice', core.LANGUAGES),
         row('player_name', 'Hunter name'),
         *[row(key, title[0], 'toggle') for key, title, _ in core.EXTRAS[:1]],
+        # PC enhancements: made from the game files when the game starts.
+        *[row(key, title[0], 'toggle') for key, title, _ in core.ENHANCEMENTS],
     ],
     'Controller': [
         row('debug_camera', 'Free camera', 'toggle'),

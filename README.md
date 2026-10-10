@@ -139,6 +139,15 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
 
 ## What's changed
 
+- Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
+  off by default (the game as it shipped). Switch them on in the launcher's **Game** page or the
+  in-game menu's **PC enhancements**; they apply after a restart and are made from your own game
+  files, which stay unchanged.
+  - **Hunter's Dream mirror** (`pc_mirror_appearance`, `BB_PC_MIRROR=1`): the workshop's mirror
+    opens the appearance editor, the developers' unused "Put on Disguise".
+  - **Two invaders** (`pc_two_invaders`, `BB_PC_TWO_INVADERS=1`): Mensis, Mergo's Loft, the
+    Nightmare Frontier and the Old Hunters' areas allow two invaders, as the chalice dungeons
+    do. Every player in a session needs it on.
 - The in-game settings menu (Insert or L3+R3) is in English, using the translation proposed
   in [upstream PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
 - Menu checkboxes and sliders save the value you selected, from

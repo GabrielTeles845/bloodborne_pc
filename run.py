@@ -153,10 +153,15 @@ def main():
     if not (game / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set BB_GAME_DIR).')
     original_game = game.resolve()
+    # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
+    generated = run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
+                           '--settings', config, capture=True).splitlines()
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),
-                           '--enabled', env.get('BB_MODS_ENABLED', '1'), capture=True).strip())
+                           '--enabled', env.get('BB_MODS_ENABLED', '1'),
+                           *(arg for folder in generated for arg in ('--generated', folder)),
+                           capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     try:
         run_script('prepare.py', game, '--out', out)
