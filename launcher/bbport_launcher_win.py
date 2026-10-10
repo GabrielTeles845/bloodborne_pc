@@ -40,8 +40,8 @@ PATCH_VERSION = '01.09'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This fork's build; the release tag includes this version.
-VERSION = '1.6.6'
-CURRENT_RELEASE_TAG = 'qml-launcher-preview-2'
+VERSION = '1.6.7'
+CURRENT_RELEASE_TAG = 'qml-launcher-preview-3'
 HERO_ART = PORT_DIR / 'launcher' / 'art' / 'hero.png'
 STRIP_ART = PORT_DIR / 'launcher' / 'art' / 'strip.png'
 # Co-op: the community server that answers the game's own server requests.
@@ -1980,6 +1980,11 @@ def install_update(target, wait_pid):
     for attempt in range(30):
         try:
             shutil.copytree(PORT_DIR, target, dirs_exist_ok=True, ignore=ignore)
+            bundled_prompts = PORT_DIR / 'mods' / 'Xbox 360 Prompts (Elden Ring)'
+            installed_prompts = target / 'mods' / bundled_prompts.name
+            if bundled_prompts.is_dir() and not installed_prompts.exists():
+                installed_prompts.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(bundled_prompts, installed_prompts)
             break
         except OSError:  # a file still in use: the old launcher is closing
             time.sleep(1)
