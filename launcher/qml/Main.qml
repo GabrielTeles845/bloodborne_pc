@@ -24,12 +24,21 @@ ApplicationWindow {
         {name:"Advanced", icon:"advanced"}, {name:"Log", icon:"log"}
     ]
 
+    // Step the wizard opens on: 0 for a fresh or re-run setup, the failing step for "Fix".
+    property int wizardStep: 0
+
     function go(next) {
-        if (page === "Setup" && next !== "Setup") launcher.finishSetupWizard()
         page = next
         settingsView.contentY = 0
     }
-    Component.onCompleted: if (launcher.setupWizardNeeded) page = "Setup"
+    function openWizard(step) {
+        wizardStep = step
+        go("Setup")
+    }
+    Component.onCompleted: {
+        wizardStep = launcher.wizardStartStep
+        page = launcher.startPage
+    }
 
     // Full-window artwork remains behind every surface, including the sidebar and cards.
     Image {
@@ -94,8 +103,15 @@ ApplicationWindow {
                 }
                 Rectangle { width: parent.width; height: 1; color: "#38ffffff" }
                 Item { width: 1; height: 10 }
+                // The wizard is a single path: no page navigation until it is finished or skipped.
+                Text {
+                    visible: page === "Setup"
+                    width: parent.width; wrapMode: Text.WordWrap; topPadding: 6
+                    text: "Finish or skip setup to open the launcher pages."
+                    color: "#a9afb6"; font.pixelSize: 12
+                }
                 Repeater {
-                    model: nav
+                    model: page === "Setup" ? [] : nav
                     delegate: Rectangle {
                         width: sidebar.width - 36
                         height: 47
@@ -139,30 +155,81 @@ ApplicationWindow {
                 id: homeView
                 visible: page === "Home"
                 x: 31; y: 58; width: parent.width - 62; height: parent.height - 131
+                // Short windows: a tighter hero leaves room for the launch options and cards.
+                property bool compact: height < 600
                 Text {
-                    x: 4; y: 22
+                    x: 4; y: homeView.compact ? 4 : 22
                     text: "Bloodborne"
                     color: "#efe5cd"
                     font.family: "Georgia"
-                    font.pixelSize: 77
+                    font.pixelSize: homeView.compact ? 64 : 77
                     font.letterSpacing: -2
                     style: Text.Raised
                     styleColor: "#a7000000"
                 }
                 Text {
-                    x: 7; y: 122; width: Math.min(560, parent.width * 0.62)
+                    x: 7; y: homeView.compact ? 88 : 122; width: Math.min(560, parent.width * 0.62)
                     text: "A journey to Yharnam. Uncover its secrets, face its nightmares, and survive the night."
                     color: "#dae0e4"; wrapMode: Text.WordWrap; font.pixelSize: 16; lineHeight: 1.4
                 }
+                // Shown only when an update exists; it never blocks Play.
+                Rectangle {
+                    visible: launcher.updateVersion !== ""
+                    anchors.right: parent.right; anchors.rightMargin: 2; y: 30
+                    width: updateRow.implicitWidth + 24; height: 44; radius: 10
+                    color: "#cb0b1119"; border.color: "#8c9cdda9"
+                    Row {
+                        id: updateRow
+                        anchors.centerIn: parent; spacing: 12
+                        Text { text: "Update available: " + launcher.updateVersion; color: "#b9ebc5"; font.pixelSize: 13; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+                        GlassButton { text: "View release"; width: 112; height: 30; onClicked: launcher.viewRelease() }
+                    }
+                }
                 Row {
-                    x: 7; y: 206; spacing: 12
+                    id: playRow
+                    x: 7; y: homeView.compact ? 158 : 206; spacing: 12
                     GlassButton { id: playHero; text: launcher.running ? "GAME RUNNING" : "▶   PLAY"; enabled: !launcher.running; onClicked: launcher.play(); width: 207; height: 51; highlighted: true }
                     GlassButton { text: "⚙   GAME OPTIONS"; onClicked: go("Graphics"); width: 184; height: 51 }
                 }
 
+                Rectangle {
+                    id: launchOptions
+                    x: 2; y: playRow.y + playRow.height + 14
+                    width: parent.width - 4; height: launchFlow.implicitHeight + 16
+                    radius: 10; color: "#a90d141c"; border.color: "#50e0e8ee"
+                    Flow {
+                        id: launchFlow
+                        x: 14; y: 8; width: parent.width - 28
+                        spacing: 10
+                        Text {
+                            height: 34; verticalAlignment: Text.AlignVCenter; rightPadding: 4
+                            text: "LAUNCH OPTIONS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.6
+                        }
+                        GlassSwitch {
+                            height: 34; text: "Launch game directly on startup"
+                            checked: launcher.launchDirectly
+                            onToggled: launcher.setValue("launchDirectly", checked)
+                        }
+                        GlassSwitch {
+                            height: 34; text: "Close launcher after Play"
+                            checked: launcher.closeOnPlay
+                            onToggled: launcher.setValue("close_on_play", checked)
+                        }
+                        GlassButton { text: "Desktop shortcut"; width: 140; height: 34; onClicked: launcher.createShortcut() }
+                        GlassButton { text: "Add to Steam"; width: 118; height: 34; onClicked: launcher.addToSteam() }
+                        Text {
+                            visible: launcher.launchDirectly
+                            height: 34; verticalAlignment: Text.AlignVCenter
+                            text: "Hold Shift while starting to open this launcher."
+                            color: quiet; font.pixelSize: 12
+                        }
+                    }
+                }
+
                 Row {
                     id: cards
-                    x: 2; y: 291; width: parent.width - 4; height: Math.min(236, parent.height * 0.37)
+                    x: 2; y: launchOptions.y + launchOptions.height + 14; width: parent.width - 4
+                    height: Math.max(110, Math.min(236, parent.height - y - 90))
                     spacing: 12
                     GlassCard {
                         width: (cards.width - 24) / 3; height: cards.height
@@ -181,8 +248,9 @@ ApplicationWindow {
                     }
                 }
                 Rectangle {
+                    visible: height >= 60
                     x: 2; y: cards.y + cards.height + 15
-                    width: parent.width - 4; height: Math.max(75, parent.height - (cards.y + cards.height + 15))
+                    width: parent.width - 4; height: parent.height - (cards.y + cards.height + 15)
                     radius: 12; color: "#9c0c1118"; border.color: "#47d8e2e8"
                     Image { anchors.fill: parent; anchors.margins: 1; source: Qt.resolvedUrl("../art/strip.png"); fillMode: Image.PreserveAspectCrop; opacity: 0.48; clip: true }
                     Rectangle { anchors.fill: parent; radius: 12; gradient: Gradient { orientation: Gradient.Horizontal
@@ -214,6 +282,22 @@ ApplicationWindow {
                         id: settingsColumn
                         width: settingsView.width - 14
                         spacing: 9
+                        // Start-up validation failed; hides itself once fixed or dismissed.
+                        Rectangle {
+                            visible: page === "Game" && launcher.startupProblem !== ""
+                            width: parent.width; height: visible ? 52 : 0; radius: 8
+                            color: "#8a3a1820"; border.color: "#b4df6672"
+                            Rectangle { x: 14; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: "#df6672" }
+                            Text {
+                                x: 34; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 220; elide: Text.ElideRight
+                                text: launcher.startupProblem; color: cream; font.pixelSize: 14; font.bold: true
+                            }
+                            Row {
+                                anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 8
+                                GlassButton { text: "Fix"; width: 92; height: 32; highlighted: true; onClicked: openWizard(launcher.fixStep) }
+                                GlassButton { text: "✕"; width: 34; height: 32; onClicked: launcher.dismissProblem() }
+                            }
+                        }
                         Rectangle {
                             visible: page === "Game"
                             width: parent.width; height: visible ? 82 : 0; radius: 8
@@ -227,7 +311,7 @@ ApplicationWindow {
                             GlassButton {
                                 x: 256; y: 12; width: 135; height: 36
                                 text: "Setup wizard"
-                                onClicked: go("Setup")
+                                onClicked: openWizard(0)
                             }
                             Text {
                                 x: 12; y: 54; width: parent.width - 24
@@ -273,8 +357,38 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        // Controller: the bundled Xbox prompt mod or the game's own PlayStation prompts.
+                        Text { visible: page === "Controller"; text: "BUTTON PROMPTS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
+                        Row { visible: page === "Controller"; spacing: 8
+                            GlassButton { text: "Xbox"; width: 112; height: 35; highlighted: launcher.promptChoice === "Xbox"; onClicked: launcher.setPrompt("Xbox") }
+                            GlassButton { text: "PlayStation"; width: 112; height: 35; highlighted: launcher.promptChoice === "PlayStation"; onClicked: launcher.setPrompt("PlayStation") }
+                            Text { text: "Applies after restart"; color: quiet; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        Text { visible: page === "Controller"; text: "DEBUG"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7; topPadding: 12 }
+                        // Advanced: automatic update check with "Check now" beside it.
+                        Rectangle {
+                            visible: page === "Advanced"
+                            width: parent.width; height: visible ? 46 : 0; radius: 7
+                            color: "#5a202a34"; border.color: "#36ffffff"
+                            Text { x: 15; anchors.verticalCenter: parent.verticalCenter; text: "Check for updates"; color: "#e7edf1"; font.pixelSize: 13 }
+                            Row {
+                                anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter; spacing: 12
+                                GlassButton { text: "Install update"; visible: launcher.hasUpdate; width: 118; height: 30; onClicked: launcher.installUpdate() }
+                                GlassButton { text: "Check now"; width: 100; height: 30; onClicked: launcher.checkForUpdates(true) }
+                                GlassSwitch {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    checked: launcher.checked("check_updates")
+                                    onToggled: launcher.setValue("check_updates", checked)
+                                }
+                            }
+                        }
                         Repeater {
                             model: page === "Home" || page === "Log" ? [] : launcher.fields(page)
+                            delegate: FieldRow { width: settingsColumn.width; field: modelData }
+                        }
+                        Text { visible: page === "Advanced"; text: "DIAGNOSTICS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7; topPadding: 12 }
+                        Repeater {
+                            model: page === "Advanced" ? launcher.fields("Diagnostics") : []
                             delegate: FieldRow { width: settingsColumn.width; field: modelData }
                         }
                         Row {
@@ -303,16 +417,10 @@ ApplicationWindow {
                             GlassButton { text: "Test connection"; width: 165; height: 36; onClicked: launcher.testConnection() }
                             Text { text: "Your account ID is the server name, not your email."; color: quiet; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
                         }
-                        Item { visible: page === "Mods"; width: parent.width; height: visible ? 16 : 0 }
-                        Text { visible: page === "Mods"; text: "CONTROLLER BUTTON PROMPTS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
-                        Row { visible: page === "Mods"; spacing: 8
-                            GlassButton { text: "Xbox"; width: 112; height: 35; highlighted: launcher.promptChoice === "Xbox"; onClicked: launcher.setPrompt("Xbox") }
-                            GlassButton { text: "PlayStation"; width: 112; height: 35; highlighted: launcher.promptChoice === "PlayStation"; onClicked: launcher.setPrompt("PlayStation") }
-                            Text { text: "Applies after restart"; color: quiet; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
-                        }
                         Text { visible: page === "Mods"; text: "INSTALLED MODS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
+                        Text { visible: page === "Mods" && launcher.contentMods.length === 0; text: "No other mods installed. Xbox button prompts are on the Controller page."; color: quiet; font.pixelSize: 12 }
                         Repeater {
-                            model: page === "Mods" ? launcher.mods : []
+                            model: page === "Mods" ? launcher.contentMods : []
                             delegate: Rectangle {
                                 width: settingsColumn.width; height: 42; radius: 6; color: "#3bffffff"; border.color: "#32ffffff"
                                 GlassSwitch { anchors.left: parent.left; anchors.leftMargin: 9; anchors.verticalCenter: parent.verticalCenter; text: modelData.name; checked: modelData.enabled; onToggled: launcher.setMod(modelData.name, checked) }
@@ -333,6 +441,7 @@ ApplicationWindow {
                             GlassButton { text: "Optional: Bloodborne Enhanced ↗"; onClicked: launcher.action("mod19") }
                         }
                         Text { visible: page === "Mods"; text: "Bloodborne Enhanced is a separate optional download. Install it yourself and enable it above."; color: quiet; font.pixelSize: 12; wrapMode: Text.WordWrap; width: parent.width }
+                        Item { visible: page === "Advanced"; width: 1; height: visible ? 6 : 0 }
                         Row { visible: page === "Advanced"; spacing: 8
                             GlassButton { text: "Open port folder"; onClicked: launcher.action("openPort") }
                             GlassButton { text: "Open bbport.ini"; onClicked: launcher.action("openConfig") }
@@ -340,10 +449,7 @@ ApplicationWindow {
                             GlassButton { text: "Releases ↗"; onClicked: launcher.action("releases") }
                         }
                         Row { visible: page === "Advanced"; spacing: 8
-                            GlassButton { text: "Desktop shortcut"; onClicked: launcher.createShortcut() }
-                            GlassButton { text: "Add to Steam"; onClicked: launcher.addToSteam() }
-                            GlassButton { text: "Check for updates"; onClicked: launcher.checkForUpdates(true) }
-                            GlassButton { text: "Install update"; visible: launcher.hasUpdate; onClicked: launcher.installUpdate() }
+                            GlassButton { text: "Re-run setup"; onClicked: openWizard(0) }
                         }
                         Row { visible: page === "Log"; spacing: 8
                             GlassButton { text: "Copy log"; onClicked: launcher.action("copyLog") }
@@ -358,7 +464,8 @@ ApplicationWindow {
             SetupWizard {
                 visible: page === "Setup"
                 x: 31; y: 58; width: parent.width - 62; height: parent.height - 132
-                onExitRequested: { page = "Home"; settingsView.contentY = 0 }
+                startStep: wizardStep
+                onExitRequested: (target) => go(target)
             }
 
             Rectangle {
@@ -366,9 +473,9 @@ ApplicationWindow {
                 x: 0; y: parent.height - 69; width: parent.width; height: 69
                 color: "#d20a0e14"; border.color: "#34ffffff"
                 Text { x: 30; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 320; elide: Text.ElideRight; text: launcher.notice; color: "#cbd2d8"; font.pixelSize: 12 }
-                Row { anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter; spacing: 10
+                Row { visible: page !== "Setup"; anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter; spacing: 10
                     GlassButton { text: "STOP"; enabled: launcher.running; onClicked: launcher.stop(); width: 106; height: 42 }
-                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running && !launcher.setupRunning && page !== "Setup"; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
+                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running && !launcher.setupRunning; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
                 }
             }
         }

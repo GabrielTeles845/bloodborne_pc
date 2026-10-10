@@ -8,12 +8,18 @@ Canvas {
     height: 25
     onKindChanged: requestPaint()
     onStrokeColorChanged: requestPaint()
+    onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
     onPaint: {
         const c = getContext("2d")
         c.reset()
+        // Paths use a 25 × 25 grid: scale them to the icon's size so smaller icons are not cut off,
+        // keeping the on-screen stroke width.
+        const s = Math.min(width, height) / 25
+        c.scale(s, s)
         c.strokeStyle = strokeColor
         c.fillStyle = strokeColor
-        c.lineWidth = 1.8
+        c.lineWidth = 1.8 / s
         c.lineCap = "round"
         c.lineJoin = "round"
         function line(points) {

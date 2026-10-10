@@ -2,33 +2,99 @@
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 
 from bbport_launcher_backend import LauncherBackend
+import bbport_startup
+
+# How long the "Launching Bloodborne" toast stays up if the game does not report running sooner.
+SPLASH_MS = 8000
 
 
-def run_ui():
+def run_ui(route=None):
+    """ROUTE comes from bbport_startup.route(); without one the launcher opens on Home."""
     QQuickStyle.setStyle('Basic')
     app = QApplication(sys.argv)
     app.setApplicationName('Bloodborne')
     icon_path = (Path(sys.executable).resolve().parent / 'launcher' / 'assets' / 'hunter-icon.ico') if getattr(sys, 'frozen', False) else (Path(__file__).resolve().parent / 'assets' / 'hunter-icon.ico')
     app.setWindowIcon(QIcon(str(icon_path)))
-    backend = LauncherBackend()
+    backend = LauncherBackend(route)
     backend.connect_workers()
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty('launcher', backend)
-    path = Path(__file__).resolve().parent / 'qml' / 'Main.qml'
+    qml = Path(__file__).resolve().parent / 'qml'
     if getattr(sys, 'frozen', False):
         import bbport_launcher_win as core
-        path = core.PORT_DIR / 'launcher' / 'qml' / 'Main.qml'
-    engine.load(QUrl.fromLocalFile(str(path)))
-    if not engine.rootObjects():
-        raise RuntimeError(f'Could not load Qt Quick launcher: {path}')
-    backend.closeRequested.connect(engine.rootObjects()[0].close)
+        qml = core.PORT_DIR / 'launcher' / 'qml'
+
+    def load(name):
+        loaded = len(engine.rootObjects())
+        engine.load(QUrl.fromLocalFile(str(qml / name)))
+        if len(engine.rootObjects()) == loaded:
+            raise RuntimeError(f'Could not load Qt Quick launcher: {qml / name}')
+        return engine.rootObjects()[-1]
+
+    launcher_window = []
+
+    def open_launcher(page=None, step=0):
+        if launcher_window:
+            return
+        if page:
+            backend.open_at(page, step)
+        backend.start_background_checks()
+        window = load('Main.qml')
+        launcher_window.append(window)
+        backend.closeRequested.connect(window.close)
+        app.setQuitOnLastWindowClosed(True)
+
+    if not route or route['mode'] != 'direct':
+        open_launcher()
+        return app.exec()
+
+    # Direct launch: no launcher window, only a toast while the game starts. Shift/Ctrl or a
+    # click on the toast opens the launcher; so does a game that fails before it is running.
+    app.setQuitOnLastWindowClosed(False)
+    splash = load('Splash.qml')
+    keys = QTimer()
+    keys.setInterval(100)
+
+    def close_splash():
+        keys.stop()
+        splash.close()
+
+    def show_launcher(page='Home'):
+        close_splash()
+        open_launcher(page)
+
+    def check_keys():
+        if bbport_startup.launcher_keys_held():
+            show_launcher()
+
+    def finished(code, started):
+        close_splash()
+        if launcher_window:
+            return  # the launcher is open; the user decides when to quit
+        if started or code == 0:
+            app.quit()
+        else:
+            open_launcher('Log')
+
+    def start():
+        backend.play()
+        if not backend.running:  # refused or could not start; the notice says why
+            show_launcher()
+
+    keys.timeout.connect(check_keys)
+    splash.openLauncher.connect(show_launcher)
+    backend.gameStarted.connect(close_splash)
+    backend.gameFinished.connect(finished)
+    keys.start()
+    QTimer.singleShot(SPLASH_MS, close_splash)
+    QTimer.singleShot(0, start)
     return app.exec()
 
 if __name__ == "__main__":

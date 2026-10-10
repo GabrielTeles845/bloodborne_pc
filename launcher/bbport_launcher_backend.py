@@ -20,6 +20,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 import bbport_launcher_win as core
+import bbport_startup
 from bbport_pkg_setup import PackageSetupError, install_game
 from bbport_readiness import check_readiness, valid_trophy_key
 
@@ -82,18 +83,22 @@ FIELDS = {
         row('mods_dir', 'Mods folder', 'folder'),
         row('patches_dir', 'External patches folder', 'folder'),
     ],
+    # Launch behaviour (launchDirectly, close_on_play, shortcuts) lives on Home; the update
+    # toggle has its own row with "Check now" in Main.qml.
     'Advanced': [
         row('ui_language', 'Launcher language', 'choice', [('', ('System default',))] + core.UI_LANGUAGES),
-        row('close_on_play', 'Close launcher after Play', 'toggle'),
-        row('check_updates', 'Check for updates', 'toggle'),
         row('draw_pipe', 'Draw pipeline', 'choice', core.DRAW_PIPE),
         row('readbacks', 'GPU readbacks', 'choice', core.READBACKS),
+        row('extra_env', 'Extra environment variables'),
+    ],
+    'Diagnostics': [
         row('frame_stats', 'Frame statistics', 'toggle'),
         row('gpu_profile', 'GPU profiling', 'toggle'),
         row('vk_validation', 'Vulkan validation', 'toggle'),
-        row('extra_env', 'Extra environment variables'),
     ],
 }
+
+LAUNCHER_ROUTE = {'mode': 'launcher', 'page': 'Home', 'step': 0, 'problem': ''}
 
 
 class LauncherBackend(QObject):
@@ -109,14 +114,16 @@ class LauncherBackend(QObject):
     setupRunningChanged = Signal()
     setupCompleted = Signal(str)
     setupFailed = Signal(str)
+    gameStarted = Signal()
+    gameFinished = Signal(int, bool)  # exit code, whether the game got as far as running
 
-    def __init__(self):
+    def __init__(self, route=None):
         super().__init__()
-        saved = core.load_json(core.CONFIG_FILE, {})
-        self._wizard_needed = saved.get('setup_seen') is False or not core.CONFIG_FILE.exists()
-        self.app = {**core.APP_DEFAULTS, **saved}
-        if self._wizard_needed:
-            self.app['setup_seen'] = False
+        self.app = {**core.APP_DEFAULTS, **core.load_json(core.CONFIG_FILE, {})}
+        self._route = dict(route or LAUNCHER_ROUTE)
+        self._problem = self._route.get('problem', '')
+        self._game_started = False
+        self._checks_started = False
         self.ini, self.ini_lines = core.load_ini()
         self.process = None
         self.job = None
@@ -134,6 +141,15 @@ class LauncherBackend(QObject):
         self.setupCompleted.connect(self._complete_game_setup)
         self.setupFailed.connect(self._fail_game_setup)
         self.refresh_addons()
+        if self._route['mode'] != 'direct':
+            self.start_background_checks()
+
+    def start_background_checks(self):
+        """GPU detection and the update check, once the launcher window is shown; a direct
+        launch skips them so nothing competes with the game starting."""
+        if self._checks_started:
+            return
+        self._checks_started = True
         threading.Thread(target=self._detect_gpu, daemon=True).start()
         if self.app.get('check_updates'):
             self.checkForUpdates(False)
@@ -158,14 +174,66 @@ class LauncherBackend(QObject):
     def setupRunning(self):
         return self._setup_running
 
+    # --- First-run setup and start-up routing -------------------------------------------------
+
+    def open_at(self, page, step=0):
+        """Page (and wizard step) the launcher window opens on; set before loading Main.qml."""
+        self._route.update(page=page, step=step)
+
+    @Property(str, constant=True)
+    def startPage(self):
+        return self._route['page']
+
+    @Property(int, constant=True)
+    def wizardStartStep(self):
+        return self._route['step']
+
+    def _problem_active(self):
+        if self._problem == 'game':
+            return not bbport_startup.game_ok(self.app)
+        if self._problem == 'saves':
+            return not bbport_startup.writable(bbport_startup.saves_folder(self.app, core.DATA_DIR))
+        return False
+
+    @Property(str, notify=changed)
+    def startupProblem(self):
+        """Banner text while the start-up problem persists; empty once fixed or dismissed."""
+        return bbport_startup.PROBLEMS[self._problem][0] if self._problem_active() else ''
+
+    @Property(int, notify=changed)
+    def fixStep(self):
+        return bbport_startup.PROBLEMS.get(self._problem, ('', 1))[1]
+
     @Property(bool, notify=changed)
-    def setupWizardNeeded(self):
-        return self._wizard_needed
+    def launchDirectly(self):
+        return bool(self.app.get('launchDirectly'))
+
+    @Property(bool, notify=changed)
+    def closeOnPlay(self):
+        return bool(self.app.get('close_on_play'))
+
+    @Slot(str, str, result=bool)
+    def confirm(self, title, text):
+        answer = QMessageBox.question(None, title, text,
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                      QMessageBox.StandardButton.No)
+        return answer == QMessageBox.StandardButton.Yes
 
     @Slot()
-    def finishSetupWizard(self):
-        self._wizard_needed = False
-        self.app['setup_seen'] = True
+    def dismissProblem(self):
+        self._problem = ''
+        self.changed.emit()
+
+    @Slot()
+    def completeSetup(self):
+        self.app.update(setupCompleted=True, setupSkipped=False, setupVersion=bbport_startup.SETUP_VERSION)
+        self._write()
+
+    @Slot()
+    def skipSetup(self):
+        self.app.update(setupSkipped=True, setupVersion=bbport_startup.SETUP_VERSION)
+        if not bbport_startup.game_ok(self.app):
+            self._problem = 'game'
         self._write()
 
     @Property(str, notify=changed)
@@ -230,13 +298,22 @@ class LauncherBackend(QObject):
     def mods(self):
         return self._mods
 
+    @staticmethod
+    def _is_prompt_mod(name):
+        return 'xbox' in name.lower() and 'prompt' in name.lower()
+
+    @Property('QVariantList', notify=changed)
+    def contentMods(self):
+        """Mods for the Mods page; the button prompt mod is chosen on the Controller page."""
+        return [m for m in self._mods if not self._is_prompt_mod(m['name'])]
+
     @Property('QVariantList', notify=changed)
     def patches(self):
         return self._patches
 
     @Property(str, notify=changed)
     def promptChoice(self):
-        prompts = [m for m in self._mods if 'xbox' in m['name'].lower() and 'prompt' in m['name'].lower()]
+        prompts = [m for m in self._mods if self._is_prompt_mod(m['name'])]
         return 'Xbox' if any(m['enabled'] for m in prompts) else 'PlayStation'
 
     @Property(str, notify=changed)
@@ -430,6 +507,7 @@ class LauncherBackend(QObject):
         self._write()
         self._log = ''
         self.logChanged.emit()
+        self._game_started = False
         try:
             self.process = subprocess.Popen(core.run_command(), cwd=core.PORT_DIR,
                                             env=core.game_environment(self.app), stdin=subprocess.DEVNULL,
@@ -464,6 +542,9 @@ class LauncherBackend(QObject):
     def _receive_line(self, line):
         self._append_log(line)
         if 'Entering original x86-64 code' in line:
+            if not self._game_started:
+                self._game_started = True
+                self.gameStarted.emit()
             self._set_notice('The game is running.')
         elif 'restarting through run.py' in line:
             self._set_notice('Restarting with the new settings…')
@@ -476,7 +557,11 @@ class LauncherBackend(QObject):
             self.job.close()
             self.job = None
         self.runningChanged.emit()
-        self._set_notice('Ready to hunt.')
+        if self._game_started or code == 0:
+            self._set_notice('Ready to hunt.')
+        else:
+            self._set_notice(f'The game could not start (exit code {code}). See the log for details.')
+        self.gameFinished.emit(code, self._game_started)
 
     def connect_workers(self):
         self._outputLine.connect(self._receive_line)
@@ -556,7 +641,7 @@ class LauncherBackend(QObject):
 
     @Slot(str)
     def setPrompt(self, choice):
-        prompt_mods = [m['name'] for m in self._mods if 'xbox' in m['name'].lower() and 'prompt' in m['name'].lower()]
+        prompt_mods = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
         if choice == 'Xbox' and not prompt_mods:
             self._set_notice('Install the optional Xbox prompts mod in the Mods folder first.')
             return
@@ -612,11 +697,19 @@ class LauncherBackend(QObject):
     @Slot(str, str, str)
     def _offer_update(self, version, url, page):
         self._update = (version, url, page)
-        self._set_notice(f'Version {version} is available. Open Advanced to update.')
+        self._set_notice(f'Version {version} is available.')
 
     @Property(bool, notify=noticeChanged)
     def hasUpdate(self):
         return self._update is not None
+
+    @Property(str, notify=noticeChanged)
+    def updateVersion(self):
+        return self._update[0] if self._update else ''
+
+    @Slot()
+    def viewRelease(self):
+        webbrowser.open(self._update[2] if self._update else core.RELEASES_PAGE)
 
     @Slot()
     def installUpdate(self):
@@ -666,14 +759,20 @@ class LauncherBackend(QObject):
             icon = str(core.PORT_DIR / 'launcher' / 'bloodborne.ico')
         def ps_string(value):
             return "'" + str(value).replace("'", "''") + "'"
-        script = ('$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath("Desktop")'
-                  '+"\\Bloodborne.lnk");'
-                  f'$s.TargetPath={ps_string(target)};$s.WorkingDirectory={ps_string(core.PORT_DIR)};'
-                  f'$s.IconLocation={ps_string(icon)};'
-                  + (f'$s.Arguments={ps_string(chr(34) + arguments + chr(34))};' if arguments else '') + '$s.Save()')
+        quoted = chr(34) + arguments + chr(34) if arguments else ''
+
+        def shortcut(folder, name, extra):
+            options = ' '.join(part for part in (quoted, extra) if part)
+            return (f'$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath("{folder}")'
+                    f'+"\\{name}.lnk");'
+                    f'$s.TargetPath={ps_string(target)};$s.WorkingDirectory={ps_string(core.PORT_DIR)};'
+                    f'$s.IconLocation={ps_string(icon)};'
+                    + (f'$s.Arguments={ps_string(options)};' if options else '') + '$s.Save();')
+        # The Start Menu entry always opens the launcher, since a plain start may launch the game directly.
+        script = shortcut('Desktop', 'Bloodborne', '') + shortcut('Programs', 'Bloodborne (Launcher)', '--launcher')
         result = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True,
                                 creationflags=core.NO_WINDOW)
-        self._set_notice('Desktop shortcut created.' if result.returncode == 0 else
+        self._set_notice('Desktop and Start Menu shortcuts created.' if result.returncode == 0 else
                          result.stderr.decode(errors='replace')[:300])
 
     @Slot()

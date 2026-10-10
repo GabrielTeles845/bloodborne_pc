@@ -9,7 +9,8 @@ Launcher options live in %APPDATA%/bbport-launcher/settings.json.
 
 Frozen with PyInstaller (packaging/windows/package.sh) the same Bloodborne.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
-so a packaged port needs no Python installation.
+so a packaged port needs no Python installation. A plain start launches the game directly once
+setup is done; `--launcher` (or Shift/Ctrl held) opens the launcher and `--setup` the wizard.
 """
 import ctypes
 import json
@@ -176,7 +177,11 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': True, 'online': False, 'online_server': 'srv.shadps4.net:31313',
                 'online_webapi': '', 'online_npid': '', 'online_password': '', 'online_upnp': True,
-                'online_community': COMMUNITY_SERVER}
+                'online_community': COMMUNITY_SERVER,
+                # First-run setup (bbport_startup): setupVersion is the wizard version last
+                # finished or skipped; launchDirectly starts the game without the launcher.
+                'setupCompleted': False, 'setupSkipped': False, 'setupVersion': 1,
+                'launchDirectly': True}
 
 UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
              ('fsr4', ('FSR 4 (best quality)', 'FSR 4 (лучшее качество)')),
@@ -2003,7 +2008,16 @@ def main():
     args = sys.argv[1:]
     if args and args[0] in ('--run', '--script'):
         sys.exit(run_role(args))
-    settings = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+    import bbport_startup
+    keys_held = bbport_startup.launcher_keys_held()  # read first: the user may let go soon
+    saved = load_json(CONFIG_FILE, {})
+    settings = {**APP_DEFAULTS, **saved}
+    if bbport_startup.migrate(saved, settings):
+        try:
+            CONFIG_FILE.write_text(json.dumps(saved, indent=2, ensure_ascii=False), encoding='utf-8')
+        except OSError:
+            pass
+        settings = {**APP_DEFAULTS, **saved}
     LANG = settings.get('ui_language') or windows_language()
     if args[:1] == ['--install-update'] and len(args) == 3:
         sys.exit(install_update(args[1], args[2]))
@@ -2028,7 +2042,7 @@ def main():
                 pass
             print(f'Qt Quick unavailable; opening classic launcher: {error}', file=sys.stderr)
         else:
-            sys.exit(run_ui())
+            sys.exit(run_ui(bbport_startup.route(settings, args, DATA_DIR, keys_held)))
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     root = tk.Tk()
