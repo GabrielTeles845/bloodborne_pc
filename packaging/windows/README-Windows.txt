@@ -12,7 +12,10 @@ Requirements
   Nothing else: Python and the libraries are inside this folder.
 
 Starting
-- Bloodborne.exe opens the launcher. On "Game" choose the folder containing eboot.bin,
+- Bloodborne.exe opens the first-run setup wizard on a new install. Follow its Game and
+  Your data steps, or choose "Skip setup" to use the launcher directly. The wizard can
+  be reopened from Game -> "Setup wizard".
+- On "Game" choose the folder containing eboot.bin,
   adjust settings, then press PLAY. The Home page shows the game version, saves, graphics
   card and FSR 4 assets. The new Qt Quick panels let the background show through.
 - If you have cusa-03173.zip instead of an extracted game folder, use Game ->

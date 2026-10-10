@@ -62,23 +62,30 @@ wider testing; you can also place your own `keys.json` in `bbport-windows\user` 
 1. Right-click **bbport-windows.zip** in Downloads and choose
    **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
    such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
-2. Open `bbport-windows` and double-click **Bloodborne.exe**. Open **Game** in the left sidebar.
-3. If you have `cusa-03173.zip`, click **Install from ZIP / PKG**, choose that ZIP, then choose
+2. Open `bbport-windows` and double-click **Bloodborne.exe**. On a new install, the setup wizard
+   opens automatically. Click **Continue** to follow it, or **Skip setup** to use the normal
+   launcher. You can reopen the wizard later from **Game → Setup wizard**.
+3. In the wizard's **Game** step (or the launcher's **Game** page), if you have `cusa-03173.zip`,
+   click **Install from ZIP / PKG**, choose that ZIP, then choose
    an empty destination such as `C:\Games\Bloodborne`. The launcher extracts the base game and
    the *plain* 1.09 update and creates `CUSA03173` there. Keep it open until it says the game
    is installed. For a 30 GB archive, allow about 70 GB of free space during setup. The ZIP
    and your other game folders are not changed.
 4. If you already have an extracted game folder with `eboot.bin` directly inside it, skip the
-   install button. Beside **Game folder**, click **Browse** and choose that folder. Do not
+   install button. In the wizard click **Choose existing game folder**, or beside **Game folder**
+   click **Browse**, and choose that folder. Do not
    select `eboot.bin`, the ZIP, a `.pkg`, or the `bbport-windows` folder.
-5. Look at **Setup checks** on the Game page. **Game files** should turn green when the selected
+5. Look at the wizard's checks or **Setup checks** on the Game page. **Game files** should turn green when the selected
    folder has version 1.09. **Trophies** shows whether the trophy pack and your own key are
    present; trophy names are verified after the game reads them. **Saves** checks that the save
    folder is writable and whether a Bloodborne save already exists. Amber is normal for a new
    install with no saves yet. Click **Check again** after copying files or importing a key.
-6. Click **PLAY**. The first launch prepares files and may take a while. New areas may stutter
+6. Finish the wizard and click **Play now**, or click **PLAY** in the launcher. The first launch
+   prepares files and may take a while. New areas may stutter
    briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
    your saved settings without opening the launcher.
+
+![The first-run setup wizard](docs/images/first-run-wizard.jpg)
 
 ![The Game page shows Install from ZIP or PKG, setup checks, and the game folder selector](docs/images/setup-game-tab.jpg)
 

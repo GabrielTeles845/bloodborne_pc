@@ -112,7 +112,11 @@ class LauncherBackend(QObject):
 
     def __init__(self):
         super().__init__()
-        self.app = {**core.APP_DEFAULTS, **core.load_json(core.CONFIG_FILE, {})}
+        saved = core.load_json(core.CONFIG_FILE, {})
+        self._wizard_needed = saved.get('setup_seen') is False or not core.CONFIG_FILE.exists()
+        self.app = {**core.APP_DEFAULTS, **saved}
+        if self._wizard_needed:
+            self.app['setup_seen'] = False
         self.ini, self.ini_lines = core.load_ini()
         self.process = None
         self.job = None
@@ -153,6 +157,16 @@ class LauncherBackend(QObject):
     @Property(bool, notify=setupRunningChanged)
     def setupRunning(self):
         return self._setup_running
+
+    @Property(bool, notify=changed)
+    def setupWizardNeeded(self):
+        return self._wizard_needed
+
+    @Slot()
+    def finishSetupWizard(self):
+        self._wizard_needed = False
+        self.app['setup_seen'] = True
+        self._write()
 
     @Property(str, notify=changed)
     def gameStatus(self):

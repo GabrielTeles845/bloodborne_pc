@@ -24,7 +24,12 @@ ApplicationWindow {
         {name:"Advanced", icon:"advanced"}, {name:"Log", icon:"log"}
     ]
 
-    function go(next) { page = next; settingsView.contentY = 0 }
+    function go(next) {
+        if (page === "Setup" && next !== "Setup") launcher.finishSetupWizard()
+        page = next
+        settingsView.contentY = 0
+    }
+    Component.onCompleted: if (launcher.setupWizardNeeded) page = "Setup"
 
     // Full-window artwork remains behind every surface, including the sidebar and cards.
     Image {
@@ -191,7 +196,7 @@ ApplicationWindow {
 
             Rectangle {
                 id: settingsPanel
-                visible: page !== "Home"
+                visible: page !== "Home" && page !== "Setup"
                 x: 31; y: 58; width: parent.width - 62; height: parent.height - 132
                 radius: 14; color: "#cb0b1119"; border.color: "#52dce2e8"
                 Rectangle { x: 1; y: 1; width: parent.width - 2; height: 57; radius: 13; color: "#2bffffff" }
@@ -218,6 +223,11 @@ ApplicationWindow {
                                 text: launcher.setupRunning ? "Installing game files…" : "Install from ZIP / PKG"
                                 enabled: !launcher.setupRunning && !launcher.running
                                 onClicked: launcher.installFromArchive()
+                            }
+                            GlassButton {
+                                x: 256; y: 12; width: 135; height: 36
+                                text: "Setup wizard"
+                                onClicked: go("Setup")
                             }
                             Text {
                                 x: 12; y: 54; width: parent.width - 24
@@ -345,6 +355,12 @@ ApplicationWindow {
                 }
             }
 
+            SetupWizard {
+                visible: page === "Setup"
+                x: 31; y: 58; width: parent.width - 62; height: parent.height - 132
+                onExitRequested: { page = "Home"; settingsView.contentY = 0 }
+            }
+
             Rectangle {
                 id: footer
                 x: 0; y: parent.height - 69; width: parent.width; height: 69
@@ -352,7 +368,7 @@ ApplicationWindow {
                 Text { x: 30; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 320; elide: Text.ElideRight; text: launcher.notice; color: "#cbd2d8"; font.pixelSize: 12 }
                 Row { anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter; spacing: 10
                     GlassButton { text: "STOP"; enabled: launcher.running; onClicked: launcher.stop(); width: 106; height: 42 }
-                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running && !launcher.setupRunning; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
+                    GlassButton { text: launcher.running ? "RUNNING" : "▶  PLAY"; enabled: !launcher.running && !launcher.setupRunning && page !== "Setup"; highlighted: true; onClicked: launcher.play(); width: 196; height: 42 }
                 }
             }
         }
