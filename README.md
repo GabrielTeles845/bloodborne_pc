@@ -1,255 +1,200 @@
-# Bloodborne for Windows — Jgamrot fork
+# Bloodborne for Windows (Jgamrot fork)
 
-This fork is based on [Supermedo's Windows port](https://github.com/Supermedo/bloodborne_pc),
-created by Mohammed Albarghouthi. It runs your own decrypted Bloodborne game files natively
-on Windows 10 or 11. It builds on [deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc)
+Run your own decrypted copy of Bloodborne (CUSA03173, version 1.09) natively on Windows 10 or 11.
+The game's own code runs directly on your CPU and its graphics are translated to Vulkan. This
+fork is based on [Supermedo's Windows port](https://github.com/Supermedo/bloodborne_pc) by
+Mohammed Albarghouthi, which builds on [deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc)
 and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 
-## Launcher
+> **No game files are included.** You need your own dump of Bloodborne. This project is not
+> affiliated with Sony Interactive Entertainment or FromSoftware.
 
-The Windows launcher is built with Qt Quick. Its dark glass sidebar, cards and settings panels
-sit over the included Yharnam artwork. The sidebar opens graphics, display, game, controller,
-cheats, online, mods, advanced and log settings. Your settings still use the existing
-`settings.json`, `bbport.ini`, `mods.json` and `patches.json` files. The cards show the game
-version, save status, graphics card, output settings and selected button prompts.
-**Game Options** opens graphics settings. The classic launcher remains available with
-`Bloodborne.exe --classic-launcher` if you need it.
+![The launcher](docs/images/launcher-cinematic.jpg)
 
-![Qt Quick Bloodborne launcher with translucent panels](docs/images/launcher-cinematic.jpg)
+## Download
 
-## In-game guide and achievements
+From the [latest release](https://github.com/Jgamrot/bloodborne_pc/releases/latest), download
+**[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/latest/download/bbport-windows.zip)**
+and extract the whole archive. The two **Source code** downloads are for developers. Previews
+of upcoming features are marked *Pre-release* on the
+[releases page](https://github.com/Jgamrot/bloodborne_pc/releases).
 
-Press **Insert** on a keyboard or **L3+R3** on a controller while the game is running to open
-the guide. **Home** shows FPS and achievement progress; **Achievements** lists locally earned
-trophies and Gamerscore; **Settings** and **Mods** contain the existing graphics and cheat
-controls. Press the same shortcut to close it. These screenshots show the guide running
-over the game at 1440p:
+## Features
 
-The **Mods** tab can switch between the bundled Xbox prompt pack and the game's original
-PlayStation buttons. Choose a style, then select **Apply mods and restart**. The same button
-applies gameplay patch changes. Other loose-file mods and their load order remain in the
-launcher's **Mods & patches** page.
+**Launcher and setup**
+- A setup wizard on first start that installs the game from your own ZIP or PKG dump, checks
+  the game files, saves and trophy key, and can be reopened from **Game → Setup wizard**.
+- Every setting in one place: graphics, display, game, controller, cheats, online and mods.
+- `Play Bloodborne.exe` starts the game straight away with your saved settings.
+- Update notifications for full releases.
 
-![Xbox-guide-inspired menu running over Bloodborne](docs/images/guide-in-game.jpg)
+**Graphics**
+- NVIDIA DLSS (GeForce RTX 20 series and newer), AMD FSR 3.1 and FSR 4, native-resolution TAA.
+- Output from 720p to 4K, fullscreen switchable while playing, 30/60/90 FPS or unlocked with a cap.
+- The game's effects on or off: chromatic aberration, depth of field, motion blur, SSAO, the
+  game's AA, dynamic shadows, screen-space reflections, model detail.
 
-The Achievements tab shows your locally earned trophies, their icons and dates, and a 1000G
-score when your own trophy key is available:
+**In the game**
+- PC settings in the game's own System menu: PC Graphics, Display, Effects, Settings and
+  Gameplay, Achievements, and Restart to Apply. Quit Game on the title screen.
+- The **Insert** / **L3+R3** guide: FPS, achievements with icons and Gamerscore, all settings,
+  mods and cheats. Achievement toasts when a trophy unlocks.
 
-![Achievements tab running over Bloodborne](docs/images/achievements-in-game.jpg)
+**Controls**
+- Controller, and keyboard and mouse at the same time, with rebindable keys
+  (`key_<action>=` lines in `bbport.ini`).
+- Mouse camera: click the game window and the mouse turns the camera 1:1. Sensitivity and
+  invert Y are on the launcher's Controller page.
+- Button prompts: PlayStation, Xbox (included) or keyboard keys (see below), switchable in the
+  launcher and the guide.
 
-When a trophy unlocks, a green achievement toast appears at the bottom of the game. Unlocks
-are queued, so one toast finishes before the next appears:
+**Optional enhancements** (off by default; switch them on in the launcher's **Mods** page or
+the guide. They are made from your own game files at start, which stay unchanged.)
+- **Lamps: Level Up and Storage** (`pc_enhanced_lamps`): every lit lamp also offers the game's
+  own level-up and storage screens, once you have used the Doll and the storage box.
+- **Rebirth in the Nightmare** (`pc_rebirth`): reallocate your stats at the Altar of Despair.
+- **Hunter's Dream mirror** (`pc_mirror_appearance`): the workshop mirror opens the appearance
+  editor, the developers' unused "Put on Disguise".
+- **Two invaders** (`pc_two_invaders`) in Mensis, Mergo's Loft, the Nightmare Frontier and the
+  Old Hunters' areas. Every player in a session needs it on.
 
-![Achievement preview toast running over Bloodborne](docs/images/toast-in-game.jpg)
+**Also**
+- Online play (beta): messages, bloodstains and ghosts through
+  [The Hunter's Dream](https://thehuntersdream.com), and co-op through a shadNet server.
+- Death respawns skip the game's fixed 12-second wait.
+- Mods and third-party patches, loaded without changing your game files.
+- The Old Hunters on base-game dumps, with a DLC folder setting.
 
-To check the toast without earning a trophy, open **Achievements** and click **Preview
-achievement toast**. It is labelled *Achievement preview* and does not change your unlocks
-or save file. Real unlocks say *Achievement unlocked*.
+What changed in each release: [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
-## Which download do I click?
-
-On the [latest release](https://github.com/Jgamrot/bloodborne_pc/releases/latest),
-download **[bbport-windows.zip](https://github.com/Jgamrot/bloodborne_pc/releases/latest/download/bbport-windows.zip)**.
-It contains the launcher, game executable, Xbox button prompts and PKG extractor. Extract the whole archive.
-The two **Source code** downloads are for developers; they are not the game.
-None of these downloads includes Bloodborne's game files, saves or a trophy key.
-
-The packaged launcher reached the title screen on Windows. Trophy-key import still needs
-wider testing; you can also place your own `keys.json` in `bbport-windows\user` manually.
+![The in-game guide](docs/images/guide-in-game.jpg)
 
 ## First-time setup
 
-1. Right-click **bbport-windows.zip** in Downloads and choose
-   **Extract All**. Put the resulting `bbport-windows` folder somewhere you want to keep it,
-   such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game from inside the zip.
-2. Open `bbport-windows` and double-click **Bloodborne.exe**. On a new install, the setup wizard
-   opens automatically. Click **Continue** to follow it, or **Skip setup** to use the normal
-   launcher. You can reopen the wizard later from **Game → Setup wizard**.
-3. In the wizard's **Game** step (or the launcher's **Game** page), if you have `cusa-03173.zip`,
-   click **Install from ZIP / PKG**, choose that ZIP, then choose
-   a destination such as `C:\Games\Bloodborne`. The launcher extracts the base game and
-   the *plain* 1.09 update and creates `CUSA03173` there. It will not replace an
-   existing `CUSA03173` folder. Keep it open until it says the game
-   is installed. For a 30 GB archive, allow about 70 GB of free space during setup. The ZIP
-   and your other game folders are not changed.
-4. If you already have an extracted game folder with `eboot.bin` directly inside it, skip the
-   install button. In the wizard click **Choose existing game folder**, or beside **Game folder**
-   click **Browse**, and choose that folder. Do not
-   select `eboot.bin`, the ZIP, a `.pkg`, or the `bbport-windows` folder.
-5. On **Your data**, optionally import your own `keys.json` or choose an existing saves folder.
-   Look at the wizard's checks or **Setup checks** on the Game page. **Game files** should turn
-   green when the selected folder has version 1.09. **Trophies** checks the pack and key format;
-   trophy-name decryption is confirmed only after the game reads the pack. **Saves** checks that
-   the folder is writable and whether a Bloodborne save exists. Amber is normal for a new
-   install with no saves yet. Click **Check again** after changing files.
-6. Finish the wizard and click **Play now**, or click **PLAY** in the launcher. The first launch
-   prepares files and may take a while. New areas may stutter
-   briefly while shaders are built. After setup, `Play Bloodborne.exe` starts the game using
-   your saved settings without opening the launcher.
+1. Right-click **bbport-windows.zip** and choose **Extract All**. Put the `bbport-windows`
+   folder somewhere permanent, such as `C:\Games\Bloodborne\bbport-windows`. Do not run the game
+   from inside the zip.
+2. Double-click **Bloodborne.exe**. The setup wizard opens on a new install; **Skip setup** goes
+   straight to the launcher.
+3. In the wizard's **Game** step, either:
+   - click **Install from ZIP / PKG** and choose your dump (for example `cusa-03173.zip`) and a
+     destination such as `C:\Games\Bloodborne`. The base game and the plain 1.09 update are
+     extracted into `CUSA03173`; allow about 70 GB free for a 30 GB archive. Or
+   - click **Choose existing game folder** and pick the folder with `eboot.bin` directly inside.
+4. On **Your data**, optionally import your own `keys.json` (for achievement names) or choose an
+   existing saves folder. The checks turn green when the game folder has version 1.09; amber is
+   normal for a new install without saves.
+5. Click **Play now**. The first launch prepares files and may take a while, and new areas may
+   stutter briefly while shaders are built.
 
-![The first-run setup wizard](docs/images/first-run-wizard.jpg)
-
-![The Game page shows Install from ZIP or PKG, setup checks, and the game folder selector](docs/images/setup-game-tab.jpg)
-
-For example, this folder layout works:
+![The setup wizard](docs/images/first-run-wizard.jpg)
 
 ```text
 C:\Games\Bloodborne\
 ├── bbport-windows\
 │   ├── Bloodborne.exe
 │   └── bin\bb-probe.exe
-└── CUSA03173\                 ← choose this as Game folder
+└── CUSA03173\                 ← the Game folder
     ├── eboot.bin
     ├── dvdroot_ps4\
     ├── sce_module\
     └── sce_sys\
 ```
 
-The finished folder should contain `eboot.bin`, `dvdroot_ps4`, `sce_module`, and `sce_sys`.
 If the launcher says **No eboot.bin**, you chose the wrong folder. If it reports version 1.00,
-the 1.09 update did not apply. The installer uses the independently licensed
-[ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus/releases/tag/PKG_EXTRACTOR_1_1)
-bundled in this release; the game's own files are never uploaded to this repository.
+the 1.09 update did not apply.
 
 **DLC.** The Game of the Year edition (CUSA03173) already includes The Old Hunters. With a
-base-game dump, also dump your add-ons. Each is a folder named like `SPEXPANSIONDLC03` with
-only `sce_sys` inside, because their data ships with the 1.09 update. Put them in one folder and
-choose it as **DLC folder** on the **Game** page, or copy them to `user\addcont\<title id>\`
-(the layout shadPS4 uses). From [upstream PR #26](https://github.com/Supermedo/bloodborne_pc/pull/26)
-by ayozetr.
+base-game dump, dump your add-ons too: each is a folder named like `SPEXPANSIONDLC03` with only
+`sce_sys` inside. Put them in one folder and choose it as **DLC folder** on the **Game** page.
 
-## Already have another launcher or a working game installation?
+**Achievements.** Names, descriptions and Gamerscore need the trophy key from your own PS4 in
+`user\keys.json` (shadPS4's format, `{"TrophyKeySet":{"ReleaseTrophyKey":"..."}}`). Without it,
+achievements show their numbers and icons. Nothing syncs to PlayStation Network.
 
-You can use the game files you already extracted. **Do not download or extract them again.**
-The easiest way to switch is to keep your old launcher folder intact and install this
-fork's full package in a **new** folder:
+## Keyboard button prompts
 
-1. Close the game and your old launcher. Find the existing game folder that has `eboot.bin`
-   directly inside it. Leave that folder where it is.
-2. Back up your old launcher folder, especially its `user` folder (saves, trophies, and any
-   `keys.json`), `bbport.ini`, and `mods` folder if present.
-3. Download the **full Windows package** above, extract it to a new permanent folder, and
-   run its `Bloodborne.exe`. Do not copy only `Bloodborne.exe` into an older port: it needs
-   the matching `bin`, scripts, patches, and support files from this package.
-4. In **Game**, set **Game folder** to your *existing* folder containing
-   `eboot.bin`. Set **Saves folder** to your existing `user` folder if you want to keep those
-   saves, or use the new default `user` folder and copy your backed-up save files into it
-   while the launcher and game are closed. Keep a backup until the saves load successfully.
-5. If you used mods, copy only the mods you still want into the new `mods` folder and
-   enable them under **Mods & patches**. Click **PLAY** and confirm your character loads.
+Choose **Keyboard** on the launcher's **Controller** page. The first time, it asks for your
+download of [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) from Nexus Mods (the
+`.7z` as downloaded; it is not included here) and imports its key images. It also sets your
+keys to the ones the images show: E interact, Left Shift dodge, R blood vial, Q item,
+F transform, left / right / middle mouse for attack / firearm / lock-on, Left Ctrl + left mouse
+for strong attack, Space for L3, G and H for gestures and personal effects. Switch back to
+PlayStation or Xbox in the launcher or the guide's **Mods** tab at any time.
 
-This works for Supermedo's launcher and other bbport-derived launchers that use the same
-extracted game folder. A separate shadPS4 installation can use the same game files, but its
-save layout may differ; keep the old saves backed up and check the new launcher's **Saves
-folder** before copying anything. The package includes Xbox button prompts, on by default;
-switch between Xbox and original PlayStation buttons on the launcher's **Controller** page.
+## Already have another launcher or game installation?
 
-## What's changed
+Keep your extracted game folder where it is; there is no need to extract it again.
 
-- **Keyboard button prompts (1.6.12 preview):** choose **Keyboard** on the launcher's Controller
-  page, or Keyboard keys in the Insert/L3+R3 overlay's Mods tab, beside PlayStation and Xbox.
-  The first time, the launcher asks for your download of
-  [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) (not included in this package)
-  and imports its key images; it also binds the keys those images show (E interact, Left Shift
-  dodge, R vial, Q item, F transform, mouse buttons for attack, firearm and lock-on). If you
-  rebind keys, menu and tutorial text names your keys instead. Text naming after
-  [bbhost](https://github.com/droogie/bbhost)'s key prompts; started by Codex.
-- **Lamps: Level Up and Storage (1.6.12 preview, `pc_enhanced_lamps`, `BB_PC_LAMPS=1`):**
-  every lit lamp, including the Old Hunters' and the chalice dungeons', also offers the game's
-  own Level Up and Storage screens, once you have used the Doll and the storage box. Off by
-  default; switch it on in the launcher's **Mods** page. Made from your own game files; an
-  independent implementation of the idea in Bloodborne Enhanced, whose files are not used.
-- **In-game PC menus (1.6.11):** the game's System menu offers native Achievements,
-  PC Graphics, Display, Effects, Settings and Gameplay, plus Restart to Apply.
-  Achievements replaces the PC Enhancements section to keep the movie at its tested
-  six-section limit. Cheats and the three PC enhancements remain in the launcher and
-  Insert/L3+R3 overlay. The menu engine is ported from
-  [bbhost](https://github.com/droogie/bbhost).
-- **Rebirth (1.6.9, `pc_rebirth`, `BB_PC_REBIRTH=1`):** the Altar of Despair in the Nightmare lets you
-  reallocate your stats. It is off by default and has not been tested in play yet.
-- **Keyboard and mouse (1.6.10):** play alongside the gamepad with rebindable keys
-  (key_<action>= lines in bbport.ini), mouse-wheel actions and mouse camera control.
-  Mouse settings are on the launcher's Controller page and in bbport.ini.
-- Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
-  off by default (the game as it shipped). Switch them on in the launcher's **Mods** page
-  or the Insert/L3+R3 overlay; they apply after a restart and are made from your own game
-  files, which stay unchanged.
-  - **Hunter's Dream mirror** (`pc_mirror_appearance`, `BB_PC_MIRROR=1`): the workshop's mirror
-    opens the appearance editor, the developers' unused "Put on Disguise".
-  - **Two invaders** (`pc_two_invaders`, `BB_PC_TWO_INVADERS=1`): Mensis, Mergo's Loft, the
-    Nightmare Frontier and the Old Hunters' areas allow two invaders, as the chalice dungeons
-    do. Every player in a session needs it on.
-- The in-game settings menu (Insert or L3+R3) is in English, using the translation proposed
-  in [upstream PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
-- Menu checkboxes and sliders save the value you selected, from
-  [upstream PR #19](https://github.com/Supermedo/bloodborne_pc/pull/19).
-- The character preview may be blank or show white ghosting on the first visit to character
-  creation. Going back and choosing New Game again can make it appear. Waiting on the first
-  screen and changing the upscaler or resolution have not cleared it. The cause remains
-  unisolated; a v1.6.1 executable showed the preview in one earlier test.
-- Display buffers are released before the game receives a flip-complete event, preventing a late
-  label reset from overwriting the next frame's label and triggering "Out of order flip IRQ".
-- The full package has a launcher that checks this fork for updates.
-- The Windows package includes the Xbox button prompts (every build now packages them from
-  `packaging/windows/mods`). Its updater adds them to an existing installation if that mod
-  folder is missing, while leaving existing mods and settings alone.
-- Death respawns no longer wait for the game's fixed 12-second minimum. Asset and character
-  readiness checks still apply. This is on by default for supported CUSA03173 1.09 images;
-  set `BB_RESPAWN_DELAY_FIX=0` in the launcher's Advanced environment overrides to restore
-  the original delay. The fix is adapted from
-  [AwesomeObserver's Windows work](https://github.com/AwesomeObserver/bloodborne_pc/blob/windows/docs/respawn-loading-windows.md).
-- Shader preload now reuses already loaded shader modules before reading their binaries again,
-  and creates the Vulkan pipeline cache before warmup. This removes redundant startup work;
-  gameplay FPS gains have not been measured. See [technical notes](docs/respawn-performance-windows.md).
-- Motion vectors now keep images for several render sizes instead of draining the GPU whenever
-  a scene switches sizes. This addresses the [water-area slowdown reported upstream](https://github.com/deadinside28/bloodborne_pc/issues/30).
-  The fix is adapted from [deadinside28's port](https://github.com/deadinside28/bloodborne_pc);
-  we have not measured its FPS effect on this Windows build.
-- v1.6.6 shows a compact, dark Xbox-guide-inspired Insert/L3+R3 menu
-  with Home, Achievements, Settings, and Mods/Cheats tabs. Trophy unlocks show a queued
-  green achievement toast. The port
-  extracts the trophy icons from your own game files and keeps local unlock dates in
-  `user\trophies.txt`. For names, descriptions, grades, secret achievements, and a 1000G
-  score, put **your own** PS4 trophy key in `user\keys.json` using shadPS4's format:
+1. Close the game and the old launcher, and back up the old launcher's `user` folder (saves,
+   trophies, `keys.json`), its `bbport.ini` and its `mods` folder.
+2. Extract this package to a **new** folder and run its `Bloodborne.exe`. Do not copy only
+   `Bloodborne.exe` into an older port.
+3. On **Game**, set **Game folder** to your existing folder with `eboot.bin`, and **Saves folder**
+   to your existing `user` folder (or copy your saves into the new one while everything is
+   closed). Keep the backup until your character loads.
+4. Copy over the mods you still want and enable them under **Mods**.
 
-  ```json
-  {"TrophyKeySet":{"ReleaseTrophyKey":"YOUR_32_HEX_CHARACTERS"}}
-  ```
+## Settings for advanced users
 
-  The key is not included with this port. [shadPS4's setup guide](https://github.com/shadps4-emu/shadPS4/wiki/I.-Quick-start-%5BUsers%5D)
-  explains how to dump it from your own console. Without a key, achievements safely show
-  their trophy IDs and icons with unknown scores. Extracted data stays in `user\trophy_cache`;
-  the key is never copied there. Existing local trophy history is still readable. Old save
-  progress cannot be reconstructed, and nothing syncs to PlayStation Network. The guide,
-  Achievements tab, and preview toast were checked in a live game session at 1440p.
+Game settings are stored in `bbport.ini` and launcher settings in
+`%APPDATA%\bbport-launcher\settings.json`. Environment overrides on the launcher's **Advanced**
+page take precedence:
 
-## Requirements and notes
+| Setting | `bbport.ini` | Override |
+|---|---|---|
+| Lamps: Level Up and Storage | `pc_enhanced_lamps=1` | `BB_PC_LAMPS=1` |
+| Rebirth | `pc_rebirth=1` | `BB_PC_REBIRTH=1` |
+| Hunter's Dream mirror | `pc_mirror_appearance=1` | `BB_PC_MIRROR=1` |
+| Two invaders | `pc_two_invaders=1` | `BB_PC_TWO_INVADERS=1` |
+| Mouse camera | `mouse_camera=0` turns it off | `BB_MOUSE_CAMERA=0` |
+| 12-second respawn wait | | `BB_RESPAWN_DELAY_FIX=0` restores it |
+| All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 
-- Windows 10 (1903 or later) or Windows 11, 64-bit, and a Vulkan 1.3 graphics card.
-- About 6 GB of available memory (RAM plus page file), or 10 GB for 1440p or 4K.
-- DLSS requires an NVIDIA GeForce RTX 20 series or newer. FSR is available on other GPUs.
-- Keep the frame cap at 120 FPS or lower; higher caps can slow game movement.
-- The first visit to an area may stutter while shaders compile. If you get a black screen,
-  try **Advanced → Clear shader cache** in the launcher.
+## Known issues
 
-## Help and source
+- Character creation can show a blank or ghosted preview on the first visit; backing out and
+  choosing New Game again restores it. A fix is on the [roadmap](docs/ROADMAP.md).
+- Rebirth and two invaders have not been tested in play yet.
+- Keep the frame cap at 120 FPS or lower; higher caps can slow movement.
+- New areas stutter briefly the first time while shaders compile. On a black screen, try
+  **Advanced → Clear shader cache**.
 
-Open an [issue on this fork](https://github.com/Jgamrot/bloodborne_pc/issues) with your GPU,
-what happened, and `user\last_run.log` from the `bbport-windows` folder. Build instructions are in
-[packaging/windows/README.md](packaging/windows/README.md).
+## Requirements
 
-The port is free software under the repository's [LICENSE](LICENSE). The release includes
-third-party license notices in its `licenses` folder. Credit for the original Windows port
-goes to [Supermedo](https://github.com/Supermedo/bloodborne_pc); credit for the English menu
-translation goes to the author of [PR #13](https://github.com/Supermedo/bloodborne_pc/pull/13).
-The Xbox prompts are by **Dommo**, from
-[Xbox (and switch) UI for Bloodborne](https://www.nexusmods.com/bloodborne/mods/30),
-redistributed under the upload permission on the mod page.
-The bundled PKG extraction helper is [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus),
-by AzaharPlus under GPL-2.0; its license is included in the `licenses` folder.
-[Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19) is an optional manual
-download. Its author does not permit redistribution, so it is not in this package. Put it in
-the launcher’s `mods` folder to enable it; its own features are configured in game through
-the Doll or Prime Hunter's Mark. It changes gameplay and is optional for a 60 FPS setup.
-Bloodborne itself belongs to Sony Interactive Entertainment and FromSoftware; this project
-is not affiliated with them.
+- Windows 10 (1903 or later) or Windows 11, 64-bit, and a graphics card with Vulkan 1.3.
+- About 6 GB of available memory (RAM plus page file), 10 GB for 1440p or 4K output.
+- DLSS needs an NVIDIA GeForce RTX 20 series or newer; FSR works on other cards.
+
+## Roadmap, help and source
+
+- What is planned next: [docs/ROADMAP.md](docs/ROADMAP.md).
+- Problems: open an [issue](https://github.com/Jgamrot/bloodborne_pc/issues) with your graphics
+  card, what happened, and `user\last_run.log` from the `bbport-windows` folder.
+- Building: [packaging/windows/README.md](packaging/windows/README.md).
+
+## Credits
+
+- [Supermedo](https://github.com/Supermedo/bloodborne_pc) (Mohammed Albarghouthi) for the Windows
+  port, [deadinside28](https://github.com/deadinside28/bloodborne_pc) for bbport, and the
+  [shadPS4 team](https://github.com/shadps4-emu/shadPS4) for the renderer and shader recompiler.
+- [droogie's bbhost](https://github.com/droogie/bbhost) for the in-engine PC menus, Rebirth,
+  the mirror, two invaders and keyboard prompt text.
+- Fixes and features from Supermedo pull requests, kept with their authors' commits: ayozetr
+  (DLC), DarkSpartan, gtggdd4mzb-source and yumlevi, andrecabralgit, noatdk, FIocker (including
+  the English menu), jpramosjp and gStone.
+- The mouse camera by imedved (Nexus Mods), ported by mcrib884 and Jhony-Jhansen.
+- Xbox prompts by **Dommo**, from [Xbox (and switch) UI for Bloodborne](https://www.nexusmods.com/bloodborne/mods/30),
+  redistributed under the upload permission on the mod page.
+- Keyboard prompt images: [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) on Nexus
+  Mods; not redistributed, imported from your own download.
+- The respawn fix after [AwesomeObserver's Windows work](https://github.com/AwesomeObserver/bloodborne_pc/blob/windows/docs/respawn-loading-windows.md).
+- [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus) by AzaharPlus
+  (GPL-2.0), included for installing your dump.
+- [Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19) inspired the lamp and
+  rematch features, which are implemented independently; its files are not used or included.
+  It can still be installed manually as a mod.
+
+The port is free software under the repository's [LICENSE](LICENSE); third-party notices are in
+the release's `licenses` folder. Bloodborne belongs to Sony Interactive Entertainment and
+FromSoftware.

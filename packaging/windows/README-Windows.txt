@@ -41,10 +41,14 @@ Starting
   Chinese, Japanese and Korean translations. Run Bloodborne.exe --classic-launcher to use it.
 - In the game, Insert (or L3+R3 on a gamepad) opens the guide menu: Home, Achievements,
   Settings, and Mods/Cheats. Use LB/RB to switch sections, A to select, and B to go back.
-  In Mods, choose Xbox or original PlayStation button prompts, then select
+  In Mods, choose PlayStation, Xbox or Keyboard key prompts, then select
   "Apply mods and restart". This also applies gameplay patch changes.
-  Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
-  Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
+- Keyboard and mouse work alongside a controller. Default keys: WASD move, I/J/K/L camera
+  (or click the window for the mouse camera), Space dodge, E interact, R blood vial, F item,
+  C transform, left mouse attack, Shift + left mouse or V strong attack, right mouse firearm,
+  Q lock on, arrow keys d-pad, G gestures, T personal effects, Escape menu. Rebind with
+  key_<action>= lines in bbport.ini. Choosing Keyboard prompts in the launcher (it imports your
+  own PCBButtons download from Nexus Mods) switches to the keys its images show instead.
 - The game's System menu has a native Achievements section. Earned trophies also show an
   achievement popup and appear in the guide's Achievements section.
   In Achievements, "Preview achievement toast" tests the popup without unlocking anything.

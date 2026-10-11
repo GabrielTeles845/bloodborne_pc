@@ -1,206 +1,106 @@
-# Нативный порт Bloodborne: что сделано и что дальше
+# Roadmap
 
-Основной текст — состояние на 2026-09-26; ниже первым разделом — что изменилось к 30.09.
-Самый подробный срез: [CURRENT_STATUS_2026-09-29.md](history/CURRENT_STATUS_2026-09-29.md).
-Отчёт о работе 30.09–01.10 (конвейер GPU, апскейлер, падение, лаунчер, AppImage):
-[SESSION_2026-09-30.md](history/SESSION_2026-09-30.md).
-Подробности по отдельным темам:
-[parallel_gpu.md](parallel_gpu.md) (многопоточность GPU, подтормаживания при подгрузке),
-[upscaler.md](upscaler.md) (анализ кадра игры, константы сцены).
+What this fork is working on, in order. **Now** is being built, **Next** is agreed and
+investigated, **Later** is wanted but not started. Requirements are kept as they were asked
+for: investigate before building, and never offer a toggle for something that does not work.
 
-## Обновление 30.09
+Sources checked for ideas (last on 11 October 2026): shadPS4 (our renderer matches its
+`d1cb90db`, 1 October), [Supermedo's pull requests](https://github.com/Supermedo/bloodborne_pc/pulls),
+[deadinside28's bbport](https://github.com/deadinside28/bloodborne_pc) 0.5,
+[droogie's bbhost](https://github.com/droogie/bbhost) and
+[Mrsuss60's Windows port](https://github.com/Mrsuss60/bloodborne_pc_windows_port).
 
-- Сделано после 26.09: FSR 4 INT8 (v07), векторы движения объектов, смена пресета без
-  перезапуска (уменьшенные цели сцены; глубина D32S8 копируется шейдером), LTO и PGO,
-  масштабирование подготовки draw под число потоков (Steam Deck тоже).
-- Проблемы из раздела «Известные проблемы» ниже: пункт 3 (перезапуск при смене пресета)
-  решён; пункт 1 (векторы объектов) реализован, у FSR 4 остаётся гостинг на персонаже при
-  Ultra Performance; пункт 2 (мыльный интерфейс) — UI рисуется в 1920×1080.
-- Ограничение: уменьшенный рендер сцены (`SceneTargets::Eligible`) требует цель 1920×1080,
-  то есть работает только при выводе 1080p.
-- Распараллеливание потока GPU-команд (шаг 2 [parallel_gpu.md](parallel_gpu.md)): текстуры на
-  отдельном потоке параллельно с буферами работают корректно, но прироста не дают —
-  данные каждого draw переезжают между ядрами. Узкое место — поток GPU-команд: 91% на CPU,
-  ~9% ожидания мелких копий гостевой памяти перед fence. Дальше — двухстадийный конвейер
-  (второй поток владеет текстурным кешем и записью draw, копия регистров из дельт сканера)
-  или мемоизация привязок текстур между кадрами; см. «What would scale» в parallel_gpu.md.
-- **Двухстадийный конвейер draw** (`vk_draw_pipe.h`): поток GPU-команд декодирует PM4 и
-  выбирает пайплайн, второй поток (`bb:DrawRec`) со своей копией регистров привязывает ресурсы
-  и записывает draw. +19% FPS на 16 потоках, +18% на 8 (как Steam Deck). Включён по умолчанию
-  при 8+ потоках (`BB_DRAW_PIPE=0/1`). Узкое место теперь — вторая стадия; подробности и план —
-  в parallel_gpu.md.
-- Пресеты и нагрузка GPU: сцена на RX 7800 XT стоит мало, поэтому пресет меняет время GPU
-  лишь на ~0.5 мс, а сам FSR 4 при выводе 1080p — ~1.4 мс (FSR 4 Ultra Performance дороже
-  нативного рендера без апскейлера). Исправлено: проходы освещения оставались в 1920×1080 при
-  любом пресете (проверка смотрела на чужие слоты целей); уменьшенные цели теперь сэмплируются
-  напрямую, без ресэмплинга в натив (кэш шейдеров пересобирается один раз). Следующее для
-  Steam Deck — гостевая копия памяти целей рендеринга `3d5ebf4e` (см. parallel_gpu.md).
-- **Исправлено падение с конвейером** (порча гостевой кучи, guest offset `0x263b8e7`, через
-  13–17 минут): прерывание «GPU простаивает» уходило раньше меток EOP, отложенных в поток записи
-  Vulkan, и игра освобождала объекты с этими метками. Теперь перед ним конвейер и отложенные
-  метки дожидаются; 2 прогона по 30 минут без падений (до исправления — 7 из 7 падений).
-- **Разрешение вывода 1440p/2160p** (меню «Разрешение вывода», bbport.ini `output_res`, после
-  перезапуска): сцена рисуется в разрешении пресета от выхода, апскейлер (FSR 3 или FSR 4)
-  дорисовывает кадр, интерфейс растеризуется в выходном разрешении. Эффекты игры (аберрация,
-  DoF, размытие, SSAO, сглаживание игры, динамические тени, SSR, заставки, LOD) — там же.
-- **Лаунчер** (`launcher/bb-launcher.sh`, GTK4/libadwaita) и **AppImage** для Steam Deck
-  (`bash packaging/appimage.sh` → `dist/`; данные в `~/.local/share/bbport`, `--play` —
-  запуск без окна лаунчера).
-- Инструменты: `BB_PAD_FILE` (скриптовый ввод геймпада), `ab.sh` (A/B битов
-  `BB_TOGGLE_FILE` в запущенной игре), в `Frame stats` — простой и блокировки потока GPU.
+## Now
 
-## Как устроен порт
+### Crash and memory fixes from Supermedo's pull requests
 
-- Оригинальный eboot (CUSA03173 v01.09) исполняется напрямую на x86-64. Системные библиотеки
-  PS4 заменены своим HLE-рантаймом на C (`runtime_*.c`, `probe.c`).
-- Графика: видеоядро и рекомпилятор шейдеров shadPS4 (GPL), собранные в `libbbgpu.so`
-  (`gpu/`), с собственными доработками. Эмулятор shadPS4 целиком не используется.
-- Патчи игры (FPS, разрешение и др.) — XML сообщества (`patches/Bloodborne.xml`),
-  компилируются `patches.py` и накладываются загрузчиком при старте.
-
-## Сделано
-
-### Производительность и плавность
-
-| Что | Результат |
+| Fix | Source |
 |---|---|
-| Запись команд Vulkan в отдельном потоке, кеши текстур/буферов, rwlock вместо мьютекса | 26 → 64 FPS в одной сцене |
-| Подготовка draw-вызовов на 4 потоках (`bb:DrawPrep`), проверка на потоке GPU | +11.5% |
-| Окно снятия защиты 256 КиБ при записи игры в память (меньше page fault) | +22% |
-| Кеш описаний текстур, быстрый путь для тех же render target | до ~94 FPS на улице |
-| Копирования гостевой памяти на пуле потоков, пул staging-буферов | фризы при подгрузке 60–170 мс → 40–50 мс |
-| Ожидание копий перед видимыми игре fence | убрано мерцание интерфейса |
-| Режим «Readbacks Relaxed» | нет «взрывов вершин» (FaceGen) |
-| Vblank 480 Гц + лимит кадров до min(монитор, 120), вывод сразу по флипу | ровная подача кадров; бег не замедляется выше 120 FPS |
+| Black character preview in character creation (stale data over GPU-written images) | [#36](https://github.com/Supermedo/bloodborne_pc/pull/36) |
+| Crash while an area loads (shader walkers from the pipeline cache) | [#29](https://github.com/Supermedo/bloodborne_pc/pull/29) |
+| Video memory grows with every area (images that cannot be freed block the collector) | [#32](https://github.com/Supermedo/bloodborne_pc/pull/32) |
 
-Всё переключается во время игры через `BB_TOGGLE_FILE` (битовая маска) для A/B-сравнений.
-Статистика: `BB_FRAME_STATS=1`.
+### Boss Rematches (Bloodborne Enhanced features, independently implemented)
 
-### Звук, ввод
+Reference: [Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19). Its files may not
+be redistributed or modified, so everything is made from the player's own game files. Notes:
+[ENHANCED_LAMPS_RESEARCH.md](ENHANCED_LAMPS_RESEARCH.md).
 
-- Вывод звука с правильным темпом (раньше щелчки каждые 10.7 мс).
-- Геймпад через SDL3, запасная раскладка клавиатуры.
+- Rematch bosses already defeated on the current character, without NG+, from their boss lamps.
+- Also through the Broken Lamp in the Hunter's Dream, in the raised garden near the tree, back
+  and to the right of the spawn point.
+- Chalice dungeon bosses only from their own lamps.
+- A rematch consumes one Insight when the player has any, and is still allowed with none.
+- Original progression and completed-boss flags are preserved, including after a death or quit.
+- Distorted Memories: Father Gascoigne, Ludwig and Orphan of Kos with both phases at once;
+  Gehrman and the Moon Presence together (Broken Lamp only); Mergo's Wet Nurse with its clone
+  phase always on. Match the original encounter behaviour.
 
-### Анализ кадра
+## Next
 
-- `BB_CAPTURE_TRIGGER=<файл>` записывает один кадр: проходы, цели, шейдеры, текстуры,
-  константы, режимы смешивания.
-- Разобрано устройство кадра Bloodborne (G-buffer, свет, цвет сцены RGBA16F, туман,
-  пост-обработка, тонмаппинг, сглаживание игры, интерфейс) и 864-байтные константы сцены
-  (матрицы вида и проекции).
+### Stability and correctness
 
-### Временной апскейлер (FSR 3.1)
+- **More Supermedo fixes:** the frame cap letting single frames through too fast
+  ([#28](https://github.com/Supermedo/bloodborne_pc/pull/28)); sprinting stuck at half speed
+  above 90-120 FPS ([#33](https://github.com/Supermedo/bloodborne_pc/pull/33), same fix as #31).
+- **Map-load crash on an unbound descriptor table:** parsifal295's guard in Mrsuss60's port.
+- **Dark spots on Intel CPUs (Old Hunters areas):** the game's own code runs natively and Intel
+  answers RCPPS / RSQRTPS slightly differently from the PS4's AMD chip; port shadPS4 `235dcabf`.
+- **Catch up with shadPS4:** port, in order, the renderer and shader commits since `d1cb90db`:
+  shader correctness (`945dbc3c`, `c4952908`, `1c2b8f97`), texture layout (`7e778987`,
+  `e7929178`, `c679ce60`, `69b6041d`, `14ada48a`, `995e37e4`), draw edge cases (`643c7997`,
+  `7721a1ef`, `00276961`, `c5dd8b8b`, `3a9f5726`, `8bafaa5a`) and speed-ups (`8e23388a`,
+  `99e33b7e`, `145932bf`, `dade3afd`, `0f6d1b87`). Test in the Research Hall and shadowed areas.
 
-- **Векторы движения камеры**: из глубины сцены и матриц текущего и прошлого кадра
-  (`vk_camera_motion.cpp`, `camera_motion.comp`). Проверены перепроецированием прошлого
-  кадра: статичная геометрия совпадает.
-- **Jitter**: субпиксельный сдвиг геометрии сцены через viewport, последовательность
-  Halton(2,3); число фаз 8·(вывод/рендер)². Интерфейс и пост-обработка не сдвигаются.
-- **FSR 3.1** (FireBurn/FSR-Vulkan, нативный Vulkan, подмодуль `gpu/third_party/fsr-vulkan`):
-  - *Native AA*: на HDR-цвете сцены перед пост-обработкой, 1:1.
-  - *Пресеты Quality/Balanced/Performance/Ultra Performance* (x1.5/1.7/2/3): игра рендерит в
-    пониженном разрешении (патч разрешения, который `patches.py` выводит из патча 720p
-    сообщества), FSR увеличивает готовый кадр до 1920x1080 перед первым проходом интерфейса.
-    Интерфейс и проход вывода перенаправлены в изображения полного размера, презентер
-    показывает их вместо буфера игры.
-- **Маска реактивности** (снимок сцены до прозрачных отрисовок, сравнение перед наложением
-  тумана): работает, но на дымке Bloodborne даёт дрожание — по умолчанию выключена.
-- **Внутриигровое меню** (Dear ImGui, Insert или L3+R3): апскейлер, пресет, резкость,
-  jitter, маска, счётчик FPS. Настройки в `bbport.ini`. Смена пресета — кнопка
-  «Применить и перезапустить игру».
+### Smoother play
 
-## Известные проблемы
+- **Compile shaders in the background**, as deadinside28 0.5 and Mrsuss60 do: geometry waits a
+  frame for its pipeline, full-screen passes wait for theirs.
+- **Evaluate the new GPU memory model** from deadinside28 0.5 (the game's memory used in place;
+  default on AMD there, mixed on NVIDIA) before committing to it.
+- **Skip draws that cannot change anything** ([#34](https://github.com/Supermedo/bloodborne_pc/pull/34)).
 
-Состояние последнего коммита. В рабочем дереве подготовлен перенос пресетов на уменьшенные
-цели рендера при сохранении гостевых буферов, постобработки и UI в 1920×1080. Переходы
-между пресетами и копирование цвета/глубины/stencil прошли Vulkan-тест на Lavapipe.
-RX 7800 XT не поддерживает blit D32S8, поэтому новый путь оставлял FSR вход 1920×1080
-и снижал FPS. Для таких GPU запуск теперь автоматически выбирает проверенный путь с патчем
-разрешения игры и UI 1920×1080; смена пресета снова требует перезапуска. На GPU с нужной
-поддержкой остаётся переключение без перезапуска. Пункты 2–3 ниже относятся к последнему
-коммиту, до этих изменений рабочего дерева.
+### Launcher
 
-Общий проход векторов движения объектов был слишком дорогим: Performance давал около
-49 FPS с ним и 77–78 FPS без него. Теперь дополнительная цель и шейдеры включаются только
-для G-buffer отрисовок с буфером позы/костей; остальные используют векторы камеры.
-В пробном запуске выборочный путь держал около 81–87 FPS, без пропусков из-за ёмкости
-истории. Векторы объектов включены по умолчанию; `BB_OBJECT_MOTION=0` отключает их, а
-`BB_OBJECT_MOTION_ALL=1` возвращает старый общий путь для сравнения. Выбор по размеру
-буфера пока эвристический: качество оружия и одежды в движении требует проверки в игре.
+- A direct launch never checks for updates; check quietly in the background and keep the result
+  for the next time the launcher shows. Add **Install update** to the Home banner.
+- **Graphics presets** after [Lantern Launcher](https://github.com/par274/lantern-bloodborne-launcher)'s
+  concept (not its values): Low, Balanced, High, Ultra and Custom, recommended from the detected
+  GPU, in the setup wizard and launcher. Establish first which settings this port really has;
+  overrides switch to Custom; explain each option and say when a restart is needed.
 
-1. **Движущиеся объекты «рассыпаются»** (оружие на спине, персонаж, ткань, враги): есть
-   только векторы движения камеры. Камера от третьего лица следует за персонажем, поэтому
-   векторы камеры для него неверны, и апскейлер берёт историю не из того места. Это касается
-   любого временного апскейлера (FSR 3/4, DLSS, XeSS).
-2. **Интерфейс в пресетах мыльный**: с патчем разрешения игра считает себя 540p-игрой и,
-   судя по всему, готовит шрифты и элементы интерфейса под это разрешение. Меню
-   (титульное, пауза) вообще не проходят через апскейлер.
-3. **Смена пресета требует перезапуска**: разрешение задаётся патчем кода при старте, а
-   буферы игра выделяет один раз.
+## Later
 
-## План
+- **Mouse settings in the game's menus.** Adding rows to PC Settings or PC Gameplay crashes the
+  generated menu movie, even with the hooks off; find the movie's real limits first.
+- **Keyboard and mouse, the rest:** a pointer in every menu, a Key Bindings screen
+  (bbhost `menu_pointer.cpp`), Switch-style prompts ([#25](https://github.com/Supermedo/bloodborne_pc/pull/25)).
+- **Camera, FOV and ultrawide** with the HUD kept in place (bbhost PC Camera,
+  [#12](https://github.com/Supermedo/bloodborne_pc/pull/12)).
+- **More in-game settings** from bbhost: AO strength, shadow distance, fog, bloom, saturation,
+  vignette.
+- **Achievement icons in the game's menus**, an Achievements entry in the pause menu, and
+  retiring the overlay's duplicated settings once the native menus have proven stable.
+- **Debug menu without extra files** (bbhost builds its font from public-domain fonts).
+- **Languages:** Brazilian Portuguese with a separate voice language
+  ([#20](https://github.com/Supermedo/bloodborne_pc/pull/20)); Circle to confirm
+  ([#17](https://github.com/Supermedo/bloodborne_pc/pull/17)).
+- **Performance overlay** (FPS, frame times, memory, GPU and CPU use) and hiding an idle cursor,
+  after Mrsuss60's port.
+- **Mods by data field and gameplay plugins** after bbhost (parameter tables in TOML, a
+  randomizer, mutators).
+- **Mirror preview:** check whether the mirror's appearance editor shows the character model;
+  if not, bbhost opens character creation's window around it (`change_appearance.cpp`).
 
-### 1. Векторы движения объектов
+## Needs testing in play
 
-Нужны всем апскейлерам и генерации кадров. Игра их не считает, поэтому считаем сами.
+- Rebirth at the Altar of Despair.
+- Two invaders (every player in the session needs it on).
+- Keyboard prompt text when keys are rebound away from the PCBButtons layout.
 
-Как:
-- Для каждой отрисовки в G-buffer (проходы с 5+ целями) рекомпилятор делает второй вариант
-  вершинного шейдера, который выдаёт позицию дважды: с текущими константами и с константами
-  прошлого кадра. Разница проекций — вектор движения, пишется во вспомогательную цель
-  RG16F как дополнительный выход пиксельного шейдера.
-- Константы прошлого кадра: для каждого draw запоминаем содержимое константных буферов
-  (матрица объекта, кости скелета) по ключу «шейдер + номер draw в проходе» или по адресу
-  данных. Нужно выяснить, как игра хранит матрицы скелета: в буферах, которые перезаписываются
-  каждый кадр (тогда копируем прошлую версию), или в кольцевом буфере (тогда достаточно
-  адреса прошлого кадра).
-- Где объект не найден (первый кадр, новый объект) — векторы камеры, как сейчас.
-- Проверка: отладочный вид векторов (`BB_DEBUG_MOTION`), перепроецирование прошлого кадра
-  по полным векторам, визуально — пила на спине при беге.
+## Not planned
 
-### 2. Масштабирование на уровне рендерера (вместо патча разрешения)
-
-Игра работает в 1920x1080 (или в разрешении монитора), а в пониженном разрешении рисуются
-только проходы 3D-сцены. Интерфейс и меню остаются чёткими, пресет меняется на лету.
-
-Как:
-- Кеш текстур выделяет для целей сцены (G-buffer, глубина, свет, цвет сцены, эффекты) копию
-  уменьшенного размера; гостевая память и описания игры не меняются.
-- Viewport и scissor проходов в эти цели масштабируются (как уже сделано для интерфейса,
-  включая проходы с отключённым отсечением).
-- Шейдеры, которые считают по пиксельным координатам (`gl_FragCoord`, `texelFetch`,
-  compute-шейдеры по пикселям), получают коэффициент масштаба через push-константы
-  рекомпилятора. Выборки по нормированным координатам работают без изменений.
-- FSR ставится туда же, где Native AA: цвет сцены перед пост-обработкой (HDR, лучшее
-  качество); пост-обработка и интерфейс идут в полном разрешении.
-- Риски: проходы, читающие цели сцены по пиксельным координатам в пост-обработке, и
-  чтения из гостевой памяти этих целей (их нужно запретить или масштабировать обратно).
-
-### 3. Другие апскейлеры
-
-Все используют одни и те же входы (цвет, глубина, векторы движения, jitter, маски).
-
-- **FSR 4 (INT8)**: в FSR-Vulkan есть экспериментальный провайдер FSR 4 v07 INT8 — добавить
-  как вариант в меню и сравнить с FSR 3.1 после шага 1.
-- **DLSS**: нативный Linux Vulkan SDK (NGX). На RX 7800 XT не работает, но нужен для
-  пользователей NVIDIA.
-- **XeSS / XeFG и OptiScaler**: Intel поставляет их только как Windows DLL. Варианты:
-  загрузчик Windows DLL (PE) внутри процесса либо запуск всей сборки под Proton с
-  OptiScaler, которому отдаём входы через интерфейс DLSS.
-  Проверено 29.09: libxess.dll (одинаковая у DOOM: The Dark Ages, PRAGMATA и др.) имеет
-  Vulkan-путь (`xessVKCreateContext`, `xessVKExecute`), но импортирует ~300 функций:
-  MSVCP140 (iostream), VCRUNTIME140 (C++-исключения), UCRT, kernel32, setupapi, dxgi.
-  Решено отложить; самый реалистичный путь — хелпер под Wine с общей памятью Vulkan.
-
-### 4. Генерация кадров
-
-- FSR 3.1 Frame Generation (есть в FSR-Vulkan): промежуточный кадр между двумя готовыми,
-  по тем же векторам движения; интерфейс нужно рисовать поверх отдельно (есть перенаправление
-  интерфейса — его можно рендерить в отдельный слой).
-- XeFG — после решения с Windows DLL (см. выше).
-- Требование: подача кадров через презентер (очередь и VRR уже работают).
-
-### 5. Прочее
-
-- Steam Deck: портативная сборка (patchelf, без Nix), проверка пресетов на 1280x800.
-- Дальнейшая разгрузка потока GPU (шаг 2 из [parallel_gpu.md](parallel_gpu.md)).
+- shadPS4's kernel, network, file system and frontend changes: this port has its own runtime.
+- bbhost's libc and shader translator: they belong to its own architecture.
+- Supermedo #30 (we build with clang 23 already), #35 (the same fix as #4, included), #27 and
+  #13 (the English menu is included).
