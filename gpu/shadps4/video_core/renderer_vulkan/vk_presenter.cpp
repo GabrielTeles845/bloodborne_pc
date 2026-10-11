@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/vk_presenter.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
+#include "bbport_toggles.h"
 
 #include <algorithm>
 #include <array>
@@ -467,6 +468,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
 
     // Flush frame creation commands.
+    BbStats::frame_number.fetch_add(1, std::memory_order_relaxed); // bbport: game frames shown
     frame->ready_semaphore = draw_scheduler.GetWorkSemaphore()->Handle();
     frame->ready_tick = draw_scheduler.CurrentTick();
     SubmitInfo info{};

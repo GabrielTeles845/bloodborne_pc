@@ -136,4 +136,8 @@ inline std::atomic<std::uint64_t> gpu_signal_faults{0};
 /// Protection changes: calls and pages, those removing write access (TLB shootdowns) apart.
 inline std::atomic<std::uint64_t> protect_calls{0}, protect_pages{0}, protect_revoke_calls{0},
     protect_revoke_pages{0};
+/// Frames shown (Presenter::PrepareFrame), and seconds of a steady clock updated by the texture
+/// collector at every guest submission: cheap frame and age counters (BB_ASYNC_PIPELINES).
+inline std::atomic<std::uint32_t> frame_number{0};
+inline std::atomic<std::uint32_t> coarse_second{0};
 } // namespace BbStats
