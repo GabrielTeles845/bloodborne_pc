@@ -3,7 +3,7 @@
 """Experimental, independent native lamp menu rewrite for the player's 1.09 files.
 
 This module is intentionally not wired into the launcher or enhancement toggles. It covers
-ordinary and DLC lamp scripts with the verified shared insertion point. Dream and chalice lamps,
+ordinary, DLC, and shared chalice lamp scripts at verified insertion points. Hunter's Dream,
 runtime behavior, and player-save safety still require work and live testing.
 """
 from collections import defaultdict
@@ -66,6 +66,20 @@ INPUTS = {
     ('m36_00_00_00', 't360002.esd'): 'eb6aec0799137c291a92ea376149dd76e1b8268e5a19dffb7b92c570a44266cb',
 }
 
+# The shared chalice lamps use a different state layout and two warp arguments.
+CHALICE_INPUTS = {
+    ('m29_00_00_00', 't290110.esd'): '4081ac830f6794b9f364540f9a7d4eb79b7230fe2cf7dc6fe2018465bd679322',
+    ('m29_00_00_00', 't290111.esd'): 'cccf90bdefa003ca7df7e34a9dd12c80f69e6585abac270ab53ec250c3c59912',
+    ('m29_00_00_00', 't290112.esd'): 'f2f031e4528948cbe5be964535cac2e8771b90377f279f666f6924107184a99f',
+    ('m29_00_00_00', 't290113.esd'): 'cd7007add4732e4673c6e9af60e594098500784af9520835f8650cd2a6eb9659',
+    ('m29_00_00_00', 't290114.esd'): '4857667037b8da0d660b6afed45a75ad0ab10f37fcc82c59d8ae4b89c16ca23c',
+    ('m29_00_00_00', 't290115.esd'): 'd4b0006970aafabd8553df5c8b00147711ec476fa6199fba571a5a43c0640273',
+    ('m29_00_00_00', 't290116.esd'): 'f9c3f53013eb728e44970a92aaeb077a9bbfea08d2f75dac2947e24c8fb12870',
+    ('m29_00_00_00', 't290117.esd'): '283ceef063ad621fcfde572e3b44fc6224370da64127a1ab19187130bf651b30',
+    ('m29_00_00_00', 't290118.esd'): 'd7b39ba4bbc12f0d924e8b0686ac06f4add584e9b9791d12549930ac6994c625',
+    ('m29_00_00_00', 't290119.esd'): '81505aed80293f192f44b7cd1019dfef5a3ffae66941e6131d14a34adcffbd0a',
+}
+
 ACTIVE_GROUP = 2147483644
 ACTIVE_STATE = 6
 VANILLA_WARP_GROUP = 2147483643
@@ -83,7 +97,8 @@ def _eq(lhs, rhs):
     return esd.done(lhs + esd.lit(rhs) + EQ)
 
 
-def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
+def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
+                  follow_state: int = 5, warp_args: int = 3) -> bytes:
     """Add Level Up and Storage to one activated lamp while retaining its original warp path."""
     if hashlib.sha256(data).hexdigest() != expected_sha:
         raise UnsupportedLamp('unexpected lamp ESD hash')
@@ -93,7 +108,7 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     active = script.group(ACTIVE_GROUP)
     if active is None:
         raise UnsupportedLamp('activated-lamp state group is missing')
-    site = script.state_in(active, ACTIVE_STATE)
+    site = script.state_in(active, active_state)
     if site < 0:
         raise UnsupportedLamp('activated-lamp state is missing')
     entry = script.runs[script.states[site].entry].items
@@ -103,9 +118,9 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     if old.bank != 6 or old.id != VANILLA_WARP_GROUP:
         raise UnsupportedLamp('activated-lamp action is not the vanilla warp call')
     args = [script.exprs[i].code for i in script.runs[old.args].items]
-    if len(args) != 3:
-        raise UnsupportedLamp('vanilla warp call does not have three parameters')
-    follow = script.state_in(active, 5)
+    if len(args) != warp_args:
+        raise UnsupportedLamp('vanilla warp call has an unexpected parameter count')
+    follow = script.state_in(active, follow_state)
     if follow < 0:
         raise UnsupportedLamp('vanilla post-warp state is missing')
     warp_conditions = script.runs[script.states[site].conds].items
@@ -168,8 +183,8 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
         script.cond(menu, _eq(esd.call(59, [200, 0]), 0))
     ])
 
-    # Registers 0..2 are the three arguments passed through by the activated-lamp state.
-    passthrough = [esd.done(bytes((0x40 + i, 0xb8))) for i in range(3)]
+    # Pass the original warp parameters through the new group in the same order.
+    passthrough = [esd.done(bytes((0x40 + i, 0xb8))) for i in range(warp_args)]
     script.states[warp].entry = script.run([script.cmd(6, VANILLA_WARP_GROUP, passthrough)])
     # Preserve both vanilla warp outcomes, including its post-warp root call.
     script.states[warp].conds = script.run([
@@ -193,17 +208,21 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
 
 
 def make(dvdroot: Path) -> dict[Path, bytes]:
-    """Build ordinary/DLC lamp archives from an exact 1.09 dump; return no partial output."""
+    """Build supported lamp archives from an exact 1.09 dump; return no partial output."""
     targets = defaultdict(list)
     for (map_name, script_name), digest in INPUTS.items():
-        targets[map_name].append((script_name, digest))
+        targets[map_name].append((script_name, digest, 6, 5, 3))
+    for (map_name, script_name), digest in CHALICE_INPUTS.items():
+        targets[map_name].append((script_name, digest, 5, 4, 2))
     files = {}
     for map_name, scripts in sorted(targets.items()):
         relative = Path('script') / 'talk' / f'{map_name}.talkesdbnd.dcx'
         packed = (dvdroot / relative).read_bytes()
         archive = Bnd4(dcx_decompress(packed))
-        for script_name, digest in scripts:
+        for script_name, digest, active_state, follow_state, warp_args in scripts:
             i = archive.index(script_name)
-            archive.files[i] = add_lamp_menu(archive.files[i], digest)
+            archive.files[i] = add_lamp_menu(archive.files[i], digest,
+                                            active_state=active_state,
+                                            follow_state=follow_state, warp_args=warp_args)
         files[relative] = dcx_compress(archive.to_bytes(), template=packed)
     return files
