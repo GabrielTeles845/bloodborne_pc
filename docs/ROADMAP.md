@@ -51,10 +51,12 @@ be redistributed or modified, so everything is made from the player's own game f
 
 ### Smoother play
 
-- **Compile shaders in the background**, as deadinside28 0.5 and Mrsuss60 do: geometry waits a
-  frame for its pipeline, full-screen passes wait for theirs.
-- **Evaluate the new GPU memory model** from deadinside28 0.5 (the game's memory used in place;
-  default on AMD there, mixed on NVIDIA) before committing to it.
+- **Compile shaders in the background:** ported from deadinside28 0.5-pre4 on the
+  `feature/async-pipelines` branch (`BB_ASYNC_PIPELINES=0` turns it off). New pipelines of passes
+  drawn every frame build on worker threads while their draws wait a frame or two; one-time
+  renders and loading screens compile at once. With an empty cache in Iosefka's Clinic it cut
+  hitch frames from 26 to 20 and the worst frame from 453 to 393 ms. Next: measure walking into
+  new areas, watch for geometry missing for a frame, then merge.
 - **Skip draws that cannot change anything** ([#34](https://github.com/Supermedo/bloodborne_pc/pull/34)).
 
 ### Launcher
@@ -99,6 +101,11 @@ be redistributed or modified, so everything is made from the player's own game f
 
 ## Not planned
 
+- **deadinside28's new GPU memory model (0.5)**, for now: it is Linux-only (write traps through
+  `mprotect` and signals, no Windows path), builds on bbport 0.3's experimental model that this
+  Windows line never took (about 7,000 lines of core GPU memory code together), and is the
+  default only on AMD there, with mixed results on NVIDIA. Revisit if AMD players report the
+  bus-bound slowdowns it fixes, or once it settles upstream.
 - shadPS4's kernel, network, file system and frontend changes: this port has its own runtime.
 - bbhost's libc and shader translator: they belong to its own architecture.
 - Supermedo #30 (we build with clang 23 already), #35 (the same fix as #4, included), #27 and
