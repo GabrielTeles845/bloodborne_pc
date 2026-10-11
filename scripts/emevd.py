@@ -64,6 +64,7 @@ class Emevd:
 
     def _validate_refs(self):
         next_instruction = 0
+        next_parameter = 0
         ids = set()
         for row in self.events:
             event_id, count, first = struct.unpack_from('<qqq', row)
@@ -71,16 +72,30 @@ class Emevd:
                 raise EmevdError('event ids or instruction ranges are inconsistent')
             ids.add(event_id)
             next_instruction += count
+            param_count, param_offset = struct.unpack_from('<qq', row, 24)
+            if (param_count < 0 or
+                    (param_count and param_offset != next_parameter * PARAMETER) or
+                    (not param_count and param_offset not in (-1, 0xffffffff))):
+                raise EmevdError('event parameter range is inconsistent')
+            for param in self.params[next_parameter:next_parameter + param_count]:
+                local_instruction = _q(param, 0)
+                if not 0 <= local_instruction < count:
+                    raise EmevdError('parameter refers to an absent event instruction')
+                write_offset = _q(param, 8)
+                size = struct.unpack_from('<i', param, 24)[0]
+                instruction = self.instructions[first // INSTRUCTION + local_instruction]
+                args_length = _q(instruction, 8)
+                if size <= 0 or write_offset < 0 or write_offset + size > args_length:
+                    raise EmevdError('parameter replacement exceeds instruction arguments')
+            next_parameter += param_count
         if next_instruction != len(self.instructions):
             raise EmevdError('event instruction count does not match the table')
+        if next_parameter != len(self.params):
+            raise EmevdError('event parameter count does not match the table')
         for row in self.instructions:
             length, offset = struct.unpack_from('<qq', row, 8)
             if length < 0 or (length and (offset < 0 or offset + length > len(self.args))):
                 raise EmevdError('instruction argument lies outside the argument blob')
-        for row in self.params:
-            index = _u32(row, 0)
-            if _u32(row, 4) != 0 or index >= len(self.instructions):
-                raise EmevdError('parameter refers to an absent instruction')
 
     def append_initialized_event(self, event_id: int, instructions: list[tuple[int, int, bytes]],
                                  *, slot: int = 0):
@@ -137,10 +152,13 @@ class Emevd:
         struct.pack_into('<q', row, 8, count + shift)
         for later in self.events[event_index + 1:]:
             struct.pack_into('<q', later, 16, _q(later, 16) + shift * INSTRUCTION)
-        for param in self.params:
-            index = _u32(param, 0)
-            if index >= insertion:
-                struct.pack_into('<I', param, 0, index + shift)
+        param_count, param_offset = struct.unpack_from('<qq', row, 24)
+        if param_count:
+            param_first = param_offset // PARAMETER
+            for param in self.params[param_first:param_first + param_count]:
+                local_index = _q(param, 0)
+                if local_index >= position:
+                    struct.pack_into('<q', param, 0, local_index + shift)
         self._validate_refs()
 
     def replace_instruction(self, event_id: int, position: int,
