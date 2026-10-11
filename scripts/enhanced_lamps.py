@@ -70,6 +70,8 @@ ACTIVE_GROUP = 2147483644
 ACTIVE_STATE = 6
 VANILLA_WARP_GROUP = 2147483643
 LAMP_MENU_GROUP = 2147483600
+LEVEL_INTRO_DONE = 6700
+STORAGE_INTRO_DONE = 6701
 EQ = b'\x95'
 
 
@@ -117,9 +119,9 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     # Preserve the existing action's three arguments for the Warp choice. A separate group opens
     # the game's own talk list; it calls the game's own level, storage and warp operations.
     script.states[site].entry = script.run([script.cmd(6, LAMP_MENU_GROUP, args)])
-    states = [script.state(i) for i in range(7)]
+    states = [script.state(i) for i in range(11)]
     script.groups.append(esd.Group(LAMP_MENU_GROUP, states))
-    start, menu, level, storage, warp, restart, end = states
+    start, menu, level, storage, warp, restart, end, add_level, add_storage, choose, storage_gate = states
     true = esd.done(esd.lit(1))
 
     script.states[start].conds = script.run([script.cond(menu, true)])
@@ -130,14 +132,27 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     script.states[menu].entry = script.run([
         command(20),  # ClearTalkListData
         command(19, 1, 70002100, -1),  # Hunter's Dream
-        command(19, 2, 15000100, -1),  # Level Up
-        command(19, 3, 70000000, -1),  # Storage
-        command(76),  # Open the native talk choice list
     ])
+    # The Doll sets this vanilla flag on the first level-up introduction. Requiring it keeps a
+    # new character's first level-up with the Doll and avoids skipping her initial progression.
+    script.states[menu].conds = script.run([
+        script.cond(add_level, _eq(esd.call(15, [LEVEL_INTRO_DONE]), 1)),
+        script.cond(storage_gate, true),
+    ])
+    script.states[add_level].entry = script.run([command(19, 2, 15000100, -1)])
+    script.states[add_level].conds = script.run([script.cond(storage_gate, true)])
+    # The vanilla storage interaction likewise shows a first-use explanation, then sets 6701.
+    script.states[storage_gate].conds = script.run([
+        script.cond(add_storage, _eq(esd.call(15, [STORAGE_INTRO_DONE]), 1)),
+        script.cond(choose, true),
+    ])
+    script.states[add_storage].entry = script.run([command(19, 3, 70000000, -1)])
+    script.states[add_storage].conds = script.run([script.cond(choose, true)])
+    script.states[choose].entry = script.run([command(76)])  # native conversation choices
     # The first condition consumes the selected entry and stores it in register 0.
     # Subsequent conditions read that same value, as the game's own talk scripts do.
     choice = esd.lit(23) + b'\x84\xa7'
-    script.states[menu].conds = script.run([
+    script.states[choose].conds = script.run([
         script.cond(warp, _eq(choice, 1)),
         script.cond(level, _eq(b'\xaf', 2)),
         script.cond(storage, _eq(b'\xaf', 3)),
@@ -168,7 +183,7 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     script.states[end].conds = script.run([script.cond(-1, true)])  # return to the vanilla caller
 
     wait = script.cmd(1, 68, [b'\x81' + struct.pack('<d', 0.33) + b'\xa1'])
-    for state in (menu, level, storage):
+    for state in (choose, level, storage):
         script.states[state].whiles = script.run([wait])
 
     result = esd.serialize(script)

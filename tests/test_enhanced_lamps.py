@@ -40,7 +40,20 @@ class LampPrototypeTests(unittest.TestCase):
                     self.assertEqual((call.bank, call.id), (6, enhanced_lamps.LAMP_MENU_GROUP))
                     options = script.states[script.state_in(menu, 1)]
                     menu_commands = [script.cmds[x].id for x in script.runs[options.entry].items]
-                    self.assertEqual(menu_commands, [20, 19, 19, 19, 76])
+                    self.assertEqual(menu_commands, [20, 19])
+                    self.assertEqual([script.cmds[x].id for x in script.runs[
+                        script.states[script.state_in(menu, 7)].entry].items], [19])
+                    self.assertEqual([script.cmds[x].id for x in script.runs[
+                        script.states[script.state_in(menu, 8)].entry].items], [19])
+                    self.assertEqual([script.cmds[x].id for x in script.runs[
+                        script.states[script.state_in(menu, 9)].entry].items], [76])
+                    gate = script.conds[script.runs[options.conds].items[0]]
+                    self.assertEqual(script.exprs[gate.eval].code,
+                                     enhanced_lamps._eq(esd.call(15, [6700]), 1))
+                    storage_gate = script.states[script.state_in(menu, 10)]
+                    storage_condition = script.conds[script.runs[storage_gate.conds].items[0]]
+                    self.assertEqual(script.exprs[storage_condition.eval].code,
+                                     enhanced_lamps._eq(esd.call(15, [6701]), 1))
                     warp = script.states[script.state_in(menu, 4)]
                     warp_call = script.cmds[script.runs[warp.entry].items[0]]
                     self.assertEqual((warp_call.bank, warp_call.id),
