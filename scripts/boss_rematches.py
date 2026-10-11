@@ -73,6 +73,22 @@ def _unused(script: Emevd, event_ids: tuple[int, ...], flags: tuple[int, ...]) -
         raise UnsupportedRematch('experimental rematch flag already occurs in game events')
 
 
+def _assert_global_ids_available(dvdroot: Path) -> None:
+    """Avoid hijacking flags or events used by another map in the player's dump."""
+    event_ids = {START_EVENT, VICTORY_EVENT, DEATH_EVENT, LEAVE_MAP_EVENT}
+    flags = (REQUEST, ACTIVE, ARENA_DEFEATED, ARENA_ENTRY)
+    event_files = sorted((dvdroot / 'event').glob('*.emevd.dcx'))
+    if not event_files:
+        raise UnsupportedRematch('game dump has no event scripts')
+    for path in event_files:
+        script = Emevd(dcx_decompress(path.read_bytes()))
+        if any(struct.unpack_from('<q', row)[0] in event_ids for row in script.events):
+            raise UnsupportedRematch(f'{path.name}: experimental rematch event ID is already used')
+        args = bytes(script.args)
+        if any(struct.pack('<I', flag) in args for flag in flags):
+            raise UnsupportedRematch(f'{path.name}: experimental rematch flag is already used')
+
+
 def _map_events(script: Emevd) -> None:
     _unused(script, (START_EVENT, VICTORY_EVENT, DEATH_EVENT),
             (REQUEST, ACTIVE, ARENA_DEFEATED, ARENA_ENTRY))
@@ -182,6 +198,7 @@ def _common_events(script: Emevd) -> None:
 
 def make(dvdroot: Path) -> dict[Path, bytes]:
     """Return event, talk, and text assets; fail closed on any unknown game version."""
+    _assert_global_ids_available(dvdroot)
     files = {}
     for name, edit in (('m24_01_00_00', _map_events), ('common', _common_events)):
         relative = Path('event') / f'{name}.emevd.dcx'
