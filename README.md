@@ -153,8 +153,9 @@ page take precedence:
 
 ## Known issues
 
-- Character creation can show a blank or ghosted preview on the first visit; backing out and
-  choosing New Game again restores it. A fix is on the [roadmap](docs/ROADMAP.md).
+- Character creation could show a blank or ghosted preview on the first visit; 1.6.12 preview
+  includes a fix that still needs confirming in play. Backing out and choosing New Game again
+  restores it.
 - Rebirth and two invaders have not been tested in play yet.
 - Keep the frame cap at 120 FPS or lower; higher caps can slow movement.
 - New areas stutter briefly the first time while shaders compile. On a black screen, try

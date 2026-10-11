@@ -17,7 +17,19 @@ A pre-release: the launcher's updater does not offer it until a full release fol
 - **Lamps: Level Up and Storage** (`pc_enhanced_lamps`, off by default). Every lit lamp also
   offers the game's own Level Up and Storage screens once the Doll and the storage box have
   been used. Works alongside Rebirth, which edits the same Nightmare archive.
-- Fixed stray control characters in the README.
+- **Fixes from Supermedo pull requests**, with their authors' commits:
+  - the black character preview in character creation: the texture cache no longer copies
+    stale game memory over images the GPU drew
+    ([#36](https://github.com/Supermedo/bloodborne_pc/pull/36), yumlevi's fix);
+  - a crash while an area loads, in shader walkers loaded from the pipeline cache
+    ([#29](https://github.com/Supermedo/bloodborne_pc/pull/29), DUDUYG);
+  - video memory growing with every area visited: images that cannot be freed no longer block
+    the collector, and idle textures go after 20 s (`BB_GC_IDLE_SECONDS`)
+    ([#32](https://github.com/Supermedo/bloodborne_pc/pull/32), parsifal295, from bbport 0.3).
+- **Boss rematches, experimental:** a Cleric Beast rematch at its lamp for testing in play
+  (`BB_PC_REMATCHES=1` in the launcher's Advanced overrides; no toggle yet). The permanent
+  defeat flag and first-kill rewards are left alone. Not offered to players until tested.
+- A tidier README, this changelog and a roadmap.
 
 ## 1.6.11
 

@@ -12,15 +12,12 @@ Sources checked for ideas (last on 11 October 2026): shadPS4 (our renderer match
 
 ## Now
 
-### Crash and memory fixes from Supermedo's pull requests
-
-| Fix | Source |
-|---|---|
-| Black character preview in character creation (stale data over GPU-written images) | [#36](https://github.com/Supermedo/bloodborne_pc/pull/36) |
-| Crash while an area loads (shader walkers from the pipeline cache) | [#29](https://github.com/Supermedo/bloodborne_pc/pull/29) |
-| Video memory grows with every area (images that cannot be freed block the collector) | [#32](https://github.com/Supermedo/bloodborne_pc/pull/32) |
-
 ### Boss Rematches (Bloodborne Enhanced features, independently implemented)
+
+Status: a Cleric Beast prototype (Codex's `scripts/boss_rematches.py`) runs as an experiment with
+`BB_PC_REMATCHES=1`; Central Yharnam loads and plays with its rewritten events. Next: a copied-save
+test with the Cleric Beast defeated (the entry, the arena, Insight, the reward, death and leaving),
+then one boss at a time.
 
 Reference: [Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19). Its files may not
 be redistributed or modified, so everything is made from the player's own game files. Notes:
@@ -94,6 +91,8 @@ be redistributed or modified, so everything is made from the player's own game f
 
 ## Needs testing in play
 
+- The fixes in 1.6.12 preview: the character creation preview (#36), area loads (#29) and
+  video memory over a long session (#32).
 - Rebirth at the Altar of Despair.
 - Two invaders (every player in the session needs it on).
 - Keyboard prompt text when keys are rebound away from the PCBButtons layout.
