@@ -146,6 +146,19 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
 
 ## What's changed
 
+- **Keyboard button prompts (1.6.12 preview):** choose **Keyboard** on the launcher's Controller
+  page, or Keyboard keys in the Insert/L3+R3 overlay's Mods tab, beside PlayStation and Xbox.
+  The first time, the launcher asks for your download of
+  [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) (not included in this package)
+  and imports its key images; it also binds the keys those images show (E interact, Left Shift
+  dodge, R vial, Q item, F transform, mouse buttons for attack, firearm and lock-on). If you
+  rebind keys, menu and tutorial text names your keys instead. Text naming after
+  [bbhost](https://github.com/droogie/bbhost)'s key prompts; started by Codex.
+- **Lamps: Level Up and Storage (1.6.12 preview, `pc_enhanced_lamps`, `BB_PC_LAMPS=1`):**
+  every lit lamp, including the Old Hunters' and the chalice dungeons', also offers the game's
+  own Level Up and Storage screens, once you have used the Doll and the storage box. Off by
+  default; switch it on in the launcher's **Mods** page. Made from your own game files; an
+  independent implementation of the idea in Bloodborne Enhanced, whose files are not used.
 - **In-game PC menus (1.6.11):** the game's System menu offers native Achievements,
   PC Graphics, Display, Effects, Settings and Gameplay, plus Restart to Apply.
   Achievements replaces the PC Enhancements section to keep the movie at its tested
@@ -155,9 +168,8 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
 - **Rebirth (1.6.9, `pc_rebirth`, `BB_PC_REBIRTH=1`):** the Altar of Despair in the Nightmare lets you
   reallocate your stats. It is off by default and has not been tested in play yet.
 - **Keyboard and mouse (1.6.10):** play alongside the gamepad with rebindable keys
-  (key_<action>= lines in bport.ini), mouse-wheel actions and mouse camera control.
-  Mouse settings are on the launcher's Controller page and in bport.ini. On-screen
-  keyboard prompts are not done yet.
+  (key_<action>= lines in bbport.ini), mouse-wheel actions and mouse camera control.
+  Mouse settings are on the launcher's Controller page and in bbport.ini.
 - Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
   off by default (the game as it shipped). Switch them on in the launcher's **Mods** page
   or the Insert/L3+R3 overlay; they apply after a restart and are made from your own game
