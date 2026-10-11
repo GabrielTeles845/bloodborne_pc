@@ -69,7 +69,12 @@ class BossRematchTests(unittest.TestCase):
                 boss = modified.event_instructions(boss_rematches.DEFEATED)
                 self.assertEqual(boss[0], boss_rematches.instruction(
                     1003, 101, 'BBBi', 0, 0, 0, boss_rematches.ARENA_DEFEATED))
-                self.assertIn(boss_rematches._set(boss_rematches.ARENA_DEFEATED, True), boss)
+                # The private arena view must update for the original first kill as well as
+                # rematches, before either branch can end the boss event.
+                self.assertEqual(boss[16], boss_rematches._set(
+                    boss_rematches.ARENA_DEFEATED, True))
+                self.assertEqual(boss[17], boss_rematches.instruction(
+                    1003, 1, 'BBBi', 2, 0, 0, boss_rematches.ACTIVE))
                 entry = modified.event_instructions(boss_rematches.FIRST_ENTRY)
                 self.assertEqual(entry[1], boss_rematches.instruction(
                     1003, 101, 'BBBi', 0, 0, 0, boss_rematches.ARENA_ENTRY))

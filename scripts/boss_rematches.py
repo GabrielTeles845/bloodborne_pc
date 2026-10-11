@@ -136,8 +136,10 @@ def _map_events(script: Emevd) -> None:
     # A completed rematch must not repeat first-clear item lots or achievement/progression writes.
     # KillBoss and arena cleanup remain vanilla; the private arena flag then ends the rematch.
     script.insert_instructions(DEFEATED, 16, [
-        instruction(1003, 1, 'BBBi', 3, 0, 0, ACTIVE),
+        # The original event's completion writes DEFEATED only when this event ends. Map events
+        # now read ARENA_DEFEATED, so update it on both the first kill and a rematch kill.
         _set(ARENA_DEFEATED, True),
+        instruction(1003, 1, 'BBBi', 2, 0, 0, ACTIVE),
         _set(ACTIVE, False),
         instruction(1000, 4, 'B', 0),
     ])
