@@ -5,7 +5,8 @@ import struct
 import sys
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(1, r'C:\Users\jackg\projects\Bloodborne Launcher\bloodborne_pc\scripts')
 from emevd import Emevd, EmevdError  # noqa: E402
 from fromsoft import dcx_decompress  # noqa: E402
 
@@ -40,10 +41,12 @@ class EmevdTests(unittest.TestCase):
                                  original_instructions[:insertion])
                 self.assertEqual([bytes(row) for row in edited.instructions[insertion + 1:-1]],
                                  original_instructions[insertion:])
-                self.assertEqual([struct.unpack_from('<I', row)[0] for row in edited.params],
-                                 [struct.unpack_from('<I', row)[0] +
-                                  (struct.unpack_from('<I', row)[0] >= insertion)
-                                  for row in original_params])
+                # Parameter instruction indices belong to each event, not the whole file.
+                # The constructor has no replacements, so appending its init instruction must
+                # leave every existing replacement byte identical.
+                self.assertEqual([bytes(row) for row in edited.params], original_params)
+                self.assertEqual(struct.unpack_from('<qq', edited.events[-1], 24),
+                                 (0, 0xffffffff))
 
     def test_unknown_layout_is_rejected(self):
         damaged = bytearray(self.load('common.emevd.dcx'))
@@ -53,17 +56,23 @@ class EmevdTests(unittest.TestCase):
 
     def test_inserting_before_parameterized_instructions_rebases_refs(self):
         script = Emevd(self.load('m24_01_00_00.emevd.dcx'))
-        original_events = script.event_instructions(12411700)
-        original_params = [struct.unpack_from('<I', row)[0] for row in script.params]
-        original_first = next(struct.unpack_from('<q', row, 16)[0] for row in script.events
-                              if struct.unpack_from('<q', row)[0] == 12411700) // 32
-        script.insert_instructions(12411700, 0,
+        event_id = 12414000  # the vanilla event has six local argument replacements
+        row = next(row for row in script.events if struct.unpack_from('<q', row)[0] == event_id)
+        count, offset = struct.unpack_from('<qq', row, 24)
+        self.assertEqual(count, 6)
+        first = offset // 32
+        original_events = script.event_instructions(event_id)
+        original_params = [bytes(row) for row in script.params]
+        script.insert_instructions(event_id, 0,
                                    [(1000, 4, b'\0\0\0\0'), (1000, 4, b'\x01\0\0\0')])
         edited = Emevd(script.to_bytes())
-        self.assertEqual(edited.event_instructions(12411700)[2:], original_events)
-        self.assertEqual([struct.unpack_from('<I', row)[0] for row in edited.params],
-                         [index + (2 if index >= original_first else 0)
-                          for index in original_params])
+        self.assertEqual(edited.event_instructions(event_id)[2:], original_events)
+        expected_params = original_params.copy()
+        for i in range(first, first + count):
+            changed = bytearray(expected_params[i])
+            struct.pack_into('<q', changed, 0, struct.unpack_from('<q', changed)[0] + 2)
+            expected_params[i] = bytes(changed)
+        self.assertEqual([bytes(row) for row in edited.params], expected_params)
 
     def test_replacement_requires_exact_expected_instruction(self):
         script = Emevd(self.load('m24_01_00_00.emevd.dcx'))
