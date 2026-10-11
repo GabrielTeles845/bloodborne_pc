@@ -98,7 +98,8 @@ def _eq(lhs, rhs):
 
 
 def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
-                  follow_state: int = 5, warp_args: int = 3) -> bytes:
+                  follow_state: int = 5, warp_args: int = 3,
+                  rematch: tuple[int, int, int] | None = None) -> bytes:
     """Add Level Up and Storage to one activated lamp while retaining its original warp path."""
     if hashlib.sha256(data).hexdigest() != expected_sha:
         raise UnsupportedLamp('unexpected lamp ESD hash')
@@ -134,9 +135,11 @@ def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
     # Preserve the existing action's three arguments for the Warp choice. A separate group opens
     # the game's own talk list; it calls the game's own level, storage and warp operations.
     script.states[site].entry = script.run([script.cmd(6, LAMP_MENU_GROUP, args)])
-    states = [script.state(i) for i in range(11)]
+    states = [script.state(i) for i in range(14 if rematch else 11)]
     script.groups.append(esd.Group(LAMP_MENU_GROUP, states))
-    start, menu, level, storage, warp, restart, end, add_level, add_storage, choose, storage_gate = states
+    start, menu, level, storage, warp, restart, end, add_level, add_storage, choose, storage_gate = states[:11]
+    if rematch:
+        rematch_gate, add_rematch, rematch_action = states[11:]
     true = esd.done(esd.lit(1))
 
     script.states[start].conds = script.run([script.cond(menu, true)])
@@ -157,22 +160,36 @@ def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
     script.states[add_level].entry = script.run([command(19, 2, 15000100, -1)])
     script.states[add_level].conds = script.run([script.cond(storage_gate, true)])
     # The vanilla storage interaction likewise shows a first-use explanation, then sets 6701.
+    after_storage = rematch_gate if rematch else choose
     script.states[storage_gate].conds = script.run([
         script.cond(add_storage, _eq(esd.call(15, [STORAGE_INTRO_DONE]), 1)),
-        script.cond(choose, true),
+        script.cond(after_storage, true),
     ])
     script.states[add_storage].entry = script.run([command(19, 3, 70000000, -1)])
-    script.states[add_storage].conds = script.run([script.cond(choose, true)])
+    script.states[add_storage].conds = script.run([script.cond(after_storage, true)])
+    if rematch:
+        defeated_flag, request_flag, text_id = rematch
+        script.states[rematch_gate].conds = script.run([
+            script.cond(add_rematch, _eq(esd.call(15, [defeated_flag]), 1)),
+            script.cond(choose, true),
+        ])
+        script.states[add_rematch].entry = script.run([command(19, 4, text_id, -1)])
+        script.states[add_rematch].conds = script.run([script.cond(choose, true)])
+        script.states[rematch_action].entry = script.run([command(11, request_flag, 1)])
+        script.states[rematch_action].conds = script.run([script.cond(end, true)])
     script.states[choose].entry = script.run([command(10, 0, 0, 0)])  # vanilla Doll/box choice list
     # The first condition consumes the selected entry and stores it in register 0.
     # Subsequent conditions read that same value, as the game's own talk scripts do.
     choice = esd.lit(23) + b'\x84\xa7'
-    script.states[choose].conds = script.run([
+    choices = [
         script.cond(warp, _eq(choice, 1)),
         script.cond(level, _eq(b'\xaf', 2)),
         script.cond(storage, _eq(b'\xaf', 3)),
-        script.cond(end, _eq(esd.call(53, []), 0)),  # menu closed
-    ])
+    ]
+    if rematch:
+        choices.append(script.cond(rematch_action, _eq(b'\xaf', 4)))
+    choices.append(script.cond(end, _eq(esd.call(53, []), 0)))  # menu closed
+    script.states[choose].conds = script.run(choices)
 
     script.states[level].entry = script.run([command(31)])  # OpenSoul
     script.states[level].conds = script.run([
