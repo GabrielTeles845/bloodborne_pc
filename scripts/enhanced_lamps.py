@@ -163,7 +163,7 @@ def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
     ])
     script.states[add_storage].entry = script.run([command(19, 3, 70000000, -1)])
     script.states[add_storage].conds = script.run([script.cond(choose, true)])
-    script.states[choose].entry = script.run([command(76)])  # native conversation choices
+    script.states[choose].entry = script.run([command(10, 0, 0, 0)])  # vanilla Doll/box choice list
     # The first condition consumes the selected entry and stores it in register 0.
     # Subsequent conditions read that same value, as the game's own talk scripts do.
     choice = esd.lit(23) + b'\x84\xa7'

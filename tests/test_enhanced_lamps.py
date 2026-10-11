@@ -52,7 +52,11 @@ class LampPrototypeTests(unittest.TestCase):
                     self.assertEqual([script.cmds[x].id for x in script.runs[
                         script.states[script.state_in(menu, 8)].entry].items], [19])
                     self.assertEqual([script.cmds[x].id for x in script.runs[
-                        script.states[script.state_in(menu, 9)].entry].items], [76])
+                        script.states[script.state_in(menu, 9)].entry].items], [10])
+                    choice_state = script.states[script.state_in(menu, 9)]
+                    choice_cmd = script.cmds[script.runs[choice_state.entry].items[0]]
+                    self.assertEqual([script.exprs[x].code for x in script.runs[choice_cmd.args].items],
+                                     [esd.done(esd.lit(0))] * 3)
                     gate = script.conds[script.runs[options.conds].items[0]]
                     self.assertEqual(script.exprs[gate.eval].code,
                                      enhanced_lamps._eq(esd.call(15, [6700]), 1))
