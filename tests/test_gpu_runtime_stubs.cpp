@@ -3,11 +3,21 @@
 #include <chrono>
 #include <cstdint>
 #include <cstddef>
+#ifdef _WIN32
+#include "bbport_toggles.h" // the Windows sigjmp_buf (no signals there)
+extern "C" int bb_setjmp(sigjmp_buf) { return 0; }
+#else
 #include <setjmp.h>
+#endif
 // Renderer tests have no guest process. Clock/host-thread services work; guest accesses abort.
 extern "C" {
+#ifdef _WIN32
+__thread sigjmp_buf* runtime_fault_recover = nullptr;
+std::uint64_t runtime_disabled_optimizations = 0;
+#else
 thread_local sigjmp_buf* runtime_fault_recover = nullptr;
 uint32_t runtime_disabled_optimizations = 0;
+#endif
 uint64_t runtime_tsc_frequency() { return 1000000000; }
 int runtime_file_translate(const char*, char*, size_t) { std::abort(); }
 uint64_t runtime_memory_clamp(uintptr_t, uint64_t) { std::abort(); }

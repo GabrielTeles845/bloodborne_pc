@@ -90,12 +90,23 @@ struct StageSpecialization {
     boost::container::small_vector<FMaskSpecialization, 8> fmasks;
     boost::container::small_vector<SamplerSpecialization, 16> samplers;
     Backend::Bindings start{};
+    /// bbport shader pre-build: what translating this permutation reads through pointers in game
+    /// memory, kept so it can be translated again without the game: each fetch-shader attribute's
+    /// vertex buffer descriptor as read (in fetch_shader_data->attributes order) and the hull
+    /// shader's tessellation constants. Not part of the comparison below.
+    boost::container::small_vector<AmdGpu::Buffer, 32> vs_attrib_sharps;
+    std::optional<TessellationDataConstantBuffer> tess_constants;
 
     StageSpecialization() = default;
     StageSpecialization(const Info& info_, RuntimeInfo runtime_info_, const Profile& profile_,
                         Backend::Bindings start_)
         : info{&info_}, runtime_info{runtime_info_}, start{start_} {
         fetch_shader_data = Gcn::ParseFetchShader(info_);
+        if (fetch_shader_data) {
+            for (const auto& attrib : fetch_shader_data->attributes) {
+                vs_attrib_sharps.push_back(attrib.ReadRawSharp(info_));
+            }
+        }
         if (info_.sw_stage == SwStage::Vertex && fetch_shader_data) {
             // Specialize shader on VS input number types to follow spec.
             ForEachSharp(vs_attribs, fetch_shader_data->attributes,
@@ -158,9 +169,10 @@ struct StageSpecialization {
         // Initialize runtime_info fields that rely on analysis in tessellation passes
         if (info->sw_stage == SwStage::TessellationControl ||
             info->sw_stage == SwStage::TessellationEval) {
-            TessellationDataConstantBuffer tess_constants{};
-            info->ReadTessConstantBuffer(tess_constants);
-            runtime_info.InitFromTessConstants(tess_constants);
+            TessellationDataConstantBuffer constants{};
+            info->ReadTessConstantBuffer(constants);
+            runtime_info.InitFromTessConstants(constants);
+            tess_constants = constants;
         }
     }
 

@@ -53,6 +53,9 @@ std::optional<FetchShaderData> ParseFetchShader(const Shader::Info& info) {
     if (!info.has_fetch_shader) {
         return std::nullopt;
     }
+    if (offline_fetch_shader) {
+        return *offline_fetch_shader;
+    }
 
     const auto* code = GetFetchShaderCode(info, info.fetch_shader_sgpr_base);
 

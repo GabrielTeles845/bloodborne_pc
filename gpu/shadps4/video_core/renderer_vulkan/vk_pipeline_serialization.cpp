@@ -14,7 +14,7 @@
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 7u; // bbport: interpolated integer fix (Pascal)
-static constexpr u32 ShaderMetaVersion = 7u; // bbport: ImageResource::needs_native
+static constexpr u32 ShaderMetaVersion = 8u; // bbport: pre-build (attribute V#s, tess constants)
 static constexpr u32 PipelineKeyVersion = 5u; // bbport: Info layout (ImageResource::needs_native)
 } // namespace Serialization
 
@@ -492,6 +492,11 @@ void StageSpecialization::Serialize(Serialization::Archive& ar) const {
     spec.Write(images);
     spec.Write(fmasks);
     spec.Write(samplers);
+    spec.Write(vs_attrib_sharps);
+    spec.Write(u8(tess_constants.has_value()));
+    if (tess_constants) {
+        spec.Write(&*tess_constants, sizeof(*tess_constants));
+    }
 }
 
 bool StageSpecialization::Deserialize(Serialization::Archive& ar) {
@@ -518,6 +523,14 @@ bool StageSpecialization::Deserialize(Serialization::Archive& ar) {
     spec.Read(images);
     spec.Read(fmasks);
     spec.Read(samplers);
+    spec.Read(vs_attrib_sharps);
+    u8 has_tess{};
+    spec.Read(has_tess);
+    if (has_tess) {
+        TessellationDataConstantBuffer constants{};
+        spec.Read(&constants, sizeof(constants));
+        tess_constants = constants;
+    }
 
     return true;
 }
