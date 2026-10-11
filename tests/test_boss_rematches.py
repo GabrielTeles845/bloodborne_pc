@@ -27,8 +27,17 @@ class BossRematchTests(unittest.TestCase):
         cls.dvdroot = Path(os.environ['BB_TEST_GAME_DIR']) / 'dvdroot_ps4'
         cls.files = boss_rematches.make(cls.dvdroot)
 
-    def test_generated_events_preserve_vanilla_event_bodies(self):
+    def test_generated_events_keep_permanent_progress_flags(self):
         files = self.files
+
+        def writes(script, flag):
+            return [(int.from_bytes(row[:8], 'little'), bank, code, args)
+                    for row in script.events
+                    for bank, code, args in script.event_instructions(
+                        int.from_bytes(row[:8], 'little'))
+                    if (bank, code) == (2003, 2)
+                    and int.from_bytes(args[:4], 'little') == flag]
+
         self.assertEqual(len(files), 40)
         for name, added in (
             ('m24_01_00_00', (boss_rematches.START_EVENT, boss_rematches.VICTORY_EVENT,
@@ -39,14 +48,31 @@ class BossRematchTests(unittest.TestCase):
             original = Emevd(dcx_decompress((self.dvdroot / relative).read_bytes()))
             modified = Emevd(dcx_decompress(files[relative]))
             self.assertEqual(modified.to_bytes(), dcx_decompress(files[relative]))
-            for row in original.events:
-                event_id = int.from_bytes(row[:8], 'little')
-                if event_id != 0:
-                    self.assertEqual(modified.event_instructions(event_id),
-                                     original.event_instructions(event_id), event_id)
             self.assertEqual(len(modified.events), len(original.events) + len(added))
             for event_id in added:
                 self.assertTrue(modified.event_instructions(event_id))
+            for row in original.events:
+                event_id = int.from_bytes(row[:8], 'little')
+                before = original.event_instructions(event_id)
+                after = modified.event_instructions(event_id)
+                if name == 'common':
+                    self.assertEqual(after[:-1] if event_id == 0 else after, before, event_id)
+                elif event_id not in (0, boss_rematches.DEFEATED, boss_rematches.FIRST_ENTRY):
+                    self.assertEqual(len(after), len(before), event_id)
+                    for old, new in zip(before, after):
+                        if all(flag.to_bytes(4, 'little') not in old[2]
+                               for flag in (boss_rematches.DEFEATED, boss_rematches.FIRST_ENTRY)):
+                            self.assertEqual(new, old, event_id)
+            for flag in (boss_rematches.DEFEATED, boss_rematches.FIRST_ENTRY):
+                self.assertEqual(writes(modified, flag), writes(original, flag))
+            if name == 'm24_01_00_00':
+                boss = modified.event_instructions(boss_rematches.DEFEATED)
+                self.assertEqual(boss[0], boss_rematches.instruction(
+                    1003, 101, 'BBBi', 0, 0, 0, boss_rematches.ARENA_DEFEATED))
+                self.assertIn(boss_rematches._set(boss_rematches.ARENA_DEFEATED, True), boss)
+                entry = modified.event_instructions(boss_rematches.FIRST_ENTRY)
+                self.assertEqual(entry[1], boss_rematches.instruction(
+                    1003, 101, 'BBBi', 0, 0, 0, boss_rematches.ARENA_ENTRY))
             if name == 'common':
                 watcher = modified.event_instructions(boss_rematches.LEAVE_MAP_EVENT)
                 self.assertEqual(watcher[0], boss_rematches.instruction(

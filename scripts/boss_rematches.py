@@ -2,15 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Experimental Cleric Beast rematch assets generated from the player's 1.09 dump.
 
-This is deliberately not installed by the launcher. Its lamp interaction, reward isolation,
-and save recovery still need a copied-save live test before it can be offered to players.
+This is deliberately not installed by the launcher. It keeps the game's completed-boss and
+first-entry flags intact, but the rematch arena, reward path, and recovery still need a copied-save
+live test before it can be offered to players.
 """
 
 import hashlib
 from pathlib import Path
 import struct
 
-from emevd import Emevd, EmevdError
+from emevd import Emevd
 from fromsoft import Bnd4, dcx_compress, dcx_decompress
 import enhanced_lamps
 import menu_assets
@@ -24,6 +25,8 @@ DEFEATED = 12411700
 FIRST_ENTRY = 12411702
 REQUEST = 12411711
 ACTIVE = 12411712
+ARENA_DEFEATED = 12411990
+ARENA_ENTRY = 12411991
 START_EVENT = 12411980
 VICTORY_EVENT = 12411981
 DEATH_EVENT = 12411982
@@ -71,7 +74,8 @@ def _unused(script: Emevd, event_ids: tuple[int, ...], flags: tuple[int, ...]) -
 
 
 def _map_events(script: Emevd) -> None:
-    _unused(script, (START_EVENT, VICTORY_EVENT, DEATH_EVENT), (REQUEST, ACTIVE))
+    _unused(script, (START_EVENT, VICTORY_EVENT, DEATH_EVENT),
+            (REQUEST, ACTIVE, ARENA_DEFEATED, ARENA_ENTRY))
     boss = script.event_instructions(DEFEATED)
     entry = script.event_instructions(FIRST_ENTRY)
     if boss[0] != instruction(1003, 101, 'BBBi', 0, 0, 1, 0):
@@ -80,12 +84,57 @@ def _map_events(script: Emevd) -> None:
     if entry[0] != instruction(1003, 2, 'BBBi', 0, 1, 0, DEFEATED):
         raise UnsupportedRematch('Cleric Beast first-entry guard differs from vanilla event')
 
-    # The constructor executes this before starting the vanilla arena events. A separate active
-    # flag survives reloads; the completed-boss flag is restored by victory/death/map-exit events.
+    # Every map event reads a private arena view of the boss and entry state. Original completion
+    # flags stay intact even if the mod disappears during a rematch. Leave writes to those original
+    # flags alone so first-time vanilla progression still saves normally.
+    originals = [(struct.unpack_from('<q', row)[0], script.event_instructions(
+        struct.unpack_from('<q', row)[0])) for row in script.events]
+    substitutions = ((DEFEATED, ARENA_DEFEATED), (FIRST_ENTRY, ARENA_ENTRY))
+    for event_id, rows in originals:
+        for position, (bank, code, args) in enumerate(rows):
+            if (bank, code) == (2003, 2):  # SetEventFlag writes: preserve permanent game flags.
+                continue
+            new_args = args
+            for original, arena in substitutions:
+                old = struct.pack('<I', original)
+                if old not in new_args:
+                    continue
+                # The second word in InitializeEvent names an event; it is not a flag.
+                if (bank, code) == (2000, 0) and new_args[4:8] == old:
+                    new_args = new_args[:8] + new_args[8:].replace(old, struct.pack('<I', arena))
+                else:
+                    new_args = new_args.replace(old, struct.pack('<I', arena))
+            if new_args != args:
+                script.replace_instruction(event_id, position, (bank, code, args),
+                                           (bank, code, new_args))
+
+    script.replace_instruction(DEFEATED, 0, boss[0],
+                               instruction(1003, 101, 'BBBi', 0, 0, 0, ARENA_DEFEATED))
+    script.replace_instruction(FIRST_ENTRY, 1, entry[1],
+                               instruction(1003, 101, 'BBBi', 0, 0, 0, ARENA_ENTRY))
+    script.replace_instruction(FIRST_ENTRY, 8, entry[8],
+                               instruction(3, 0, 'bBBi', 1, 0, 0, ARENA_ENTRY))
+    # Mark the first-entry animation as done in the arena view, without altering the original
+    # game's saved first-entry flag. The vanilla write to FIRST_ENTRY still runs on first play.
+    script.insert_instructions(FIRST_ENTRY, 20, [_set(ARENA_ENTRY, True)])
+    # A completed rematch must not repeat first-clear item lots or achievement/progression writes.
+    # KillBoss and arena cleanup remain vanilla; the private arena flag then ends the rematch.
+    script.insert_instructions(DEFEATED, 16, [
+        instruction(1003, 1, 'BBBi', 3, 0, 0, ACTIVE),
+        _set(ARENA_DEFEATED, True),
+        _set(ACTIVE, False),
+        instruction(1000, 4, 'B', 0),
+    ])
+
+    # The constructor initializes arena views before starting any original map events.
     script.insert_instructions(0, 0, [
-        instruction(1003, 1, 'BBBi', 2, 0, 0, ACTIVE),
-        _set(DEFEATED, False),
-        _set(FIRST_ENTRY, False),
+        _set(ARENA_DEFEATED, False),
+        _set(ARENA_ENTRY, False),
+        instruction(1003, 1, 'BBBi', 4, 1, 0, ACTIVE),
+        instruction(1003, 1, 'BBBi', 1, 0, 0, DEFEATED),
+        _set(ARENA_DEFEATED, True),
+        instruction(1003, 1, 'BBBi', 1, 0, 0, FIRST_ENTRY),
+        _set(ARENA_ENTRY, True),
     ])
     script.append_initialized_event(START_EVENT, [
         _await_flag_on(REQUEST),
@@ -94,6 +143,8 @@ def _map_events(script: Emevd) -> None:
         instruction(1000, 4, 'B', 0),
         _set(REQUEST, False),
         _set(ACTIVE, True),
+        _set(ARENA_DEFEATED, False),
+        _set(ARENA_ENTRY, False),
         instruction(3, 26, 'bBb', 1, 0, 2),  # Insight > 0
         instruction(1000, 1, 'BBb', 1, 0, 1),
         instruction(2004, 8, 'iiB', 10000, 4681, 0),  # one Insight, only if positive
@@ -103,25 +154,27 @@ def _map_events(script: Emevd) -> None:
     ])
     script.append_initialized_event(VICTORY_EVENT, [
         _end_if_flag_off(ACTIVE),
-        _await_flag_on(DEFEATED),
+        _await_flag_on(ARENA_DEFEATED),
         _set(ACTIVE, False),
     ])
     script.append_initialized_event(DEATH_EVENT, [
         _end_if_flag_off(ACTIVE),
         instruction(4, 2, 'bibf', 0, 10000, 5, 0.0),  # hunter HP <= 0
-        _set(DEFEATED, True),
+        _set(ARENA_DEFEATED, True),
+        _set(ARENA_ENTRY, True),
         _set(ACTIVE, False),
     ])
 
 
 def _common_events(script: Emevd) -> None:
-    _unused(script, (LEAVE_MAP_EVENT,), (REQUEST, ACTIVE))
+    _unused(script, (LEAVE_MAP_EVENT,), (REQUEST, ACTIVE, ARENA_DEFEATED, ARENA_ENTRY))
     script.append_initialized_event(LEAVE_MAP_EVENT, [
         _await_flag_on(ACTIVE),
         instruction(1001, 0, 'f', 3.0),
         instruction(1003, 7, 'BBBB', 1, 0, 24, 1),  # outside Central Yharnam
         instruction(1000, 4, 'B', 1),  # still in arena: check again later
-        _set(DEFEATED, True),
+        _set(ARENA_DEFEATED, True),
+        _set(ARENA_ENTRY, True),
         _set(ACTIVE, False),
         instruction(1000, 4, 'B', 1),
     ])
