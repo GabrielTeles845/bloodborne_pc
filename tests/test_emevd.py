@@ -37,6 +37,8 @@ class EmevdTests(unittest.TestCase):
                 insertion = struct.unpack_from('<q', script.events[0], 8)[0]
                 script.append_initialized_event(19999990, [(1000, 4, b'\0\0\0\0')])
                 edited = Emevd(script.to_bytes())
+                self.assertEqual(edited.event_instructions(0)[-1],
+                                 (2000, 0, struct.pack('<iii', 0, 19999990, 0)))
                 self.assertEqual([bytes(row) for row in edited.instructions[:insertion]],
                                  original_instructions[:insertion])
                 self.assertEqual([bytes(row) for row in edited.instructions[insertion + 1:-1]],

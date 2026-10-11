@@ -108,7 +108,10 @@ class Emevd:
             if (not 0 <= bank <= 0x7fffffff or not 0 <= code <= 0x7fffffff
                     or not isinstance(args, bytes) or len(args) % 4):
                 raise EmevdError('invalid EMEVD instruction')
-        init_args = struct.pack('<ii', slot, event_id)
+        # Bloodborne's InitializeEvent has a required four-byte argument payload even when the
+        # called event takes no arguments. The previous 8-byte form parsed as an EMEVD record
+        # but is rejected by the game's documented instruction layout.
+        init_args = struct.pack('<iii', slot, event_id, 0)
         self.insert_instructions(0, _q(self.events[0], 8), [(2000, 0, init_args)])
         first = len(self.instructions) * INSTRUCTION
         new_rows = [self._new_instruction(bank, instruction_id, args)
