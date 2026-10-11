@@ -47,7 +47,22 @@ class LampPrototypeTests(unittest.TestCase):
                                      (6, enhanced_lamps.VANILLA_WARP_GROUP))
                     self.assertEqual([script.exprs[x].code for x in script.runs[warp_call.args].items],
                                      [b'\x40\xb8\xa1', b'\x41\xb8\xa1', b'\x42\xb8\xa1'])
-                    end = script.states[script.state_in(menu, 5)]
+                    original = esd.parse(old_data)
+                    original_active = original.group(enhanced_lamps.ACTIVE_GROUP)
+                    original_warp = original.states[original.state_in(original_active,
+                                                                      enhanced_lamps.ACTIVE_STATE)]
+                    original_conditions = [original.exprs[original.conds[c].eval].code
+                                           for c in original.runs[original_warp.conds].items]
+                    patched_conditions = [script.exprs[script.conds[c].eval].code
+                                          for c in script.runs[warp.conds].items]
+                    self.assertEqual(patched_conditions, original_conditions)
+                    restart = script.states[script.state_in(menu, 5)]
+                    original_follow = original.states[original.state_in(original_active, 5)]
+                    self.assertEqual([(script.cmds[c].bank, script.cmds[c].id)
+                                      for c in script.runs[restart.entry].items],
+                                     [(original.cmds[c].bank, original.cmds[c].id)
+                                      for c in original.runs[original_follow.entry].items])
+                    end = script.states[script.state_in(menu, 6)]
                     self.assertEqual(script.conds[script.runs[end.conds].items[0]].target, -1)
                     self.assertEqual(esd.serialize(script), new_data)
                     changed += 1
