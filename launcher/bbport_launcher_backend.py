@@ -61,8 +61,6 @@ FIELDS = {
         row('language', 'Game language', 'choice', core.LANGUAGES),
         row('player_name', 'Hunter name'),
         *[row(key, title[0], 'toggle') for key, title, _ in core.EXTRAS[:1]],
-        # PC enhancements: made from the game files when the game starts.
-        *[row(key, title[0], 'toggle') for key, title, _ in core.ENHANCEMENTS],
     ],
     'Controller': [
         row('mouse_camera', 'Mouse camera (click the game window to use it)', 'toggle'),
@@ -88,6 +86,9 @@ FIELDS = {
         row('mods_enabled', 'Enable mods', 'toggle'),
         row('mods_dir', 'Mods folder', 'folder'),
         row('patches_dir', 'External patches folder', 'folder'),
+    ],
+    'Enhancements': [
+        *[row(key, title[0], 'toggle') for key, title, _ in core.ENHANCEMENTS],
     ],
     # Launch behaviour (launchDirectly, close_on_play, shortcuts) lives on Home; the update
     # toggle has its own row with "Check now" in Main.qml.
@@ -821,6 +822,10 @@ class LauncherBackend(QObject):
         if restart:
             os.startfile('steam://open/games')
         self._set_notice('Bloodborne was added to your Steam library.')
+
+    @Slot()
+    def openShadNetRegistration(self):
+        webbrowser.open('https://shadps4.net/shadnet/register/')
 
     @Slot()
     def testConnection(self):

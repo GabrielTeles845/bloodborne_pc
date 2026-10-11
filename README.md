@@ -146,11 +146,12 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
 
 ## What's changed
 
-- **In-game PC menus (1.6.10):** the game's System menu offers PC Graphics, Display,
-  Effects, Settings, Gameplay and Enhancements, plus Restart to Apply. All six sections
-  were checked in gameplay. Cheats and Achievements remain in the L3+R3 overlay and launcher
-  because a seventh generated section crashes the in-game movie. The menu engine is ported
-  from [bbhost](https://github.com/droogie/bbhost).
+- **In-game PC menus (1.6.11):** the game's System menu offers native Achievements,
+  PC Graphics, Display, Effects, Settings and Gameplay, plus Restart to Apply.
+  Achievements replaces the PC Enhancements section to keep the movie at its tested
+  six-section limit. Cheats and the three PC enhancements remain in the launcher and
+  Insert/L3+R3 overlay. The menu engine is ported from
+  [bbhost](https://github.com/droogie/bbhost).
 - **Rebirth (1.6.9, `pc_rebirth`, `BB_PC_REBIRTH=1`):** the Altar of Despair in the Nightmare lets you
   reallocate your stats. It is off by default and has not been tested in play yet.
 - **Keyboard and mouse (1.6.10):** play alongside the gamepad with rebindable keys
@@ -158,8 +159,8 @@ switch between Xbox and original PlayStation buttons on the launcher's **Control
   Mouse settings are on the launcher's Controller page and in bport.ini. On-screen
   keyboard prompts are not done yet.
 - Optional PC enhancements, ported from droogie's [bbhost](https://github.com/droogie/bbhost),
-  off by default (the game as it shipped). Switch them on in the launcher's **Game** page or the
-  in-game menu's **PC enhancements**; they apply after a restart and are made from your own game
+  off by default (the game as it shipped). Switch them on in the launcher's **Mods** page
+  or the Insert/L3+R3 overlay; they apply after a restart and are made from your own game
   files, which stay unchanged.
   - **Hunter's Dream mirror** (`pc_mirror_appearance`, `BB_PC_MIRROR=1`): the workshop's mirror
     opens the appearance editor, the developers' unused "Put on Disguise".

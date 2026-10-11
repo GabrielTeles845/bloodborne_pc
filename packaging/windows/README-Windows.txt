@@ -45,7 +45,8 @@ Starting
   "Apply mods and restart". This also applies gameplay patch changes.
   Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square,
   Q Triangle, 1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad.
-- Earned trophies show an achievement popup and appear in the guide's Achievements section.
+- The game's System menu has a native Achievements section. Earned trophies also show an
+  achievement popup and appear in the guide's Achievements section.
   In Achievements, "Preview achievement toast" tests the popup without unlocking anything.
   Unlock dates are saved in user\trophies.txt. Trophy icons come from your own game folder.
   Names, descriptions, grades and Gamerscore require your own PS4 trophy key in
@@ -67,12 +68,19 @@ Data
 - Generated files (prepared game image, patches): out\.
 
 Online play (beta)
-- Register a shadNet account at https://shadnet.shadps4.net. In the launcher open
-  "Online", tick "Play online", enter the account name (not the email) and password,
-  use "Test connection", then PLAY and choose online at the title screen.
+- Create a shadNet account at https://shadps4.net/shadnet/register/ (no Discord
+  required). In the launcher open "Online", tick "Play online", enter the account
+  name (not the email) and password, then PLAY and choose online at the title screen.
+  "Test connection" checks server reachability; it does not verify account sign-in.
+  The Hunter's Dream website account is separate and optional for gameplay.
 - Messages, bloodstains and ghosts come from The Hunter's Dream (https://thehuntersdream.com);
   bells and summons go through the shadNet server. Everyone needs game version 1.09 and the
   same co-op server. Summoning between players is not confirmed yet.
+
+PC enhancements
+- In the launcher's Mods page, Hunter's Dream Mirror, Two Invaders, and Rebirth at the
+  Altar are optional and off by default. They are made from your own game files at launch;
+  turn one on, then restart. They do not require the Load mods switch.
 
 Cheats
 - The "Cheats" page has cheats (never die, enemies do not see or hear you, Rally never fades,

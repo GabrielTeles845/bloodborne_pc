@@ -414,9 +414,17 @@ ApplicationWindow {
                             GlassButton { text: "Download FSR 4 assets"; width: 182; height: 35; onClicked: launcher.downloadFsr4() }
                         }
                         Row { visible: page === "Online"; spacing: 9
+                            GlassButton { text: "Create shadNet account"; width: 195; height: 36; onClicked: launcher.openShadNetRegistration() }
                             GlassButton { text: "Test connection"; width: 165; height: 36; onClicked: launcher.testConnection() }
-                            Text { text: "Your account ID is the server name, not your email."; color: quiet; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
                         }
+                        Text { visible: page === "Online"; text: "No Discord needed. Register on shadPS4, then enter that account name and password above. The Hunter's Dream website account is separate and optional."; color: quiet; font.pixelSize: 12; wrapMode: Text.WordWrap; width: settingsColumn.width }
+                        Text { visible: page === "Online"; text: "Test connection checks server reachability, not your account sign-in."; color: quiet; font.pixelSize: 12; wrapMode: Text.WordWrap; width: settingsColumn.width }
+                        Text { visible: page === "Mods"; text: "PC GAMEPLAY ENHANCEMENTS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
+                        Repeater {
+                            model: page === "Mods" ? launcher.fields("Enhancements") : []
+                            delegate: FieldRow { width: settingsColumn.width; field: modelData }
+                        }
+                        Text { visible: page === "Mods"; text: "Made from your own game files at launch; restart to apply. These do not require Load mods."; color: quiet; font.pixelSize: 12; wrapMode: Text.WordWrap; width: settingsColumn.width }
                         Text { visible: page === "Mods"; text: "INSTALLED MODS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
                         Text { visible: page === "Mods" && launcher.contentMods.length === 0; text: "No other mods installed. Xbox button prompts are on the Controller page."; color: quiet; font.pixelSize: 12 }
                         Repeater {

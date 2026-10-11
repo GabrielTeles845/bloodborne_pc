@@ -61,7 +61,10 @@ class FormatTests(unittest.TestCase):
         self.assertIsNotNone(native)
         indices = [int(index) for index in native.group(1).split(',')]
         self.assertEqual([sections[index][0] for index in indices],
-                         [name for name, *_ in m.NATIVE_SECTIONS])
+                         [name for name, *_ in m.NATIVE_SECTIONS if name != 'PCAchieve'])
+        self.assertIn(('PCAchieve', 128020, 6), m.NATIVE_SECTIONS)
+        self.assertNotIn(('PCEnhance', 124020, 3), m.NATIVE_SECTIONS)
+        self.assertIn('add_command(builder, ROW_ACHIEVEMENTS, (const void *)ach_row, 1)', runtime)
         self.assertEqual(len(m.NATIVE_SECTIONS), 6)  # in-game GFX capacity checked in play
         counts = {name: rows_n for name, _title, rows_n in m.SECTION_ROWS}
         for name, system, array in sections:

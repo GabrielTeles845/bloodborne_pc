@@ -49,7 +49,7 @@ FEATURES = {
 # Off unless switched on, except these: they change nothing the game does by themselves.
 DEFAULT_ON = {'pc_menu'}
 # Bumped when a rewrite changes, so every install makes its files again.
-VERSION = 'enhancements 3'  # 3: the native movie keeps six instantiated PC sections
+VERSION = 'enhancements 4'  # 4: Achievements replaces PC Enhancements in the six-section movie
 
 
 def sha256(data):

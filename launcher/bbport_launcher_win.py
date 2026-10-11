@@ -41,8 +41,8 @@ PATCH_VERSION = '01.09'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This fork's build; the release tag includes this version.
-VERSION = '1.6.10'
-CURRENT_RELEASE_TAG = 'qml-launcher-preview-6'
+VERSION = '1.6.11'
+CURRENT_RELEASE_TAG = 'qml-launcher-preview-7'
 HERO_ART = PORT_DIR / 'launcher' / 'art' / 'hero.png'
 STRIP_ART = PORT_DIR / 'launcher' / 'art' / 'strip.png'
 # Co-op: the community server that answers the game's own server requests.
@@ -1292,14 +1292,18 @@ class Launcher:
                  _('Of the shadNet server, not the game server. Leave empty: the server address with '
                    'port 31315 is used.'))
         self.section(f, _('Account'))
+        self.row(f, '', ttk.Button(f, text=_('Create shadNet account (no Discord)'),
+                                   command=lambda: webbrowser.open('https://shadps4.net/shadnet/register/')))
+        self.note(f, _('The Hunter\'s Dream website account is separate and optional for gameplay.'))
         self.row(f, _('Online ID (NPID)'), ttk.Entry(f, textvariable=self.var('online_npid', 'app'), width=40),
-                 _('Your shadNet account name, not your email. Register one at shadnet.shadps4.net, or ask the '
+                 _('Your shadNet account name, not your email. Register one at shadps4.net/shadnet/register/, or ask the '
                    'owner of a private server.'))
         self.row(f, _('Password'), ttk.Entry(f, textvariable=self.var('online_password', 'app'), width=40, show='•'),
                  _('Saved on this PC with the other launcher settings.'))
         self.section(f, _('Connection'))
         self.check(f, 'online_upnp', 'app', _('UPnP (open a port on the router automatically)'),
                    _('Turn it off on Tailscale or another VPN.'))
+        self.note(f, _('Test connection checks server reachability, not account sign-in.'))
         result = ttk.Label(f, text='', style='Muted.TLabel', justify='left')
 
         def check():
@@ -1335,15 +1339,11 @@ class Launcher:
                     _('Empty: {}', 'Пусто: {}').format(DATA_DIR / 'mods'), on_change=self.refresh_lists)
         self.mods_frame = self.ttk.Frame(f)
         self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
-        self.section(f, _('Optional: Bloodborne Enhanced', 'Дополнительно: Bloodborne Enhanced'))
-        self.note(f, _('Adds lamp rest and travel, vial restocking and boss rematches. Download it from its author, '
-                       'place it in the Mods folder, then enable it above. Its own features can be changed in game '
-                       'through the Doll or Prime Hunter\'s Mark. It is not included in this launcher.',
-                       'Добавляет отдых и перемещение у ламп, пополнение флаконов и повторные бои с боссами. '
-                       'Скачайте мод у автора и поместите его в папку модов. Настройки меняются через Куклу.'), top=4)
-        self.ttk.Button(f, text=_('Open Bloodborne Enhanced on Nexus', 'Открыть Bloodborne Enhanced на Nexus'),
-                        command=lambda:webbrowser.open('https://www.nexusmods.com/bloodborne/mods/19')).grid(
-                            row=self.next_row(f),column=0,columnspan=2,sticky='w',pady=(10,0))
+        self.section(f, _('PC gameplay enhancements'))
+        for key, title, _on in ENHANCEMENTS:
+            self.check(f, key, 'ini', _(*title))
+        self.note(f, _('Made from your own game files at launch. Restart to apply; Load mods is not required.'))
+        self.note(f, _('Enhanced Lamps and Boss Rematches are still experimental and are not installed by this launcher.'))
         self.section(f, _('Third-party patches', 'Сторонние патчи'))
         self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
                     _('shadPS4/GoldHEN XML patch files for version 1.09. Empty: {}',
@@ -1765,7 +1765,7 @@ class Launcher:
             return
 
         def show():
-            if version_tuple(version) > version_tuple(VERSION):
+            if release_is_newer(version):
                 self.offer_update(version, url, page)
             elif manual:
                 self.messagebox.showinfo('Bloodborne', _('You have the latest version ({}).',

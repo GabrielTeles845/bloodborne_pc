@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * The in-game PC menu: PC Graphics, PC Display, PC Effects, PC Settings, PC Gameplay
- * and PC Enhancements rows in the game's own System menu, each opening a section drawn by the
+ * and Achievements rows in the game's own System menu, each opening a section drawn by the
  * game like Controls or Language, plus Restart to Apply and the title menu's Quit Game. It
  * offers what the L3+R3 overlay offers, which stays available.
  *
@@ -485,7 +485,7 @@ static const void *const SECTION_ROWS[] = {
     (const void *)row_0, (const void *)row_1, (const void *)row_2, (const void *)row_3,
     (const void *)row_4, (const void *)row_5, (const void *)row_6,
 };
-static const int NATIVE_SECTION_INDEX[] = {0, 1, 2, 3, 4, 6};  /* Cheats stay in the overlay. */
+static const int NATIVE_SECTION_INDEX[] = {0, 1, 2, 3, 4};  /* Cheats and Enhancements stay in the overlay. */
 _Static_assert(sizeof(SECTION_ROWS) / sizeof(SECTION_ROWS[0]) == sizeof(g_sections) / sizeof(g_sections[0]),
                "one row function per section");
 
@@ -697,7 +697,7 @@ static BB_GUEST_ABI int64_t ach_opener(void *root, void *params) {
     return dialog;
 }
 
-static BB_GUEST_ABI __attribute__((unused)) void *ach_row(void *out, void *ctx) { return row_open(out, ctx, (const void *)ach_opener); }
+static BB_GUEST_ABI void *ach_row(void *out, void *ctx) { return row_open(out, ctx, (const void *)ach_opener); }
 
 /* --- Yes/no commands: Quit Game and Restart to Apply ------------------------------------- */
 /* Built like the game's own Exit Game opener (sub_200c9f0): a message box from a dialog caption
@@ -787,7 +787,7 @@ static BB_GUEST_ABI void *system_finalize(void *out, void *builder, void *arg3) 
     unsigned char *last = builder_last_row(builder);
     const int move_exit = last && row_is_exit_game(last);
     if (move_exit) pop_last_row(builder);
-    /* Achievements stays in the overlay: a seventh native movie section crashes in game. */
+    add_command(builder, ROW_ACHIEVEMENTS, (const void *)ach_row, 1);
     for (int k = 0; k < COUNT(NATIVE_SECTION_INDEX); ++k) {
         const int i = NATIVE_SECTION_INDEX[k];
         add_command(builder, g_sections[i].system_row, SECTION_ROWS[i], 1);
@@ -864,7 +864,7 @@ int bb_pc_menu_install(void) {
     }
     g_installed = 1;
     int hooks = 3 + hook_list_update();
-    printf("PC menu: System gains %d PC sections and Restart to Apply\n", COUNT(NATIVE_SECTION_INDEX));
+    printf("PC menu: System gains Achievements, %d PC sections and Restart to Apply\n", COUNT(NATIVE_SECTION_INDEX));
     const char *quit = getenv("BB_PC_MENU_QUIT");
     if (!quit || strcmp(quit, "1"))
         puts("PC menu: no Quit Game on the title (its line was not made)");
