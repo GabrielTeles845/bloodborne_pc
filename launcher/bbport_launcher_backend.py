@@ -320,10 +320,11 @@ class LauncherBackend(QObject):
 
     @Property(str, notify=changed)
     def promptChoice(self):
-        if self.app.get('button_prompts') == 'Keyboard':
+        """From the mods in use, so a choice made in the game's overlay shows here too."""
+        enabled = {m['name'] for m in self._mods if self._is_prompt_mod(m['name']) and m['enabled']}
+        if core.KEYBOARD_PROMPTS in enabled:
             return 'Keyboard'
-        prompts = [m for m in self._mods if self._is_prompt_mod(m['name'])]
-        return 'Xbox' if any(m['enabled'] for m in prompts) else 'PlayStation'
+        return 'Xbox' if enabled else 'PlayStation'
 
     @Property(str, notify=changed)
     def fsrStatus(self):
@@ -689,8 +690,6 @@ class LauncherBackend(QObject):
             (enabled.add if name in chosen else enabled.discard)(name)
         profile.update({'enabled': sorted(enabled), 'disabled': sorted(disabled)})
         profile_file.write_text(json.dumps(profile, indent=2), encoding='utf-8')
-        self.app['button_prompts'] = choice
-        self._write()
         if choice == 'Keyboard':  # the keys the images show
             core.save_ini(core.KEYBOARD_PROMPT_LAYOUT, self.ini_lines)
             self.ini, self.ini_lines = core.load_ini()

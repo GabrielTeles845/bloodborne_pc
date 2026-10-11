@@ -108,9 +108,22 @@ class FirstRunWizardTests(unittest.TestCase):
         ini = (self.root / 'bbport.ini').read_text(encoding='utf-8')
         self.assertIn('key_roll=Left Shift', ini)
         self.assertIn('key_lock_on=Mouse3', ini)
-        env = core.game_environment(backend.app)
-        self.assertEqual((env['BB_BUTTON_PROMPTS'], env['BB_KEY_PROMPT_IMAGES']), ('Keyboard', '1'))
         self.assertNotIn(core.KEYBOARD_PROMPTS, [m['name'] for m in backend.contentMods])
+        # What run.py reads at every start (BB_BUTTON_PROMPTS): the key images, not the Xbox ones.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+        import mods
+        in_use = mods.selected(self.root / 'mods', self.root / 'mods.json')
+        self.assertIn(core.KEYBOARD_PROMPTS, in_use)
+        self.assertNotIn('Xbox 360 Prompts (Elden Ring)', in_use)
+        # A choice made in the game's overlay (mods.json only) shows in the launcher too.
+        profile = json.loads((self.root / 'mods.json').read_text())
+        profile['disabled'] = sorted(set(profile['disabled']) - {'Xbox 360 Prompts (Elden Ring)'}
+                                     | {core.KEYBOARD_PROMPTS})
+        (self.root / 'mods.json').write_text(json.dumps(profile))
+        backend.refresh_addons()
+        self.assertEqual(backend.promptChoice, 'Xbox')
+        backend.setPrompt('Keyboard')  # already imported: no file dialog
+        self.assertEqual(backend.promptChoice, 'Keyboard')
         backend.setPrompt('Xbox')
         profile = json.loads((self.root / 'mods.json').read_text())
         self.assertIn(core.KEYBOARD_PROMPTS, profile['disabled'])

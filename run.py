@@ -19,6 +19,8 @@ import sys
 PORT = Path(__file__).resolve().parent
 # The Xbox button prompts mod the package ships (packaging/windows/mods).
 XBOX_PROMPTS = 'Xbox 360 Prompts (Elden Ring)'
+# The keyboard key images the player imports (launcher KEYBOARD_PROMPTS, PCBButtons).
+KEYBOARD_PROMPTS = 'Keyboard Prompts (PCBButtons)'
 
 
 # Co-op: the community service that answers Bloodborne's own game-server requests
@@ -177,6 +179,20 @@ def main():
                            *(arg for folder in bundled for arg in ('--bundled', folder)),
                            capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
+    # Keyboard prompts: whether the key images are among the mods in use, as the launcher's
+    # Controller page or the overlay's Mods tab left mods.json (read again on an in-game restart).
+    # src/key_prompts.c names the bound keys in text when the images do not match the bindings.
+    keyboard = False
+    if env.get('BB_MODS_ENABLED', '1') == '1':
+        sys.path.insert(0, str(PORT / 'scripts'))
+        import mods as mod_list
+        try:
+            keyboard = KEYBOARD_PROMPTS in mod_list.selected(Path(env.get('BB_MODS_DIR', data / 'mods')),
+                                                           Path(env.get('BB_MODS_CONFIG', data / 'mods.json')))
+        except (OSError, ValueError):
+            pass
+    env['BB_BUTTON_PROMPTS'] = 'Keyboard' if keyboard else ''
+    env['BB_KEY_PROMPT_IMAGES'] = '1' if keyboard else '0'
     try:
         run_script('prepare.py', game, '--out', out)
         run_script('link_libc.py', game, '--out', out)

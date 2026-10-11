@@ -553,26 +553,44 @@ void ModsTab() {
     ImGui::TextWrapped("Select button prompts and gameplay patches, then restart to apply them.");
     if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
         ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Mod loading is off in the launcher. Enable it there first.");
+    // 0 the game's PlayStation buttons, 1 the Xbox prompt mod, 2 the keyboard key images the
+    // launcher imports (PCBButtons; run.py reads the choice again at every start).
     ImGui::SeparatorText("Button prompts");
     static const auto xbox_folder = XboxPromptFolder();
-    static std::optional<bool> xbox_enabled;
-    if (xbox_folder) {
-        if (!xbox_enabled) xbox_enabled = PromptEnabled(*xbox_folder);
-        int choice = *xbox_enabled ? 1 : 0;
-        if (ImGui::RadioButton("Original PlayStation buttons", choice == 0)) choice = 0;
-        if (ImGui::RadioButton("Xbox buttons", choice == 1)) choice = 1;
-        if (bool(choice) != *xbox_enabled) {
-            if (SetPromptEnabled(*xbox_folder, choice == 1)) {
-                xbox_enabled = choice == 1;
-                mod_selection_changed = true;
-                mod_selection_error.clear();
-            } else mod_selection_error = "Could not save mods.json. Check the port folder permissions.";
-        }
-        ImGui::TextDisabled("Xbox prompts: %s", xbox_folder->c_str());
-    } else {
-        ImGui::TextDisabled("Original PlayStation buttons");
-        ImGui::TextDisabled("Install an Xbox prompt mod in the launcher's Mods folder to enable Xbox buttons.");
+    static const std::optional<std::string> keyboard_folder = [] () -> std::optional<std::string> {
+        const char* configured = std::getenv("BB_MODS_DIR");
+        const auto root = configured && *configured ? std::filesystem::path(configured) :
+                          std::filesystem::current_path() / "mods";
+        std::error_code ec;
+        const std::string name = "Keyboard Prompts (PCBButtons)";
+        if (std::filesystem::is_directory(root / name, ec)) return name;
+        return std::nullopt;
+    }();
+    static int prompt_choice = -1;
+    if (prompt_choice < 0)
+        prompt_choice = keyboard_folder && PromptEnabled(*keyboard_folder) ? 2
+                      : xbox_folder && PromptEnabled(*xbox_folder) ? 1 : 0;
+    int choice = prompt_choice;
+    if (ImGui::RadioButton("Original PlayStation buttons", choice == 0)) choice = 0;
+    ImGui::BeginDisabled(!xbox_folder);
+    if (ImGui::RadioButton("Xbox buttons", choice == 1)) choice = 1;
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(!keyboard_folder);
+    if (ImGui::RadioButton("Keyboard keys", choice == 2)) choice = 2;
+    ImGui::EndDisabled();
+    if (choice != prompt_choice) {
+        const bool saved = (!xbox_folder || SetPromptEnabled(*xbox_folder, choice == 1)) &&
+                           (!keyboard_folder || SetPromptEnabled(*keyboard_folder, choice == 2));
+        if (saved) {
+            prompt_choice = choice;
+            mod_selection_changed = true;
+            mod_selection_error.clear();
+        } else mod_selection_error = "Could not save mods.json. Check the port folder permissions.";
     }
+    if (!xbox_folder)
+        ImGui::TextDisabled("Install an Xbox prompt mod in the launcher's Mods folder to enable Xbox buttons.");
+    if (!keyboard_folder)
+        ImGui::TextDisabled("Keyboard keys: choose Keyboard once on the launcher's Controller page to import them.");
     if (!mod_selection_error.empty())
         ImGui::TextColored(ImVec4(.95f,.35f,.35f,1), "%s", mod_selection_error.c_str());
     ImGui::SeparatorText("Gameplay and debug");

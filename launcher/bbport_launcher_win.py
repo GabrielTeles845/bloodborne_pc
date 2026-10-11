@@ -185,7 +185,6 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'button_prompts': '',  # empty preserves the older Xbox mod selection
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
@@ -407,10 +406,6 @@ def import_keyboard_prompts(source, mods_dir):
 
 def game_environment(s):
     env = dict(os.environ)
-    env['BB_BUTTON_PROMPTS'] = s.get('button_prompts', '')
-    # Whether PCBButtons' key images are in place (src/key_prompts.c names keys only without them).
-    keyboard_mod = Path(s.get('mods_dir') or DATA_DIR / 'mods') / KEYBOARD_PROMPTS / 'menu' / 'common.tpf.dcx'
-    env['BB_KEY_PROMPT_IMAGES'] = '1' if env['BB_BUTTON_PROMPTS'] == 'Keyboard' and keyboard_mod.is_file() else '0'
     env['BB_GAME_DIR'] = s['game_dir']
     if s['user_dir']:
         env['BB_USER_DIR'] = s['user_dir']
