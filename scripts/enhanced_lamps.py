@@ -103,13 +103,23 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     args = [script.exprs[i].code for i in script.runs[old.args].items]
     if len(args) != 3:
         raise UnsupportedLamp('vanilla warp call does not have three parameters')
+    follow = script.state_in(active, 5)
+    if follow < 0:
+        raise UnsupportedLamp('vanilla post-warp state is missing')
+    warp_conditions = script.runs[script.states[site].conds].items
+    follow_conditions = script.runs[script.states[follow].conds].items
+    if (len(warp_conditions) != 2
+            or [script.conds[c].target for c in warp_conditions] != [-1, follow]
+            or len(follow_conditions) != 1
+            or script.conds[follow_conditions[0]].target != -1):
+        raise UnsupportedLamp('vanilla warp continuation has an unknown shape')
 
     # Preserve the existing action's three arguments for the Warp choice. A separate group opens
     # the game's own talk list; it calls the game's own level, storage and warp operations.
     script.states[site].entry = script.run([script.cmd(6, LAMP_MENU_GROUP, args)])
-    states = [script.state(i) for i in range(6)]
+    states = [script.state(i) for i in range(7)]
     script.groups.append(esd.Group(LAMP_MENU_GROUP, states))
-    start, menu, level, storage, warp, end = states
+    start, menu, level, storage, warp, restart, end = states
     true = esd.done(esd.lit(1))
 
     script.states[start].conds = script.run([script.cond(menu, true)])
@@ -146,7 +156,15 @@ def add_lamp_menu(data: bytes, expected_sha: str) -> bytes:
     # Registers 0..2 are the three arguments passed through by the activated-lamp state.
     passthrough = [esd.done(bytes((0x40 + i, 0xb8))) for i in range(3)]
     script.states[warp].entry = script.run([script.cmd(6, VANILLA_WARP_GROUP, passthrough)])
-    script.states[warp].conds = script.run([script.cond(end, true)])
+    # Preserve both vanilla warp outcomes, including its post-warp root call.
+    script.states[warp].conds = script.run([
+        script.cond(end, script.exprs[script.conds[warp_conditions[0]].eval].code),
+        script.cond(restart, script.exprs[script.conds[warp_conditions[1]].eval].code),
+    ])
+    script.states[restart].entry = script.run(list(script.runs[script.states[follow].entry].items))
+    script.states[restart].conds = script.run([
+        script.cond(end, script.exprs[script.conds[follow_conditions[0]].eval].code)
+    ])
     script.states[end].conds = script.run([script.cond(-1, true)])  # return to the vanilla caller
 
     wait = script.cmd(1, 68, [b'\x81' + struct.pack('<d', 0.33) + b'\xa1'])
