@@ -40,7 +40,7 @@ class FormatTests(unittest.TestCase):
         for mid in (110006, 110013, 116020, 124020, 125000, 116004, 124001, 124003):
             self.assertTrue(rows[mid][0], mid)
         events = [mid for mid in rows if m.message_kind(mid) == 'event']
-        self.assertEqual(events, [14000332, 14000333, 14000334, 14000335, 14000336])
+        self.assertEqual(events, [14000332, 14000333, 14000334, 14000335, 14000336, 14000337])  # Rebirth; Rematch Cleric Beast
         self.assertEqual([mid for mid in rows if m.message_kind(mid) == 'dialog'], [920001, 920002])
         self.assertEqual(rows[122000][0], 'Quit Game')
 

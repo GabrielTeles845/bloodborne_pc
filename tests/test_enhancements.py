@@ -49,9 +49,12 @@ class SettingsTests(unittest.TestCase):
     def test_overlay_and_launcher_offer_the_same_keys(self):
         header = (ROOT / 'gpu/shim/bbport_settings.h').read_text(encoding='utf-8')
         launcher = (ROOT / 'launcher/bbport_launcher_win.py').read_text(encoding='utf-8')
-        for key in set(enhancements.FEATURES) - enhancements.DEFAULT_ON:
+        for key in set(enhancements.FEATURES) - enhancements.DEFAULT_ON - enhancements.EXPERIMENTAL:
             self.assertIn(f'{{"{key}", ', header)
             self.assertIn(f"('{key}', ", launcher)
+        for key in enhancements.EXPERIMENTAL:  # not offered to players until tested in play
+            self.assertNotIn(f'{{"{key}", ', header)
+            self.assertNotIn(f"('{key}', ", launcher)
 
 
 class RewriteTests(unittest.TestCase):
@@ -121,6 +124,27 @@ class RealGameTests(unittest.TestCase):
             again = enhancements.make(GAME, out, ['pc_mirror_appearance'])
             self.assertEqual([m.name for m in again], ['dream-mirror'])
             self.assertEqual(stamp.stat().st_mtime_ns, before)  # up to date: not made again
+
+    def test_experimental_rematch_keeps_the_lamps_and_rebirth(self):
+        from fromsoft import Bnd4
+        import esd
+        import enhanced_lamps
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            keys = enhancements.enabled({'pc_rebirth': '1', 'pc_enhanced_lamps': '1'}, {'BB_PC_REMATCHES': '1'})
+            self.assertEqual(keys[-3:], ['pc_enhanced_lamps', 'pc_boss_rematches', 'pc_menu'])
+            made = {m.name: m for m in enhancements.make(GAME, out, keys)}
+            root = made['boss-rematches'] / 'dvdroot_ps4'
+            self.assertTrue((root / 'event/m24_01_00_00.emevd.dcx').is_file())
+            # The altar archive keeps Rebirth; Central Yharnam's lamp has the menu and the rematch.
+            altar = Bnd4(dcx_decompress((root / 'script/talk/m24_02_00_00.talkesdbnd.dcx').read_bytes()))
+            self.assertEqual(hashlib.sha256(altar.files[altar.index('t242307.esd')]).hexdigest(),
+                             enhancements.REBIRTH_OUT)
+            yharnam = Bnd4(dcx_decompress((root / 'script/talk/m24_01_00_00.talkesdbnd.dcx').read_bytes()))
+            lamp = esd.parse(yharnam.files[yharnam.index('t241002.esd')])
+            self.assertIsNotNone(lamp.group(enhanced_lamps.LAMP_MENU_GROUP))
+        # Off unless the experiment is asked for: there is no launcher toggle.
+        self.assertNotIn('pc_boss_rematches', enhancements.enabled({'pc_boss_rematches': '0'}, {}))
 
     def test_lamps_and_rebirth_share_the_altar_archive(self):
         from fromsoft import Bnd4
