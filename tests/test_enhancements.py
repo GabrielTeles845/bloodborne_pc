@@ -122,6 +122,30 @@ class RealGameTests(unittest.TestCase):
             self.assertEqual([m.name for m in again], ['dream-mirror'])
             self.assertEqual(stamp.stat().st_mtime_ns, before)  # up to date: not made again
 
+    def test_lamps_and_rebirth_share_the_altar_archive(self):
+        from fromsoft import Bnd4
+        import enhanced_lamps
+        shared = 'script/talk/m24_02_00_00.talkesdbnd.dcx'
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            keys = enhancements.enabled({'pc_rebirth': '1', 'pc_enhanced_lamps': '1'}, {})
+            self.assertLess(keys.index('pc_rebirth'), keys.index('pc_enhanced_lamps'))  # lamps win
+            made = enhancements.make(GAME, out, keys)
+            self.assertIn('enhanced-lamps', [m.name for m in made])
+            archive = Bnd4(dcx_decompress((out / 'enhanced-lamps/dvdroot_ps4' / shared).read_bytes()))
+            altar = archive.files[archive.index('t242307.esd')]
+            self.assertEqual(hashlib.sha256(altar).hexdigest(), enhancements.REBIRTH_OUT)
+            lamp = archive.files[archive.index('t242000.esd')]
+            self.assertIsNotNone(__import__('esd').parse(lamp).group(enhanced_lamps.LAMP_MENU_GROUP))
+            # Rebirth switched off: the lamp layer is made again, without the altar edit.
+            stamp = (out / 'enhanced-lamps/stamp.txt').read_text(encoding='utf-8')
+            self.assertIn('+pc_rebirth', stamp.splitlines()[0])
+            enhancements.make(GAME, out, ['pc_enhanced_lamps'])
+            archive = Bnd4(dcx_decompress((out / 'enhanced-lamps/dvdroot_ps4' / shared).read_bytes()))
+            original = Bnd4(dcx_decompress((GAME / 'dvdroot_ps4' / shared).read_bytes()))
+            self.assertEqual(archive.files[archive.index('t242307.esd')],
+                             original.files[original.index('t242307.esd')])
+
 
 if __name__ == '__main__':
     unittest.main()

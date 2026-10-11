@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Experimental, independent native lamp menu rewrite for the player's 1.09 files.
 
-This module is intentionally not wired into the launcher or enhancement toggles. It covers
-ordinary, DLC, and shared chalice lamp scripts at verified insertion points. Hunter's Dream,
-runtime behavior, and player-save safety still require work and live testing.
+Made by scripts/enhancements.py when pc_enhanced_lamps is on (off by default). It covers
+ordinary, DLC, and shared chalice lamp scripts at verified insertion points; Hunter's Dream's
+own lamp keeps the Doll and the box beside it.
 """
 from collections import defaultdict
 import hashlib

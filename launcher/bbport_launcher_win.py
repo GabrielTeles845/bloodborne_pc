@@ -165,7 +165,7 @@ TWEAKS = [
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]
 # PC enhancements (scripts/enhancements.py, after bbhost): game files made at start; off is the
-# game as it shipped. BB_PC_MIRROR / BB_PC_TWO_INVADERS / BB_PC_REBIRTH override them.
+# game as it shipped. BB_PC_MIRROR / BB_PC_TWO_INVADERS / BB_PC_REBIRTH / BB_PC_LAMPS override them.
 ENHANCEMENTS = [
     ('pc_mirror_appearance', ("Hunter's Dream mirror: change appearance",
                               'Зеркало в Сне охотника: смена внешности'), False),
@@ -173,6 +173,8 @@ ENHANCEMENTS = [
                          'Два захватчика в поздних локациях (нужно всем игрокам)'), False),
     ('pc_rebirth', ('Rebirth in the Nightmare at the Altar of Despair',
                     'Перерождение у Алтаря отчаяния'), False),
+    ('pc_enhanced_lamps', ('Lamps: Level Up and Storage at every lit lamp',
+                           'Фонари: повышение уровня и хранилище у каждого фонаря'), False),
 ]
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y',
              *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}

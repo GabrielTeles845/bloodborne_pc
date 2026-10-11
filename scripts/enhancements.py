@@ -21,6 +21,10 @@ engine/maiden_events.cpp and engine/dream_mirror_layout.cpp.
                                               with the Yharnam Stone, level and attributes go back
                                               to the origin's and the echoes are refunded
                                               (src/rebirth.c does the runtime half)
+  pc_enhanced_lamps     (BB_PC_LAMPS)         every lit lamp also offers Level Up and Storage, the
+                                              game's own screens, once the Doll and the storage box
+                                              have been used (enhanced_lamps.py). With Rebirth on,
+                                              its altar edit shares the Nightmare's lamp archive.
   pc_menu               (BB_PC_MENU)          the in-game PC menu's assets (menu_assets.py): its
                                               sections in the options movie and its strings in
                                               every language. On by default: it only adds rows.
@@ -44,6 +48,8 @@ FEATURES = {
     'pc_two_invaders': ('BB_PC_TWO_INVADERS', 'two-invaders', 'Two invaders in the late areas'),
     'pc_mirror_appearance': ('BB_PC_MIRROR', 'dream-mirror', "Hunter's Dream mirror: change appearance"),
     'pc_rebirth': ('BB_PC_REBIRTH', 'rebirth', 'Rebirth in the Nightmare at the Altar of Despair'),
+    # After Rebirth: both rewrite m24_02_00_00's talk archive, and the later layer wins (mods.py).
+    'pc_enhanced_lamps': ('BB_PC_LAMPS', 'enhanced-lamps', 'Lamps: Level Up and Storage'),
     'pc_menu': ('BB_PC_MENU', 'pc-menu', 'In-game PC menu (System > PC Settings)'),
 }
 # Off unless switched on, except these: they change nothing the game does by themselves.
@@ -345,13 +351,38 @@ def rebirth(dvdroot):
         return {}
 
 
+def enhanced_lamps(dvdroot, keys=()):
+    """Level Up and Storage at every lit lamp. The Altar of Despair's archive holds lamps too:
+    with Rebirth on, its altar script is rewritten here as well, so whichever layer is read the
+    archive has both."""
+    import enhanced_lamps as lamps
+    try:
+        files = lamps.make(dvdroot)
+    except (OSError, FormatError, ValueError) as error:
+        print(f'Enhancements: Lamps: the lamps keep their menus ({error})', file=sys.stderr)
+        return {}
+    shared = Path('script') / 'talk' / 'm24_02_00_00.talkesdbnd.dcx'
+    if 'pc_rebirth' in keys and shared in files:
+        from fromsoft import Bnd4
+        try:
+            archive = Bnd4(dcx_decompress(files[shared]))
+            index = archive.index('t242307.esd')
+            archive.files[index] = rebirth_script(archive.files[index])
+            files[shared] = dcx_compress(archive.to_bytes(), template=(dvdroot / shared).read_bytes())
+        except (OSError, FormatError, Skip, ValueError) as error:
+            print(f'Enhancements: Lamps: the altar keeps its Rebirth entry off ({error})', file=sys.stderr)
+    return files
+
+
 def pc_menu(dvdroot):
     import menu_assets
     return menu_assets.make(dvdroot, log=lambda line: print(f'Enhancements: {line}', file=sys.stderr))
 
 
 MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror, 'pc_rebirth': rebirth,
-          'pc_menu': pc_menu}
+          'pc_enhanced_lamps': enhanced_lamps, 'pc_menu': pc_menu}
+# Makers whose files depend on which other features are on (their stamp names those features).
+COMBINED = {'pc_enhanced_lamps': ('pc_rebirth',)}
 
 
 def enabled(settings, env):
@@ -380,7 +411,8 @@ def generator():
     """The generator's own identity: its version and the scripts and strings it runs."""
     here = Path(__file__).resolve().parent
     digest = hashlib.sha256()
-    for name in ('enhancements.py', 'menu_assets.py', 'fromsoft.py', 'esd.py', 'pc_menu_messages.tsv'):
+    for name in ('enhancements.py', 'menu_assets.py', 'fromsoft.py', 'esd.py', 'enhanced_lamps.py',
+                 'pc_menu_messages.tsv'):
         try:
             digest.update((here / name).read_bytes())
         except OSError:
@@ -388,9 +420,9 @@ def generator():
     return f'{VERSION} {digest.hexdigest()[:16]}'
 
 
-def stamp_for(dvdroot, files):
+def stamp_for(dvdroot, files, identity=None):
     """What a feature's folder was made from: the generator and the dump's source files."""
-    lines = [generator()]
+    lines = [identity or generator()]
     for relative in sorted(files):
         try:
             info = (dvdroot / relative).stat()
@@ -407,18 +439,20 @@ def make(game, out, keys):
     for key in keys:
         folder = Path(out) / FEATURES[key][1]
         stamp_file = folder / 'stamp.txt'
+        with_others = [other for other in COMBINED.get(key, ()) if other in keys]
+        identity = ' +'.join([generator(), *with_others])
         try:
             previous = stamp_file.read_text(encoding='utf-8')
         except OSError:
             previous = None
-        if previous and previous.splitlines()[0] == generator():
+        if previous and previous.splitlines()[0] == identity:
             made = [Path(line.rsplit(' ', 2)[0]) for line in previous.splitlines()[1:]]
-            if made and stamp_for(dvdroot, made) == previous and \
+            if made and stamp_for(dvdroot, made, identity) == previous and \
                     all((folder / 'dvdroot_ps4' / m).is_file() for m in made):
                 folders.append(folder)
                 print(f'Enhancements: {FEATURES[key][2]} (up to date)', file=sys.stderr)
                 continue
-        files = MAKERS[key](dvdroot)
+        files = MAKERS[key](dvdroot, keys) if key in COMBINED else MAKERS[key](dvdroot)
         shutil.rmtree(folder, ignore_errors=True)
         if not files:
             continue
@@ -426,7 +460,7 @@ def make(game, out, keys):
             target = folder / 'dvdroot_ps4' / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
-        stamp_file.write_text(stamp_for(dvdroot, files), encoding='utf-8')
+        stamp_file.write_text(stamp_for(dvdroot, files, identity), encoding='utf-8')
         folders.append(folder)
         print(f'Enhancements: {FEATURES[key][2]} ({len(files)} files)', file=sys.stderr)
     return folders
