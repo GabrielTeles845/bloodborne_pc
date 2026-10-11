@@ -1,6 +1,6 @@
 # Enhanced lamps and boss rematches: native Windows implementation notes
 
-Status: research only. Neither feature is installed, enabled, or presented as a working toggle. This note is based on Bloodborne 1.09 CUSA03173 from the player's installed dump, the port's own archive/ESD tools, and the author's public [Bloodborne Enhanced description](https://www.nexusmods.com/bloodborne/mods/19) and [script directory](https://github.com/colorsolid/Bloodborne-Enhanced-Directory). The author's scripts were inspected read-only; none are copied into this repository.
+Status: experimental lamp-script generator plus research. Neither feature is installed, enabled, or presented as a working toggle. This note is based on Bloodborne 1.09 CUSA03173 from the player's installed dump, the port's own archive/ESD tools, and the author's public [Bloodborne Enhanced description](https://www.nexusmods.com/bloodborne/mods/19) and [script directory](https://github.com/colorsolid/Bloodborne-Enhanced-Directory). The author's scripts were inspected read-only; none are copied into this repository.
 
 ## Rights and packaging boundary
 
@@ -12,6 +12,9 @@ The mod page forbids reuploading its files, modifying them without permission, a
 - The existing fork can parse, edit, and serialize Bloodborne's DCX/BND4 and long-format ESD talk scripts (`scripts/fromsoft.py`, `scripts/esd.py`). Rebirth already uses this path to add a native talk-menu item from the player's own dump. Lamp support needs a distinct rewrite that retains the normal activation/warp paths and any map-specific branches.
 - The installed CUSA03173 dump contains lamp talk archives under `dvdroot_ps4/script/talk`. One representative ordinary lamp, `m22_00_00_00/t220000.esd`, has ten state groups and 68 parsed states. It round-trips with the fork's parser. The reference mod's public sources show lamp talk variants across the base-game areas, DLC, and the shared chalice scripts. A single patched script is insufficient.
 - The reference adds a menu to activated lamps and retains normal lamp behavior. The requested initial scope is only **Level Up** and **Storage**. Do not silently bring along rest/reawaken, warp changes, shops, kindling, appearance editing, or other Enhanced features.
+- `scripts/enhanced_lamps.py` now drafts an independent talk-list group at the shared activated-lamp site for 46 ordinary/DLC scripts in 15 archives. It preserves the vanilla warp action as one menu choice and uses existing event-text messages in all 22 available game languages. On the player's dump the 46 rewritten ESDs serialize and parse, and every other archive member is byte identical. This is a **static prototype**, not proof that the menu opens or that leveling/storage are safe in play. It is deliberately not wired into the generator, launcher, or release.
+- An isolated overlay loaded these 15 archives and reached a copied character in the clinic. That character had not reached a lamp, so the menu itself, native actions, and save behavior remain untested in play. A separate attempt hit the port's existing `Unimplemented PM4 type 0` graphics crash before loading the character. The isolated test process was closed afterward.
+- The prototype currently lists Level Up unconditionally. Before exposing it, confirm and enforce the same progression gate as the Doll so a new character cannot level prematurely. The first-use level-up explanation and storage tutorial flags also need to be preserved.
 
 ## Rematch findings
 
