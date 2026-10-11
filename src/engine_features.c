@@ -3,6 +3,7 @@
  * (in-game PC menu, enhancements, keyboard and mouse) add themselves to these lists. */
 #include "engine_features.h"
 #include "engine_hooks.h"
+#include "key_prompts.h"
 #include "mouse_camera.h"
 #include "pc_menu.h"
 #include "rebirth.h"
@@ -12,7 +13,8 @@
 typedef int (*Install)(void);
 typedef void (*Frame)(void);
 
-static const Install installs[] = {bb_pc_menu_install, bb_rebirth_install, bb_mouse_camera_install};
+static const Install installs[] = {bb_pc_menu_install, bb_rebirth_install, bb_mouse_camera_install,
+                                   bb_key_prompts_install};
 static const Frame frames[] = {bb_pc_menu_frame};
 
 int bb_engine_install(void) {

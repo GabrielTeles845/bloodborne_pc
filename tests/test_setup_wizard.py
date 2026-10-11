@@ -92,6 +92,39 @@ class FirstRunWizardTests(unittest.TestCase):
         self.assertEqual(backend.contentMods, [])
         backend.setPrompt('PlayStation')
         self.assertEqual(backend.promptChoice, 'PlayStation')
+        # Keyboard imports the player's PCBButtons download (a stand-in archive here), enables it
+        # instead of the Xbox images and binds the keys its images show.
+        import zipfile
+        download = self.root / 'PCBButtons-460-1-2.zip'
+        with zipfile.ZipFile(download, 'w') as archive:
+            archive.writestr('PCBButtons/common.tpf.dcx', b'DCX\0' + b'\0' * 60)
+            archive.writestr('PCBButtons/BBlauncher keybind.txt', 'cross = e\n')
+        backend.setPrompt('Keyboard', str(download))
+        self.assertEqual(backend.promptChoice, 'Keyboard')
+        profile = json.loads((self.root / 'mods.json').read_text())
+        self.assertIn('Xbox 360 Prompts (Elden Ring)', profile['disabled'])
+        self.assertIn(core.KEYBOARD_PROMPTS, profile['enabled'])
+        self.assertTrue((self.root / 'mods' / core.KEYBOARD_PROMPTS / 'menu' / 'common.tpf.dcx').is_file())
+        ini = (self.root / 'bbport.ini').read_text(encoding='utf-8')
+        self.assertIn('key_roll=Left Shift', ini)
+        self.assertIn('key_lock_on=Mouse3', ini)
+        env = core.game_environment(backend.app)
+        self.assertEqual((env['BB_BUTTON_PROMPTS'], env['BB_KEY_PROMPT_IMAGES']), ('Keyboard', '1'))
+        self.assertNotIn(core.KEYBOARD_PROMPTS, [m['name'] for m in backend.contentMods])
+        backend.setPrompt('Xbox')
+        profile = json.loads((self.root / 'mods.json').read_text())
+        self.assertIn(core.KEYBOARD_PROMPTS, profile['disabled'])
+        self.assertEqual(backend.promptChoice, 'Xbox')
+
+    def test_keyboard_prompts_refuse_a_download_without_the_images(self):
+        import zipfile
+        download = self.root / 'other.zip'
+        with zipfile.ZipFile(download, 'w') as archive:
+            archive.writestr('readme.txt', 'nothing here')
+        backend = LauncherBackend()
+        backend.setPrompt('Keyboard', str(download))
+        self.assertNotEqual(backend.promptChoice, 'Keyboard')
+        self.assertIn('common.tpf.dcx', backend.notice)
 
     def test_launch_options_moved_out_of_advanced(self):
         backend = LauncherBackend()

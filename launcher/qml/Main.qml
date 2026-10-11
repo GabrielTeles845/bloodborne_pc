@@ -357,11 +357,12 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        // Controller: the bundled Xbox prompt mod or the game's own PlayStation prompts.
+                        // Controller: Xbox textures, the game's PlayStation glyphs, or native key names.
                         Text { visible: page === "Controller"; text: "BUTTON PROMPTS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7 }
                         Row { visible: page === "Controller"; spacing: 8
                             GlassButton { text: "Xbox"; width: 112; height: 35; highlighted: launcher.promptChoice === "Xbox"; onClicked: launcher.setPrompt("Xbox") }
                             GlassButton { text: "PlayStation"; width: 112; height: 35; highlighted: launcher.promptChoice === "PlayStation"; onClicked: launcher.setPrompt("PlayStation") }
+                            GlassButton { text: "Keyboard"; width: 112; height: 35; highlighted: launcher.promptChoice === "Keyboard"; onClicked: launcher.setPrompt("Keyboard") }
                             Text { text: "Applies after restart"; color: quiet; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
                         }
                         Text { visible: page === "Controller"; text: "DEBUG"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7; topPadding: 12 }

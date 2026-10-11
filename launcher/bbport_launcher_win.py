@@ -183,6 +183,7 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
+                'button_prompts': '',  # empty preserves the older Xbox mod selection
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
@@ -356,8 +357,58 @@ def server_check(server, webapi, community):
     return '\n'.join(lines)
 
 
+# Keyboard button prompts: PCBButtons (Nexus Mods, Bloodborne mod 460) replaces the game's prompt
+# images with keyboard keys. It is not redistributed: the player imports their own download. Its
+# images show shadPS4's PC layout, so choosing it also binds those keys (bbport.ini key_*); the
+# engine names keys in text (src/key_prompts.c) when the bindings differ from the images.
+KEYBOARD_PROMPTS = 'Keyboard Prompts (PCBButtons)'
+KEYBOARD_PROMPTS_URL = 'https://www.nexusmods.com/bloodborne/mods/460'
+KEYBOARD_PROMPT_LAYOUT = {
+    'key_interact': 'E', 'key_roll': 'Left Shift', 'key_blood_vial': 'R', 'key_use_item': 'Q',
+    'key_transform': 'F', 'key_attack': 'Mouse1', 'key_firearm': 'Mouse2',
+    'key_strong_attack': 'none', 'key_strong_modifier': 'Left Ctrl', 'key_l3': 'Space',
+    'key_lock_on': 'Mouse3', 'key_gestures': 'G', 'key_personal_effects': 'H', 'key_menu': 'Escape',
+}
+
+
+def import_keyboard_prompts(source, mods_dir):
+    """Installs PCBButtons' menu/common.tpf.dcx from the player's download (the .7z or .zip,
+    its folder, or the file itself) as a mod. Returns the mod folder; ValueError when the
+    download holds no prompt texture pack."""
+    source, mods_dir = Path(source), Path(mods_dir)
+    with tempfile.TemporaryDirectory(prefix='bbport-prompts-') as tmp:
+        if source.is_file() and source.suffix.lower() in ('.7z', '.zip'):
+            # Windows' own tar (libarchive) reads both formats.
+            tar = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'tar.exe'
+            result = subprocess.run([str(tar) if tar.is_file() else 'tar', '-xf', str(source), '-C', tmp],
+                                    capture_output=True, text=True, creationflags=NO_WINDOW)
+            if result.returncode:
+                raise ValueError(f'Could not open {source.name}: {result.stderr.strip() or result.returncode}')
+            found = sorted(Path(tmp).rglob('common.tpf.dcx'))
+        elif source.is_dir():
+            found = sorted(source.rglob('common.tpf.dcx'))
+        else:
+            found = [source] if source.name.lower() == 'common.tpf.dcx' else []
+        if not found:
+            raise ValueError(f'{source.name} has no common.tpf.dcx (the PCBButtons prompt images).')
+        data = found[0].read_bytes()
+        if not data.startswith(b'DCX\0'):
+            raise ValueError(f'{found[0].name} is not a game texture pack.')
+    target = mods_dir / KEYBOARD_PROMPTS
+    (target / 'menu').mkdir(parents=True, exist_ok=True)
+    (target / 'menu' / 'common.tpf.dcx').write_bytes(data)
+    (target / 'SOURCE.txt').write_text(
+        f'PCBButtons keyboard prompts, imported from {source.name}.\n{KEYBOARD_PROMPTS_URL}\n'
+        'Not redistributed with the port; credit to its author.\n', encoding='utf-8')
+    return target
+
+
 def game_environment(s):
     env = dict(os.environ)
+    env['BB_BUTTON_PROMPTS'] = s.get('button_prompts', '')
+    # Whether PCBButtons' key images are in place (src/key_prompts.c names keys only without them).
+    keyboard_mod = Path(s.get('mods_dir') or DATA_DIR / 'mods') / KEYBOARD_PROMPTS / 'menu' / 'common.tpf.dcx'
+    env['BB_KEY_PROMPT_IMAGES'] = '1' if env['BB_BUTTON_PROMPTS'] == 'Keyboard' and keyboard_mod.is_file() else '0'
     env['BB_GAME_DIR'] = s['game_dir']
     if s['user_dir']:
         env['BB_USER_DIR'] = s['user_dir']

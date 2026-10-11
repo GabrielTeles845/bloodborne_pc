@@ -307,7 +307,7 @@ class LauncherBackend(QObject):
 
     @staticmethod
     def _is_prompt_mod(name):
-        return 'xbox' in name.lower() and 'prompt' in name.lower()
+        return ('xbox' in name.lower() and 'prompt' in name.lower()) or name == core.KEYBOARD_PROMPTS
 
     @Property('QVariantList', notify=changed)
     def contentMods(self):
@@ -320,6 +320,8 @@ class LauncherBackend(QObject):
 
     @Property(str, notify=changed)
     def promptChoice(self):
+        if self.app.get('button_prompts') == 'Keyboard':
+            return 'Keyboard'
         prompts = [m for m in self._mods if self._is_prompt_mod(m['name'])]
         return 'Xbox' if any(m['enabled'] for m in prompts) else 'PlayStation'
 
@@ -646,24 +648,56 @@ class LauncherBackend(QObject):
         profile_file.write_text(json.dumps(profile, indent=2), encoding='utf-8')
         self.refresh_addons()
 
+    def _mods_dir(self):
+        return Path(self.app.get('mods_dir') or core.DATA_DIR / 'mods')
+
     @Slot(str)
-    def setPrompt(self, choice):
-        prompt_mods = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
-        if choice == 'Xbox' and not prompt_mods:
+    def setPrompt(self, choice, source=None):
+        """Xbox: the bundled prompt images. PlayStation: the game's own. Keyboard: PCBButtons'
+        key images, imported from the player's download the first time (`source`, or a file
+        dialog), and the keys those images show bound in bbport.ini."""
+        if choice not in ('Xbox', 'PlayStation', 'Keyboard'):
+            return
+        names = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
+        xbox = [n for n in names if n != core.KEYBOARD_PROMPTS]
+        if choice == 'Xbox' and not xbox:
             self._set_notice('Install the optional Xbox prompts mod in the Mods folder first.')
             return
+        if choice == 'Keyboard' and core.KEYBOARD_PROMPTS not in names:
+            if source is None:
+                source, _ = QFileDialog.getOpenFileName(
+                    None, 'Choose the PCBButtons download (Nexus Mods)', str(Path.home() / 'Downloads'),
+                    'PCBButtons (*.7z *.zip common.tpf.dcx)')
+            if not source:
+                self._set_notice(f'Keyboard prompts need the PCBButtons mod: download it from '
+                                 f'{core.KEYBOARD_PROMPTS_URL}, then choose Keyboard again.')
+                return
+            try:
+                core.import_keyboard_prompts(source, self._mods_dir())
+            except (OSError, ValueError) as error:
+                self._set_notice(str(error))
+                return
+            self.refresh_addons()
+            names = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
         profile_file = core.DATA_DIR / 'mods.json'
         profile_file.parent.mkdir(parents=True, exist_ok=True)
         profile = core.load_json(profile_file, {})
-        disabled = set(profile.get('disabled', []))
-        for name in prompt_mods:
-            disabled.add(name)
-        if choice == 'Xbox':
-            disabled.discard(prompt_mods[0])
-        profile['disabled'] = sorted(disabled)
+        disabled, enabled = set(profile.get('disabled', [])), set(profile.get('enabled', []))
+        chosen = {'Xbox': xbox[:1], 'Keyboard': [core.KEYBOARD_PROMPTS]}.get(choice, [])
+        for name in names:
+            (disabled.discard if name in chosen else disabled.add)(name)
+            (enabled.add if name in chosen else enabled.discard)(name)
+        profile.update({'enabled': sorted(enabled), 'disabled': sorted(disabled)})
         profile_file.write_text(json.dumps(profile, indent=2), encoding='utf-8')
+        self.app['button_prompts'] = choice
+        self._write()
+        if choice == 'Keyboard':  # the keys the images show
+            core.save_ini(core.KEYBOARD_PROMPT_LAYOUT, self.ini_lines)
+            self.ini, self.ini_lines = core.load_ini()
         self.refresh_addons()
-        self._set_notice(f'{choice} button prompts selected. Restart the game to apply them.')
+        self._set_notice(f'{choice} button prompts selected. Restart the game to apply them.'
+                         + (' Keys now match the prompt images (E interact, Left Shift dodge, Q item, F transform).'
+                            if choice == 'Keyboard' else ''))
 
     @Slot()
     def downloadFsr4(self):
