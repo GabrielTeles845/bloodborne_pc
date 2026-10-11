@@ -89,19 +89,12 @@ class Emevd:
             raise EmevdError('constructor missing or new event id already exists')
         if not instructions or event_id <= 0 or not 0 <= slot <= 0xffffffff:
             raise EmevdError('new event must have instructions and a valid id/slot')
-        insertion = _q(self.events[0], 8)
-        if insertion > len(self.instructions):
-            raise EmevdError('constructor instruction range is invalid')
+        for bank, code, args in instructions:
+            if (not 0 <= bank <= 0x7fffffff or not 0 <= code <= 0x7fffffff
+                    or not isinstance(args, bytes) or len(args) % 4):
+                raise EmevdError('invalid EMEVD instruction')
         init_args = struct.pack('<ii', slot, event_id)
-        init = self._new_instruction(2000, 0, init_args)
-        self.instructions.insert(insertion, init)
-        struct.pack_into('<q', self.events[0], 8, insertion + 1)
-        for row in self.events[1:]:
-            struct.pack_into('<q', row, 16, _q(row, 16) + INSTRUCTION)
-        for row in self.params:
-            index = _u32(row, 0)
-            if index >= insertion:
-                struct.pack_into('<I', row, 0, index + 1)
+        self.insert_instructions(0, _q(self.events[0], 8), [(2000, 0, init_args)])
         first = len(self.instructions) * INSTRUCTION
         new_rows = [self._new_instruction(bank, instruction_id, args)
                     for bank, instruction_id, args in instructions]
@@ -109,6 +102,73 @@ class Emevd:
         self.events.append(bytearray(struct.pack('<6q', event_id, len(new_rows), first,
                                                  0, 0xffffffff, 0)))
         self._validate_refs()
+
+    def event_instructions(self, event_id: int) -> list[tuple[int, int, bytes]]:
+        """Return an event's instructions without exposing mutable offsets or rows."""
+        row = self._event(event_id)
+        count, first = struct.unpack_from('<qq', row, 8)
+        result = []
+        for instruction in self.instructions[first // INSTRUCTION:first // INSTRUCTION + count]:
+            bank, code, length, offset = struct.unpack_from('<iiqq', instruction)
+            result.append((bank, code, bytes(self.args[offset:offset + length])))
+        return result
+
+    def insert_instructions(self, event_id: int, position: int,
+                            instructions: list[tuple[int, int, bytes]]) -> None:
+        """Insert into an existing event, updating later event and parameter references."""
+        self._validate_refs()
+        event_index = next((i for i, row in enumerate(self.events)
+                            if _q(row, 0) == event_id), -1)
+        if event_index < 0:
+            raise EmevdError(f'event {event_id} does not exist')
+        row = self.events[event_index]
+        count, first = struct.unpack_from('<qq', row, 8)
+        if not 0 <= position <= count or not instructions:
+            raise EmevdError('insertion point or instruction list is invalid')
+        # Validate before changing any section, so malformed requests leave the file intact.
+        for bank, code, args in instructions:
+            if (not 0 <= bank <= 0x7fffffff or not 0 <= code <= 0x7fffffff
+                    or not isinstance(args, bytes) or len(args) % 4):
+                raise EmevdError('invalid EMEVD instruction')
+        insertion = first // INSTRUCTION + position
+        new_rows = [self._new_instruction(bank, code, args) for bank, code, args in instructions]
+        self.instructions[insertion:insertion] = new_rows
+        shift = len(new_rows)
+        struct.pack_into('<q', row, 8, count + shift)
+        for later in self.events[event_index + 1:]:
+            struct.pack_into('<q', later, 16, _q(later, 16) + shift * INSTRUCTION)
+        for param in self.params:
+            index = _u32(param, 0)
+            if index >= insertion:
+                struct.pack_into('<I', param, 0, index + shift)
+        self._validate_refs()
+
+    def replace_instruction(self, event_id: int, position: int,
+                            expected: tuple[int, int, bytes],
+                            replacement: tuple[int, int, bytes]) -> None:
+        """Replace one verified instruction while preserving other instruction and argument bytes."""
+        self._validate_refs()
+        row = self._event(event_id)
+        count, first = struct.unpack_from('<qq', row, 8)
+        if not 0 <= position < count:
+            raise EmevdError('replacement position lies outside the event')
+        index = first // INSTRUCTION + position
+        old = self.instructions[index]
+        bank, code, length, offset = struct.unpack_from('<iiqq', old)
+        if (bank, code, bytes(self.args[offset:offset + length])) != expected:
+            raise EmevdError('instruction differs from expected player-game input')
+        bank, code, args = replacement
+        if (not 0 <= bank <= 0x7fffffff or not 0 <= code <= 0x7fffffff
+                or not isinstance(args, bytes) or len(args) % 4):
+            raise EmevdError('invalid EMEVD instruction')
+        self.instructions[index] = self._new_instruction(bank, code, args)
+        self._validate_refs()
+
+    def _event(self, event_id: int) -> bytearray:
+        for row in self.events:
+            if _q(row, 0) == event_id:
+                return row
+        raise EmevdError(f'event {event_id} does not exist')
 
     def _new_instruction(self, bank: int, instruction_id: int, args: bytes) -> bytearray:
         if not isinstance(args, bytes) or len(args) % 4:
