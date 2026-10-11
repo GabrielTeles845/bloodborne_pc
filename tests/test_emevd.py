@@ -50,3 +50,36 @@ class EmevdTests(unittest.TestCase):
         struct.pack_into('<q', damaged, 0x58, len(damaged) + 1)
         with self.assertRaises(EmevdError):
             Emevd(damaged)
+
+    def test_inserting_before_parameterized_instructions_rebases_refs(self):
+        script = Emevd(self.load('m24_01_00_00.emevd.dcx'))
+        original_events = script.event_instructions(12411700)
+        original_params = [struct.unpack_from('<I', row)[0] for row in script.params]
+        original_first = next(struct.unpack_from('<q', row, 16)[0] for row in script.events
+                              if struct.unpack_from('<q', row)[0] == 12411700) // 32
+        script.insert_instructions(12411700, 0,
+                                   [(1000, 4, b'\0\0\0\0'), (1000, 4, b'\x01\0\0\0')])
+        edited = Emevd(script.to_bytes())
+        self.assertEqual(edited.event_instructions(12411700)[2:], original_events)
+        self.assertEqual([struct.unpack_from('<I', row)[0] for row in edited.params],
+                         [index + (2 if index >= original_first else 0)
+                          for index in original_params])
+
+    def test_replacement_requires_exact_expected_instruction(self):
+        script = Emevd(self.load('m24_01_00_00.emevd.dcx'))
+        original = script.event_instructions(12411700)
+        untouched = script.to_bytes()
+        with self.assertRaisesRegex(EmevdError, 'differs'):
+            script.replace_instruction(12411700, 0, (0, 0, b''), original[0])
+        self.assertEqual(script.to_bytes(), untouched)
+        replacement = (1000, 4, b'\0\0\0\0')
+        script.replace_instruction(12411700, 0, original[0], replacement)
+        edited = Emevd(script.to_bytes())
+        self.assertEqual(edited.event_instructions(12411700), [replacement, *original[1:]])
+
+    def test_malformed_append_does_not_change_input(self):
+        script = Emevd(self.load('common.emevd.dcx'))
+        original = script.to_bytes()
+        with self.assertRaisesRegex(EmevdError, 'invalid EMEVD instruction'):
+            script.append_initialized_event(19999990, [(1000, 4, b'good'), (1000, 4, b'bad')])
+        self.assertEqual(script.to_bytes(), original)
