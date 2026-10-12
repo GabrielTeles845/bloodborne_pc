@@ -70,7 +70,7 @@ bool initialized = false;
 std::atomic<bool> menu_open{false};
 std::atomic<std::int64_t> menu_opened_ms{0};
 bool l3_down = false, r3_down = false;
-int active_tab = 0; // Home, Achievements, Settings, Mods / Cheats
+int active_tab = 0; // Hunt, Trophy gallery, Image tools, Gameplay extras
 bool dirty = false; // settings changed while open: saved on close
 bool mod_selection_changed = false;
 std::string mod_selection_error;
@@ -304,6 +304,22 @@ bool RestartNeeded() {
     return restart;
 }
 
+bool NativePcMenuAvailable() {
+    const char* assets = std::getenv("BB_PC_MENU_ASSETS");
+    const char* enabled = std::getenv("BB_PC_MENU");
+    return assets && std::strcmp(assets, "1") == 0 &&
+           (!enabled || std::strcmp(enabled, "0") != 0);
+}
+
+bool ExtrasRestartNeeded() {
+    const auto& s = BbSettings::Get();
+    for (int e = 10; e < 15; ++e) // Cheats: native PC menu has no room for this section.
+        if (s.effects[e] != s.startup_effects[e]) return true;
+    for (int e = BbSettings::FirstEnhancement; e < BbSettings::EffectCount; ++e)
+        if (s.effects[e] != s.startup_effects[e]) return true;
+    return false;
+}
+
 void RestartPrompt() {
     if (!RestartNeeded()) return;
     ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
@@ -501,6 +517,59 @@ void SettingsTab() {
     Checkbox("Show FPS counter", s.show_fps);
 }
 
+void ImageToolsTab() {
+    auto& s = BbSettings::Get();
+    ImGui::PushFont(guide_serif_font, 39.0f);
+    ImGui::TextUnformatted("Image tools");
+    ImGui::PopFont();
+    ImGui::Separator();
+    ImGui::TextWrapped("Graphics, display, effects and the FPS counter are in Pause > System. "
+                       "These tools provide diagnostics beyond the game menu.");
+    ImGui::SeparatorText("Current image");
+    ImGui::Text("Scene resolution: %d x %d", s.active_render_width.load(),
+                s.active_render_height.load());
+    if (BbSettings::FixedRenderSession())
+        ImGui::Text("Startup preset: %s (changes need a restart)",
+                    BbSettings::PresetName(s.startup_preset));
+    if (const char* problem = s.dlss_problem.load();
+        problem && s.upscaler == BbSettings::UpscalerDlss)
+        ImGui::TextWrapped("DLSS: %s", problem);
+    if (const char* problem = s.fsr4_problem.load())
+        ImGui::TextWrapped("FSR 4 unavailable: %s", problem);
+
+    ImGui::SeparatorText("Fine tuning");
+    ImGui::BeginDisabled(!s.sharpen);
+    Slider("Sharpness", s.sharpness, 0.0f, 2.0f);
+    ImGui::EndDisabled();
+    Hint("Enable Sharpening in System > PC Graphics first. Values above 1 add another RCAS pass.");
+    if (BbSettings::IsFsr4(s.upscaler)) {
+        Checkbox("FSR 4: auto exposure", s.fsr4_auto_exposure);
+        Checkbox("FSR 4: invert jitter", s.fsr4_invert_jitter);
+        Hint("Provider checks for FSR 4. These changes apply immediately.");
+    }
+    const bool temporal = s.upscaler != BbSettings::UpscalerOff &&
+                          s.upscaler != BbSettings::UpscalerTaa;
+    ImGui::BeginDisabled(!temporal);
+    Checkbox("Reactive mask", s.reactive);
+    ImGui::BeginDisabled(!s.reactive);
+    Slider("Mask scale", s.reactive_scale, 0.0f, 4.0f);
+    Slider("Mask threshold", s.reactive_threshold, 0.0f, 1.0f);
+    Slider("Mask maximum", s.reactive_max, 0.0f, 1.0f);
+    ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    Hint("Marks particles and fog so the upscaler relies less on frame history.");
+
+    ImGui::SeparatorText("Debug views");
+    int view = s.debug_view;
+    if (ImGui::RadioButton("Normal image", view == BbSettings::DebugNone))
+        s.debug_view = BbSettings::DebugNone;
+    if (ImGui::RadioButton("Reactive mask view", view == BbSettings::DebugReactive))
+        s.debug_view = BbSettings::DebugReactive;
+    if (ImGui::RadioButton("Motion vector view", view == BbSettings::DebugMotion))
+        s.debug_view = BbSettings::DebugMotion;
+    Hint("Debug views are temporary diagnostics; return to Normal image to play.");
+}
+
 std::filesystem::path ModConfigPath() {
     if (const char* value = std::getenv("BB_MODS_CONFIG"); value && *value) return value;
     return std::filesystem::current_path() / "mods.json";
@@ -565,11 +634,14 @@ bool SetPromptEnabled(const std::string& folder, bool enabled) {
 
 void ModsTab() {
     auto& s = BbSettings::Get();
+    const bool native = NativePcMenuAvailable();
     ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted("Mods & patches");
+    ImGui::TextUnformatted(native ? "Gameplay extras" : "Mods & patches");
     ImGui::PopFont();
     ImGui::Separator();
-    ImGui::TextWrapped("Select button prompts and gameplay patches, then restart to apply them.");
+    ImGui::TextWrapped(native ?
+        "Gameplay tweaks and PC settings are in Pause > System. Cheats and enhancements remain here because the game menu has no room for them." :
+        "Select button prompts and gameplay patches, then restart to apply them.");
     if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
         ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Mod loading is off in the launcher. Enable it there first.");
     // 0 the game's PlayStation buttons, 1 the Xbox prompt mod, 2 the keyboard key images the
@@ -612,18 +684,23 @@ void ModsTab() {
         ImGui::TextDisabled("Keyboard keys: choose Keyboard once on the launcher's Controller page to import them.");
     if (!mod_selection_error.empty())
         ImGui::TextColored(ImVec4(.95f,.35f,.35f,1), "%s", mod_selection_error.c_str());
-    ImGui::SeparatorText("Gameplay and debug");
-    for (int e = 8; e < BbSettings::FirstEnhancement; ++e)
+    if (!native) ImGui::SeparatorText("Gameplay and debug");
+    else ImGui::SeparatorText("Cheats (restart required)");
+    for (int e = native ? 10 : 8;
+         e < (native ? 15 : BbSettings::FirstEnhancement); ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
-    Hint("Free camera: hold Cross/A and press L3 (keyboard: E + Left Ctrl). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
+    if (!native)
+        Hint("Free camera: hold Cross/A and press L3 (keyboard: E + Left Ctrl). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
     ImGui::SeparatorText("PC enhancements (restart required)");
     for (int e = BbSettings::FirstEnhancement; e < BbSettings::EffectCount; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
     Hint("Made from your own game files at start; off is the game as it shipped. The mirror in the Hunter's Dream opens the appearance editor. Two invaders: Mensis, Mergo's Loft, the Nightmare Frontier and the Old Hunters' areas allow two, as the chalice dungeons do. After bbhost by droogie.");
     ImGui::Separator();
-    if (mod_selection_changed || RestartNeeded())
+    const bool needs_restart = mod_selection_changed ||
+        (native ? ExtrasRestartNeeded() : RestartNeeded());
+    if (needs_restart)
         ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Changes are ready. Restart to apply them.");
-    if (ImGui::Button("Apply mods and restart", ImVec2(-1, 0))) {
+    if (needs_restart && ImGui::Button("Apply extras and restart", ImVec2(-1, 0))) {
         BbSettings::Save();
         runtime_restart();
     }
@@ -641,13 +718,14 @@ std::string UnlockDate(std::int64_t timestamp) {
 }
 
 void AchievementRow(const BbTrophies::Entry& entry) {
-    const float h = 98.0f * base_scale;
+    const bool gallery = NativePcMenuAvailable();
+    const float h = (gallery ? 72.0f : 98.0f) * base_scale;
     const bool earned = entry.unlocked_at > 0;
     ImGui::PushID(entry.id);
     ImGui::Selectable("##achievement", false, 0, ImVec2(0, h));
     const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
     ImDrawList* draw = ImGui::GetWindowDrawList();
-    const float icon = 52.0f * base_scale;
+    const float icon = (gallery ? 46.0f : 52.0f) * base_scale;
     const ImVec2 icon_min(min.x + 9.0f * base_scale, min.y + (h - icon) * .5f);
     const ImVec2 icon_max(icon_min.x + icon, icon_min.y + icon);
     const auto texture = IconRef(entry.id);
@@ -663,7 +741,7 @@ void AchievementRow(const BbTrophies::Entry& entry) {
     const float text_x = icon_max.x + 14.0f * base_scale;
     const float right_x = max.x - 64.0f * base_scale;
     const bool secret = entry.hidden && !earned;
-    const std::string name = secret ? "Secret achievement" : entry.name;
+    const std::string name = secret ? "Secret trophy" : entry.name;
     const std::string detail = secret ? "Unlock to reveal this achievement" : entry.description;
     const std::string score = secret || entry.score < 0 ? "??G" :
                               std::to_string(entry.score) + "G";
@@ -674,13 +752,13 @@ void AchievementRow(const BbTrophies::Entry& entry) {
                   name.c_str(), nullptr, 0.0f, &name_clip);
     draw->AddText(ImVec2(right_x, min.y + 10.0f * base_scale),
                   earned ? IM_COL32(126, 224, 135, 255) : IM_COL32(133, 141, 136, 255),
-                  score.c_str());
-    if (!detail.empty())
+                  gallery ? (earned ? "Earned" : "Locked") : score.c_str());
+    if (!gallery && !detail.empty())
         draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * .83f,
                       ImVec2(text_x, min.y + 34.0f * base_scale),
                       earned ? IM_COL32(180, 192, 183, 255) : IM_COL32(112, 122, 115, 255),
                       detail.c_str(), nullptr, right_x - text_x - 7.0f * base_scale);
-    if (earned) {
+    if (!gallery && earned) {
         const auto date = UnlockDate(entry.unlocked_at);
         draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * .78f,
                       ImVec2(text_x, min.y + 76.0f * base_scale),
@@ -698,23 +776,28 @@ void AchievementRow(const BbTrophies::Entry& entry) {
 }
 
 void AchievementsTab() {
+    const bool gallery = NativePcMenuAvailable();
     auto entries = BbTrophies::Entries();
     const int total = int(entries.size());
     int earned = 0;
     for (const auto& entry : entries) earned += entry.unlocked_at > 0;
     const int score = BbTrophies::EarnedScore();
     ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted("Trophies");
+    ImGui::TextUnformatted(gallery ? "Trophy gallery" : "Trophies");
     ImGui::PopFont();
     ImGui::Separator();
     ImGui::Spacing();
-    if (BbTrophies::TotalScore() == 1000)
-        ImGui::Text("Gamerscore: %d / 1000G", score);
-    else
-        ImGui::Text("Gamerscore: -- / 1000G");
-    ImGui::Text("%d of %d unlocked", earned, total);
-    ImGui::ProgressBar(total ? float(earned) / total : 0.0f,
-                       ImVec2(-1, 9.0f * base_scale), "");
+    if (gallery)
+        ImGui::TextWrapped("Browse trophy artwork here. Full details, dates and Gamerscore are in Pause > System > Achievements.");
+    else {
+        if (BbTrophies::TotalScore() == 1000)
+            ImGui::Text("Gamerscore: %d / 1000G", score);
+        else
+            ImGui::Text("Gamerscore: -- / 1000G");
+        ImGui::Text("%d of %d unlocked", earned, total);
+        ImGui::ProgressBar(total ? float(earned) / total : 0.0f,
+                           ImVec2(-1, 9.0f * base_scale), "");
+    }
     ImGui::BeginDisabled(entries.empty());
     if (ImGui::Button("Preview achievement toast", ImVec2(-1, 0))) {
         const auto sample = std::find_if(entries.begin(), entries.end(), [](const auto& entry) {
@@ -735,14 +818,15 @@ void AchievementsTab() {
         return;
     }
     ImGuiListClipper clipper;
-    clipper.Begin(total, 98.0f * base_scale + ImGui::GetStyle().ItemSpacing.y);
+    clipper.Begin(total, (gallery ? 72.0f : 98.0f) * base_scale + ImGui::GetStyle().ItemSpacing.y);
     while (clipper.Step())
         for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
             AchievementRow(entries[i]);
-    ImGui::TextDisabled("Local achievements only. No online account is connected.");
+    if (!gallery) ImGui::TextDisabled("Local achievements only. No online account is connected.");
 }
 
 void HomeTab() {
+    const bool native = NativePcMenuAvailable();
     const auto entries = BbTrophies::Entries();
     const int earned = int(std::count_if(entries.begin(), entries.end(),
                                          [](const auto& e) { return e.unlocked_at > 0; }));
@@ -783,7 +867,11 @@ void HomeTab() {
                             IM_COL32(194, 49, 65, 255), 5.0f * s);
     ImGui::Dummy(ImVec2(0, 42.0f * s));
 
-    const char* labels[] = {"View trophies", "Visual settings", "Mods & patches"};
+    const char* labels[] = {
+        native ? "Trophy gallery" : "View trophies",
+        native ? "Image tools" : "Visual settings",
+        native ? "Gameplay extras" : "Mods & patches",
+    };
     for (int i = 0; i < 3; ++i) {
         ImGui::PushID(i);
         const ImVec2 min = ImGui::GetCursorScreenPos();
@@ -823,6 +911,10 @@ void HomeTab() {
         draw->AddText(ImVec2(max.x - 36.0f * s, min.y + 23.0f * s), ink, ">");
         ImGui::Dummy(ImVec2(0, 15.0f * s));
         ImGui::PopID();
+    }
+    if (native) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("For standard options, pause the game and open System.");
     }
 }
 
@@ -901,7 +993,10 @@ void Menu() {
     rail_draw->AddLine(ImVec2(rail_pos.x + rail_width - 1, rail_pos.y),
                        ImVec2(rail_pos.x + rail_width - 1,
                               rail_pos.y + ImGui::GetWindowHeight()), IM_COL32(48, 54, 59, 255));
-    const char* nav_ids[] = {"Hunt##nav", "Trophies##nav", "Visual settings##nav", "Mods and patches##nav"};
+    const bool native = NativePcMenuAvailable();
+    const char* nav_ids[] = {"Hunt##nav", "Trophies##nav",
+                             native ? "Image tools##nav" : "Visual settings##nav",
+                             native ? "Gameplay extras##nav" : "Mods and patches##nav"};
     for (int i = 0; i < 4; ++i) {
         ImGui::SetCursorPos(ImVec2(16.0f * s, (50.0f + 104.0f * i) * s));
         if (ImGui::InvisibleButton(nav_ids[i], ImVec2(rail_width - 32.0f * s, 96.0f * s),
@@ -960,7 +1055,7 @@ void Menu() {
     switch (active_tab) {
     case 0: HomeTab(); break;
     case 1: AchievementsTab(); break;
-    case 2: SettingsTab(); break;
+    case 2: if (native) ImageToolsTab(); else SettingsTab(); break;
     case 3: ModsTab(); break;
     }
     ImGui::EndChild();
