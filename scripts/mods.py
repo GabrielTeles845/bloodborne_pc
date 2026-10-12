@@ -106,20 +106,56 @@ def mod_files(folder):
 # the game panics loading it (FileTransferTask.cpp(865)). Directories are symlinks, or
 # junctions without the symlink privilege (Developer Mode off). Hard links and junctions are
 # not symlinks, so the overlay remembers what it linked and where to.
+#
+# A process started with Windows' redirection trust policy (RedirectionGuard; Armoury Crate on
+# the ROG Ally starts games this way, and children inherit it) refuses to follow a junction or
+# symlink a non-administrator made: ERROR_UNTRUSTED_MOUNT_POINT. The first directory link is
+# tried; if it is refused, every directory becomes a real folder of hard-linked files (about
+# 6 s for the whole game on an SSD) for the rest of this overlay.
 LINKED = {}
+UNTRUSTED_MOUNT_POINT = 448
+MIRROR_DIRECTORIES = False
+
+
+def _directory_link_followed(link):
+    try:
+        os.listdir(link)
+        return True
+    except OSError as error:
+        if getattr(error, 'winerror', None) == UNTRUSTED_MOUNT_POINT:
+            return False
+        raise
+
+
+def _mirror_directory(link, target):
+    link.mkdir()
+    for entry in target.iterdir():
+        make_link(link / entry.name, entry)
 
 
 def make_link(link, target):
+    global MIRROR_DIRECTORIES
     if os.name != 'nt':
         link.symlink_to(target, target_is_directory=target.is_dir())
         return
     if target.is_dir():
+        if MIRROR_DIRECTORIES:
+            _mirror_directory(link, target)
+            return
         try:
             link.symlink_to(target, target_is_directory=True)
-            return
         except OSError:
             import _winapi
             _winapi.CreateJunction(str(target), str(link))
+            LINKED[str(link)] = target
+        if _directory_link_followed(link):
+            return
+        remove_link(link)
+        MIRROR_DIRECTORIES = True
+        print('Mods: this process may not follow folder links (Windows redirection trust); '
+              'copying the folder structure with hard links instead', file=sys.stderr)
+        _mirror_directory(link, target)
+        return
     else:
         try:
             os.link(target, link)

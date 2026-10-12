@@ -4,6 +4,14 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Mods when started from Armoury Crate** (ROG Ally) and other launchers that start games with
+  Windows' redirection trust policy: the game no longer stops with "the path cannot be traversed
+  because it contains an untrusted mount point". When folder links are refused, the mod overlay
+  uses real folders of hard-linked files instead (a few seconds longer at start, only then).
+  Reported by Sjknight413 on r/BloodbornePC.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
