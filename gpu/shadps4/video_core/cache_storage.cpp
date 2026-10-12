@@ -310,6 +310,19 @@ bool DataBase::Has(BlobType type, const std::string& name) const {
     return std::filesystem::exists(path, ec);
 }
 
+u32 DataBase::Count(BlobType type) const {
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return 0;
+    }
+    const auto ext = "." + GetBlobFileExtension(type);
+    std::error_code ec;
+    u32 count = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(cache_path, ec)) {
+        count += entry.path().extension() == ext;
+    }
+    return count;
+}
+
 u32 DataBase::Seed(const std::filesystem::path& catalog) {
     if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
         return 0;

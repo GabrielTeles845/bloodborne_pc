@@ -42,6 +42,8 @@ public:
     u32 Seed(const std::filesystem::path& catalog);
     /// Whether a blob is stored (directory caches; archives answer true and are read as before).
     bool Has(BlobType type, const std::string& name) const;
+    /// How many blobs of a type are stored (directory caches; 0 for archives).
+    u32 Count(BlobType type) const;
 
     bool Save(BlobType type, const std::string& name, std::vector<u8>&& data);
     bool Save(BlobType type, const std::string& name, std::vector<u32>&& data);

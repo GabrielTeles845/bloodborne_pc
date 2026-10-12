@@ -15,6 +15,8 @@
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 #include "common/hash.h"
 
+void SetWindowStatus(const std::string& status); // gpu/shim/window.cpp: the title status
+
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 7u; // bbport: interpolated integer fix (Pascal)
@@ -23,6 +25,7 @@ static constexpr u32 PipelineKeyVersion = 5u; // bbport: Info layout (ImageResou
 } // namespace Serialization
 
 namespace Vulkan {
+
 
 // bbport shader pre-build: permutations the warm-up translated from the game files this start,
 // and those it could not (their pipelines compile when first drawn, as before).
@@ -446,10 +449,25 @@ void PipelineCache::WarmUp() {
 
     u32 num_pipelines{};
     u32 num_total_pipelines{};
+    // Progress in the window title while the game waits (a first start with a full catalog
+    // builds thousands of pipelines).
+    const u32 work = Storage::DataBase::Instance().Count(Storage::BlobType::PipelineKey) +
+                     Storage::DataBase::Instance().Count(Storage::BlobType::ShaderMeta);
+    u32 done = 0;
+    auto shown = std::chrono::steady_clock::now();
+    const auto progress = [&] {
+        ++done;
+        const auto now = std::chrono::steady_clock::now();
+        if (work > 200 && now - shown > std::chrono::milliseconds(200)) {
+            shown = now;
+            SetWindowStatus(fmt::format("Preparing shaders: {}%", std::min(99u, done * 100 / work)));
+        }
+    };
 
     Storage::DataBase::Instance().ForEachBlob(
         Storage::BlobType::PipelineKey, [&](std::vector<u8>&& data) {
             ++num_total_pipelines;
+            progress();
 
             Serialization::Archive ar{std::move(data)};
             Serialization::Reader pldata{ar};
@@ -485,6 +503,7 @@ void PipelineCache::WarmUp() {
     u32 variants = 0;
     Storage::DataBase::Instance().ForEachBlob(
         Storage::BlobType::ShaderMeta, [&](std::vector<u8>&& data) {
+            progress();
             Serialization::Archive ar{std::move(data)};
             try {
                 variants += LoadPipelineStage(ar, 0);
@@ -494,6 +513,7 @@ void PipelineCache::WarmUp() {
             sel.modules.fill(nullptr);
             sel.fetch_shader.reset();
         });
+    SetWindowStatus({});
     if (prebuild) {
         std::printf("Shader pre-build: %u stored shader variants ready, pipelines or not\n",
                     variants);
