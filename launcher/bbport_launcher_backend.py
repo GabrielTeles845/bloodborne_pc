@@ -136,7 +136,7 @@ SETTINGS_SECTIONS = {
     ],
     'Controls': [
         ('Button prompts', []),
-        ('Mouse', ['mouse_camera', 'mouse_sensitivity', 'mouse_invert_y']),
+        ('Mouse', ['mouse_camera', 'mouse_menu', 'mouse_sensitivity', 'mouse_invert_y']),
     ],
     'Game & Saves': [
         ('Game files', ['game_dir', 'dlc_dir']),
@@ -167,7 +167,7 @@ SEARCH_TERMS = {
     'output_res': 'screen resolution display', 'fps_mode': 'fps frame rate',
     'frame_cap': 'fps limit unlocked', 'upscaler': 'dlss fsr taa',
     'user_dir': 'save folder save path', 'game_dir': 'eboot install game files',
-    'online_npid': 'account id username', 'mouse_camera': 'camera controls',
+    'online_npid': 'account id username', 'mouse_camera': 'camera controls', 'mouse_menu': 'cursor pointer click menus',
     'ui_language': 'launcher language', 'mods_enabled': 'load mods',
 }
 SEARCH_ACTIONS = [
