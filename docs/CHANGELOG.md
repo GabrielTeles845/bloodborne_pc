@@ -87,6 +87,11 @@ follows. It includes everything in 1.6.12.
   knock-off controllers (for example Switch Pro clones) read correctly. A genuine pad reads as
   before. `BB_PAD_CENTER_CAL=0` turns it off; `BB_PAD_DEADZONE` sets an inner dead zone
   ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71), Bainianzzz).
+- **Every retail release recognised:** external patch files, mods wrapped in a serial folder
+  and the save sound fix now accept all nine retail Bloodborne serials (Japanese and US Old
+  Hunters editions included), which run the same 1.09 game
+  ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47), parsifal295, from
+  bbport 0.51).
 
 ## 1.6.12 preview
 
