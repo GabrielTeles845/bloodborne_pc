@@ -114,9 +114,9 @@ achievements show their numbers and icons. Nothing syncs to PlayStation Network.
 
 ## Keyboard button prompts
 
-Choose **Keyboard** on the launcher's **Controller** page. The first time, it asks for your
-download of [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) from Nexus Mods (the
-`.7z` as downloaded; it is not included here) and imports its key images. It also sets your
+Choose **Keyboard** in the launcher (**Settings > Controls**). The key images are
+[PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) by **JinkiJinn**, included with the
+port as its permissions allow; nothing needs downloading. Choosing it also sets your
 keys to the ones the images show: E interact, Left Shift dodge, R blood vial, Q item,
 F transform, left / right / middle mouse for attack / firearm / lock-on, Left Ctrl + left mouse
 for strong attack, Space for L3, G and H for gestures and personal effects. Switch back to
@@ -191,8 +191,8 @@ page take precedence:
 - The mouse camera by imedved (Nexus Mods), ported by mcrib884 and Jhony-Jhansen.
 - Xbox prompts by **Dommo**, from [Xbox (and switch) UI for Bloodborne](https://www.nexusmods.com/bloodborne/mods/30),
   redistributed under the upload permission on the mod page.
-- Keyboard prompt images: [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460) on Nexus
-  Mods; not redistributed, imported from your own download.
+- Keyboard prompts by **JinkiJinn**, from [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460),
+  redistributed with credit under the upload permission on the mod page.
 - The respawn fix after [AwesomeObserver's Windows work](https://github.com/AwesomeObserver/bloodborne_pc/blob/windows/docs/respawn-loading-windows.md).
 - [ShadPs4Plus PKG Extractor 1.1](https://github.com/AzaharPlus/shadPS4Plus) by AzaharPlus
   (GPL-2.0), included for installing your dump.

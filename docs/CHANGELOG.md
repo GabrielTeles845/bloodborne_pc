@@ -14,6 +14,13 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
 - **Redesigned in-game guide**, in the launcher's style: an icon rail, a Hunt page of menu
   rows, and settings laid out as label/control rows with switches. Every option is where it
   was and does the same thing.
+- **Keyboard prompts included.** JinkiJinn's [PCBButtons](https://www.nexusmods.com/bloodborne/mods/460)
+  key images ship with the port (its permissions allow it, with credit), so choosing Keyboard no
+  longer asks for a download. They arrive switched off beside the Xbox prompts; the launcher and
+  the guide can both choose them.
+- **Guide controls.** Console-style movement: along the icon rail the page follows, Right enters
+  the page and Left returns to the rail. L3 + R3 is shown as the way to close; on a keyboard,
+  Insert opens and closes the guide. The mouse pointer shows as soon as the guide opens.
 - Developers: `overlay-preview` (an opt-in build target) renders the guide to an image
   without starting the game.
 

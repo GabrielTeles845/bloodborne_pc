@@ -247,23 +247,37 @@ def build_overlay(game, out, mods):
 SEEDED = '.bbport-bundled.json'
 
 
-def seed_bundled(mods_dir, bundled):
-    """Copies mods the port ships (the Xbox button prompts) into the player's mods folder once:
-    a data folder of its own (BB_DATA_DIR) or a source checkout starts without them. What was
-    seeded is remembered, so a mod the player deletes stays deleted."""
+def seed_bundled(mods_dir, bundled, off=(), config=None):
+    """Copies mods the port ships (the Xbox and keyboard button prompts) into the player's mods
+    folder once: a data folder of its own (BB_DATA_DIR) or a source checkout starts without them.
+    Those in `off` arrive switched off in `config` (the keyboard prompts would otherwise replace
+    the same images as the Xbox ones). What was seeded is remembered, so a mod the player
+    deletes stays deleted."""
     mods_dir = Path(mods_dir)
+    off_names = {Path(folder).name for folder in off}
     record = mods_dir / SEEDED
     try:
         seeded = set(json.loads(record.read_text(encoding='utf-8')))
     except (OSError, ValueError, TypeError):
         seeded = set()
     changed = False
-    for source in bundled:
+    for source in [*bundled, *off]:
         source = Path(source)
         if source.name in seeded or not source.is_dir():
             continue
         target = child(mods_dir, source.name)
         if not target.exists() and source.resolve() != target.resolve():
+            if source.name in off_names and config:
+                config = Path(config)
+                try:
+                    settings = json.loads(config.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    settings = {}
+                disabled = settings.get('disabled', [])
+                if source.name not in disabled and source.name not in settings.get('enabled', []):
+                    settings['disabled'] = sorted({*disabled, source.name})
+                    config.parent.mkdir(parents=True, exist_ok=True)
+                    config.write_text(json.dumps(settings, indent=2), encoding='utf-8')
             shutil.copytree(source, target)
             print(f'Mods: added the bundled {source.name}', file=sys.stderr)
         seeded.add(source.name)
@@ -286,8 +300,10 @@ def main():
     parser.add_argument('--generated', type=Path, action='append', default=[])
     # Mods the port ships, copied into --mods-dir once (seed_bundled).
     parser.add_argument('--bundled', type=Path, action='append', default=[])
+    # Shipped mods that arrive switched off (the keyboard prompts).
+    parser.add_argument('--bundled-off', type=Path, action='append', default=[])
     args = parser.parse_args()
-    seed_bundled(args.mods_dir, args.bundled)
+    seed_bundled(args.mods_dir, args.bundled, args.bundled_off, args.config)
     layers = [(folder.name, folder) for folder in args.generated if content_root(folder)]
     if args.enabled == '1':
         # shadPS4's loose overlay convention, beside the original game.

@@ -841,28 +841,20 @@ class LauncherBackend(QObject):
         return Path(self.app.get('mods_dir') or core.DATA_DIR / 'mods')
 
     @Slot(str)
-    def setPrompt(self, choice, source=None):
-        """Xbox: the bundled prompt images. PlayStation: the game's own. Keyboard: PCBButtons'
-        key images, imported from the player's download the first time (`source`, or a file
-        dialog), and the keys those images show bound in bbport.ini."""
+    def setPrompt(self, choice):
+        """Xbox and Keyboard: prompt images the port ships (Dommo's Xbox prompts; JinkiJinn's
+        PCBButtons key images, copied into the mods folder the first time, with the keys those
+        images show bound in bbport.ini). PlayStation: the game's own."""
         if choice not in ('Xbox', 'PlayStation', 'Keyboard'):
             return
         names = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
         xbox = [n for n in names if n != core.KEYBOARD_PROMPTS]
         if choice == 'Xbox' and not xbox:
-            self._set_notice('Install the optional Xbox prompts mod in the Mods folder first.')
+            self._set_notice('The Xbox prompts are missing from the mods folder. Download the latest release.')
             return
         if choice == 'Keyboard' and core.KEYBOARD_PROMPTS not in names:
-            if source is None:
-                source, _ = QFileDialog.getOpenFileName(
-                    None, 'Choose the PCBButtons download (Nexus Mods)', str(Path.home() / 'Downloads'),
-                    'PCBButtons (*.7z *.zip common.tpf.dcx)')
-            if not source:
-                self._set_notice(f'Keyboard prompts need the PCBButtons mod: download it from '
-                                 f'{core.KEYBOARD_PROMPTS_URL}, then choose Keyboard again.')
-                return
             try:
-                core.import_keyboard_prompts(source, self._mods_dir())
+                core.install_keyboard_prompts(self._mods_dir())
             except (OSError, ValueError) as error:
                 self._set_notice(str(error))
                 return

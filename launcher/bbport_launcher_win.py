@@ -422,8 +422,10 @@ def server_check(server, webapi, community):
     return '\n'.join(lines)
 
 
-# Keyboard button prompts: PCBButtons (Nexus Mods, Bloodborne mod 460) replaces the game's prompt
-# images with keyboard keys. It is not redistributed: the player imports their own download. Its
+# Keyboard button prompts: PCBButtons by JinkiJinn (Nexus Mods, Bloodborne mod 460, shipped with
+# credit as its permissions allow) replaces the game's prompt images with keyboard keys. The
+# package keeps it in bundled/ (packaging/windows/bundled in a source checkout), outside the mods
+# folder so it is not switched on beside the Xbox prompts; choosing Keyboard copies it in. Its
 # images show shadPS4's PC layout, so choosing it also binds those keys (bbport.ini key_*); the
 # engine names keys in text (src/key_prompts.c) when the bindings differ from the images.
 KEYBOARD_PROMPTS = 'Keyboard Prompts (PCBButtons)'
@@ -436,35 +438,24 @@ KEYBOARD_PROMPT_LAYOUT = {
 }
 
 
-def import_keyboard_prompts(source, mods_dir):
-    """Installs PCBButtons' menu/common.tpf.dcx from the player's download (the .7z or .zip,
-    its folder, or the file itself) as a mod. Returns the mod folder; ValueError when the
-    download holds no prompt texture pack."""
-    source, mods_dir = Path(source), Path(mods_dir)
-    with tempfile.TemporaryDirectory(prefix='bbport-prompts-') as tmp:
-        if source.is_file() and source.suffix.lower() in ('.7z', '.zip'):
-            # Windows' own tar (libarchive) reads both formats.
-            tar = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'tar.exe'
-            result = subprocess.run([str(tar) if tar.is_file() else 'tar', '-xf', str(source), '-C', tmp],
-                                    capture_output=True, text=True, creationflags=NO_WINDOW)
-            if result.returncode:
-                raise ValueError(f'Could not open {source.name}: {result.stderr.strip() or result.returncode}')
-            found = sorted(Path(tmp).rglob('common.tpf.dcx'))
-        elif source.is_dir():
-            found = sorted(source.rglob('common.tpf.dcx'))
-        else:
-            found = [source] if source.name.lower() == 'common.tpf.dcx' else []
-        if not found:
-            raise ValueError(f'{source.name} has no common.tpf.dcx (the PCBButtons prompt images).')
-        data = found[0].read_bytes()
-        if not data.startswith(b'DCX\0'):
-            raise ValueError(f'{found[0].name} is not a game texture pack.')
-    target = mods_dir / KEYBOARD_PROMPTS
-    (target / 'menu').mkdir(parents=True, exist_ok=True)
-    (target / 'menu' / 'common.tpf.dcx').write_bytes(data)
-    (target / 'SOURCE.txt').write_text(
-        f'PCBButtons keyboard prompts, imported from {source.name}.\n{KEYBOARD_PROMPTS_URL}\n'
-        'Not redistributed with the port; credit to its author.\n', encoding='utf-8')
+def bundled_keyboard_prompts():
+    """The keyboard prompt pack the port ships, or None in a copy without it."""
+    for folder in (PORT_DIR / 'bundled', PORT_DIR / 'packaging' / 'windows' / 'bundled'):
+        if (folder / KEYBOARD_PROMPTS / 'menu' / 'common.tpf.dcx').is_file():
+            return folder / KEYBOARD_PROMPTS
+    return None
+
+
+def install_keyboard_prompts(mods_dir):
+    """Copies the bundled keyboard prompts into the mods folder (once). Returns the mod folder;
+    ValueError when this copy of the port does not have them."""
+    source = bundled_keyboard_prompts()
+    if source is None:
+        raise ValueError('The keyboard prompt images are missing from this copy of the port. '
+                         'Download the latest release.')
+    target = Path(mods_dir) / KEYBOARD_PROMPTS
+    if not (target / 'menu' / 'common.tpf.dcx').is_file():
+        shutil.copytree(source, target, dirs_exist_ok=True)
     return target
 
 

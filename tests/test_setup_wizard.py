@@ -92,14 +92,10 @@ class FirstRunWizardTests(unittest.TestCase):
         self.assertEqual(backend.contentMods, [])
         backend.setPrompt('PlayStation')
         self.assertEqual(backend.promptChoice, 'PlayStation')
-        # Keyboard imports the player's PCBButtons download (a stand-in archive here), enables it
-        # instead of the Xbox images and binds the keys its images show.
-        import zipfile
-        download = self.root / 'PCBButtons-460-1-2.zip'
-        with zipfile.ZipFile(download, 'w') as archive:
-            archive.writestr('PCBButtons/common.tpf.dcx', b'DCX\0' + b'\0' * 60)
-            archive.writestr('PCBButtons/BBlauncher keybind.txt', 'cross = e\n')
-        backend.setPrompt('Keyboard', str(download))
+        # Keyboard copies in the PCBButtons images the port ships (packaging/windows/bundled),
+        # enables them instead of the Xbox images and binds the keys its images show.
+        self.assertIsNotNone(core.bundled_keyboard_prompts())
+        backend.setPrompt('Keyboard')
         self.assertEqual(backend.promptChoice, 'Keyboard')
         profile = json.loads((self.root / 'mods.json').read_text())
         self.assertIn('Xbox 360 Prompts (Elden Ring)', profile['disabled'])
@@ -129,15 +125,16 @@ class FirstRunWizardTests(unittest.TestCase):
         self.assertIn(core.KEYBOARD_PROMPTS, profile['disabled'])
         self.assertEqual(backend.promptChoice, 'Xbox')
 
-    def test_keyboard_prompts_refuse_a_download_without_the_images(self):
-        import zipfile
-        download = self.root / 'other.zip'
-        with zipfile.ZipFile(download, 'w') as archive:
-            archive.writestr('readme.txt', 'nothing here')
+    def test_keyboard_prompts_missing_from_the_copy_says_so(self):
         backend = LauncherBackend()
-        backend.setPrompt('Keyboard', str(download))
+        original = core.bundled_keyboard_prompts
+        core.bundled_keyboard_prompts = lambda: None
+        try:
+            backend.setPrompt('Keyboard')
+        finally:
+            core.bundled_keyboard_prompts = original
         self.assertNotEqual(backend.promptChoice, 'Keyboard')
-        self.assertIn('common.tpf.dcx', backend.notice)
+        self.assertIn('latest release', backend.notice)
 
     def test_launch_options_moved_out_of_advanced(self):
         backend = LauncherBackend()

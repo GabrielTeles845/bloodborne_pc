@@ -103,6 +103,12 @@ mkdir -p "$dest/mods"
 cp -r "$BB_XBOX_PROMPTS_DIR" "$dest/mods/"
 [[ -f "$dest/mods/Xbox 360 Prompts (Elden Ring)/menu/common.tpf.dcx" ]] ||
     { echo "The package is missing the Xbox prompt texture." >&2; exit 1; }
+# Keyboard prompts: PCBButtons by JinkiJinn (nexusmods.com/bloodborne/mods/460, redistribution
+# allowed with credit). Kept in bundled/, not mods/, so it is off until the player chooses Keyboard.
+mkdir -p "$dest/bundled"
+cp -r "packaging/windows/bundled/Keyboard Prompts (PCBButtons)" "$dest/bundled/"
+[[ -f "$dest/bundled/Keyboard Prompts (PCBButtons)/menu/common.tpf.dcx" ]] ||
+    { echo "The package is missing the keyboard prompt texture." >&2; exit 1; }
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 mkdir -p "$dest/docs"
 cp -r docs/images "$dest/docs/"

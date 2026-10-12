@@ -58,6 +58,10 @@ bundled=()
 for folder in "mods/Xbox 360 Prompts (Elden Ring)" "packaging/windows/mods/Xbox 360 Prompts (Elden Ring)"; do
     if [[ -d $folder ]]; then bundled=(--bundled "$folder"); break; fi
 done
+# The keyboard prompts (PCBButtons by JinkiJinn), seeded switched off.
+for folder in "bundled/Keyboard Prompts (PCBButtons)" "packaging/windows/bundled/Keyboard Prompts (PCBButtons)"; do
+    if [[ -d $folder ]]; then bundled+=(--bundled-off "$folder"); break; fi
+done
 game=$("$PYTHON" scripts/mods.py "$game" --out "$out" \
     --mods-dir "${BB_MODS_DIR:-$data/mods}" --config "${BB_MODS_CONFIG:-$data/mods.json}" \
     --enabled "${BB_MODS_ENABLED:-1}" ${generated[@]+"${generated[@]}"} ${bundled[@]+"${bundled[@]}"})

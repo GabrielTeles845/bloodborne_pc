@@ -235,7 +235,7 @@ Item {
                             delegate: GlassButton { text: modelData; width: 124; height: 38; highlighted: launcher.promptChoice === modelData; onClicked: launcher.setPrompt(modelData) }
                         }
                     }
-                    Note { visible: is("Controls", "Button prompts"); text: "Which buttons the game shows, from the next start. Xbox prompts come with the launcher (Dommo's mod, shared with permission). Keyboard needs your own download of PCBButtons, since its author does not allow it to be shipped: the first time, the launcher asks for the file and binds the keys its images show." }
+                    Note { visible: is("Controls", "Button prompts"); text: "Which buttons the game shows, from the next start. Both prompt sets come with the launcher, shared with their authors' permission: Xbox by Dommo, Keyboard (PCBButtons) by JinkiJinn. Keyboard also binds the keys its images show: E interact, Left Shift dodge, R blood vial, Q item, F transform, mouse buttons to attack." }
                     Row { visible: is("Visuals", "Upscaling"); spacing: 12
                         GlassButton { text: "Download FSR 4 assets"; width: 190; height: 38; onClicked: launcher.downloadFsr4() }
                         Note { text: launcher.fsrStatus; anchors.verticalCenter: parent.verticalCenter; width: 380 }

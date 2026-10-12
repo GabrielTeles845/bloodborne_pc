@@ -205,6 +205,14 @@ void SetOpen(bool value) {
     if (value) {
         active_tab = 0;
         menu_opened_ms = ClockMs();
+        // The pointer shows at once where the mouse is, not only after it next moves.
+        if (SDL_Window* window = SDL_GetMouseFocus()) {
+            float x = 0.0f, y = 0.0f;
+            SDL_GetMouseState(&x, &y);
+            const float density = SDL_GetWindowPixelDensity(window);
+            const float d = density > 0.0f ? density : 1.0f;
+            ImGui::GetIO().AddMousePosEvent(x * d, y * d);
+        }
     }
     else for (const auto key : {ImGuiKey_GamepadLStickLeft, ImGuiKey_GamepadLStickRight,
                                 ImGuiKey_GamepadLStickUp, ImGuiKey_GamepadLStickDown})
@@ -843,7 +851,8 @@ void ModsTab() {
     if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
         Note("Mod loading is off in the launcher. Turn it on there first.", Ink::Warn);
     // 0 the game's PlayStation buttons, 1 the Xbox prompt mod, 2 the keyboard key images the
-    // launcher imports (PCBButtons; run.py reads the choice again at every start).
+    // port ships (PCBButtons, put in the mods folder switched off; run.py reads the choice again
+    // at every start).
     Section("Button prompts");
     static const auto xbox_folder = XboxPromptFolder();
     static const std::optional<std::string> keyboard_folder = [] () -> std::optional<std::string> {
@@ -879,7 +888,7 @@ void ModsTab() {
     if (!xbox_folder)
         Note("Xbox buttons need the Xbox prompt mod in the launcher's mods folder.", Ink::Faint);
     if (!keyboard_folder)
-        Note("Keyboard keys: choose Keyboard once in the launcher (Settings > Controls) to import them.", Ink::Faint);
+        Note("Keyboard keys are added to the mods folder the next time the game starts.", Ink::Faint);
     if (!mod_selection_error.empty())
         Note(mod_selection_error.c_str(), Ink::Accent);
     if (!native) Section("Gameplay and debug");
