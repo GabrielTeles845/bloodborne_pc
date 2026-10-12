@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **A lost GPU device on a particle effect** whose indirect dispatch read garbage group
+  counts: implausible counts are now skipped and reported
+  ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41), parsifal295, from
+  bbport 0.5). `BB_INDIRECT_GUARD=0` restores the old behaviour.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
