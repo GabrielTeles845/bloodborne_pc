@@ -36,8 +36,7 @@ fi
 "$venv/Scripts/python.exe" -m pip install -q --disable-pip-version-check pyinstaller pillow certifi PySide6_Essentials==6.12.0
 # The scripts run inside Bloodborne.exe (--script): the standard modules they import come along.
 hidden=()
-for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request ctypes.wintypes certifi; do
+for module in argparse base64 bisect collections contextlib hashlib json re shutil struct tempfile               xml.etree.ElementTree urllib.request ctypes.wintypes certifi; do
     hidden+=(--hidden-import "$module")
 done
 "$venv/Scripts/python.exe" -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
@@ -109,6 +108,8 @@ mkdir -p "$dest/bundled"
 cp -r "packaging/windows/bundled/Keyboard Prompts (PCBButtons)" "$dest/bundled/"
 [[ -f "$dest/bundled/Keyboard Prompts (PCBButtons)/menu/common.tpf.dcx" ]] ||
     { echo "The package is missing the keyboard prompt texture." >&2; exit 1; }
+# Legacy CPU (Intel 3rd generation and older): the translation plan scripts/cpu_compat.py applies.
+mkdir -p "$dest/tools" && cp tools/legacy-cpu-plan.json "$dest/tools/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 mkdir -p "$dest/docs"
 cp -r docs/images "$dest/docs/"
