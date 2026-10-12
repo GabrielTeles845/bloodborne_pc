@@ -29,6 +29,13 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   remembers the answer. The next time the launcher opens, the Home banner shows the new version
   at once, with **Install update** beside **View release**. Off with the launcher's *Check for
   updates* switch, like every other check.
+- **Graphics presets** on the Graphics page and in the setup wizard: Low, Balanced, High and
+  Ultra, with a ★ on the one suggested for the detected graphics card (by video memory). They
+  change only settings that cost GPU time (upscaling factor, model detail, SSAO, dynamic-light
+  shadows, screen-space reflections, frame rate); the upscaler, output resolution and look-only
+  effects stay as you set them. Balanced is the shipped defaults, and any change of your own
+  shows as Custom. Each graphics setting now says what it does. After Lantern Launcher's idea
+  (par274), not its values.
 
 ## 1.6.12 preview
 

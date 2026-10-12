@@ -33,18 +33,34 @@ def row(key, label, kind='text', options=None, hint=''):
     return {'key': key, 'label': label, 'kind': kind, 'options': choice_rows(options or []), 'hint': hint}
 
 
+# What the graphics rows do, and which ones cost GPU time (the presets change those).
+EFFECT_HINTS = {
+    'effect_chromatic_aberration': 'Colour fringes at the screen edges. Look only.',
+    'effect_dof': 'Blurs the background in cutscenes and close-ups. Look only.',
+    'effect_motion_blur': 'Blur while turning the camera. Look only.',
+    'effect_ssao': 'Soft shadows in corners and creases. Costs GPU time.',
+    'effect_game_aa': "The game's own edge smoothing, under the upscaler. Look only.",
+    'effect_dynamic_shadows': 'Shadows cast by lamps, torches and other moving lights. Costs GPU time.',
+    'effect_ssr': 'Reflections on wet streets; not in the original game. Costs GPU time.',
+}
+
 FIELDS = {
     'Graphics': [
-        row('upscaler', 'Upscaler', 'choice', core.UPSCALERS),
-        row('preset', 'Upscaling preset', 'choice', core.PRESETS),
-        row('output_res', 'Output resolution', 'choice', core.OUTPUTS),
-        row('live_resolution', 'Live resolution changes', 'choice', core.LIVE),
-        row('sharpen', 'Sharpening (RCAS)', 'toggle'),
+        row('upscaler', 'Upscaler', 'choice', core.UPSCALERS,
+            'Renders below the output size and rebuilds a sharp image. DLSS needs an NVIDIA RTX card; FSR 3.1 works on any.'),
+        row('preset', 'Upscaling preset', 'choice', core.PRESETS,
+            'How far below the output the game renders: higher factors are faster and softer.'),
+        row('output_res', 'Output resolution', 'choice', core.OUTPUTS, "The final image size, usually your display's."),
+        row('live_resolution', 'Live resolution changes', 'choice', core.LIVE,
+            'Lets the in-game menu change the upscaling preset without a restart, at some cost in speed.'),
+        row('sharpen', 'Sharpening (RCAS)', 'toggle', hint='Sharpens the upscaled image.'),
         row('sharpness', 'Sharpness (0.00–1.00)'),
-        row('object_motion', 'Object motion vectors', 'toggle'),
-        row('model_lod', 'Model detail', 'choice', core.LODS),
+        row('object_motion', 'Object motion vectors', 'toggle',
+            hint='Motion data for moving characters: fewer ghosting trails with an upscaler.'),
+        row('model_lod', 'Model detail', 'choice', core.LODS,
+            'How soon distant models switch to simpler versions. Highest costs GPU time.'),
         row('show_fps', 'Show FPS counter', 'toggle'),
-        *[row(key, title[0], 'toggle') for key, title, _ in core.EFFECTS],
+        *[row(key, title[0], 'toggle', hint=EFFECT_HINTS.get(key, '')) for key, title, _ in core.EFFECTS],
     ],
     'Display': [
         row('fps_mode', 'Frame rate', 'choice', core.FPS_MODES),
@@ -123,6 +139,7 @@ class LauncherBackend(QObject):
     setupFailed = Signal(str)
     gameStarted = Signal()
     gameFinished = Signal(int, bool)  # exit code, whether the game got as far as running
+    presetApplied = Signal()
 
     def __init__(self, route=None):
         super().__init__()
@@ -140,6 +157,8 @@ class LauncherBackend(QObject):
         self._patches = []
         # A newer release found earlier (a direct launch checks quietly): shown at once.
         self._update = core.remembered_update() if self.app.get('check_updates') else None
+        self._update = None
+        self._settings_revision = 0
         self._gpu_status = 'Checking graphics card…'
         self._setup_running = False
         self.workerNotice.connect(self._set_notice)
@@ -282,6 +301,41 @@ class LauncherBackend(QObject):
         self._gpu_status = status
         self.changed.emit()
 
+    # --- Graphics presets (core.GRAPHICS_PRESETS) ---------------------------------------------
+
+    @Property(str, notify=changed)
+    def graphicsPreset(self):
+        return core.graphics_preset_of(self.ini, self.app)
+
+    @Property(str, notify=changed)
+    def recommendedPreset(self):
+        return core.recommended_graphics_preset(self._gpu_status) or ''
+
+    @Slot(str, result=str)
+    def presetLabel(self, name):
+        return core.GRAPHICS_PRESET_INFO.get(name, ('', ''))[0]
+
+    @Slot(str, result=str)
+    def presetDescription(self, name):
+        return core.GRAPHICS_PRESET_INFO.get(name, ('', ''))[1]
+
+    @Property(int, notify=presetApplied)
+    def settingsRevision(self):
+        """Bumped when a preset rewrites several rows at once, so the pages rebuild them."""
+        return self._settings_revision
+
+    @Slot(str)
+    def applyGraphicsPreset(self, name):
+        if name not in core.GRAPHICS_PRESETS:
+            return
+        core.apply_graphics_preset(name, self.ini, self.app)
+        self._write()
+        self._settings_revision += 1
+        self.presetApplied.emit()
+        label = core.GRAPHICS_PRESET_INFO[name][0]
+        self._set_notice(f'{label} preset chosen. Restart the game to apply it.' if self.running else
+                         f'{label} preset chosen. It applies the next time the game starts.')
+
     def _detect_gpu(self):
         exe = core.PORT_DIR / 'bin' / 'bb-gpu-capabilities.exe'
         if not exe.is_file():
@@ -334,7 +388,8 @@ class LauncherBackend(QObject):
 
     @Slot(str, result='QVariantList')
     def fields(self, page):
-        return FIELDS.get(page, [])
+        # The revision makes the rows differ after a preset, so the page builds them anew.
+        return [{**field, 'revision': self._settings_revision} for field in FIELDS.get(page, [])]
 
     @Slot(str, result='QVariant')
     def value(self, key):

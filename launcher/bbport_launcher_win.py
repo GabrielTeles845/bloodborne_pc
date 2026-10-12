@@ -236,6 +236,61 @@ FRAME_CAPS = [('', ('Auto: display refresh, max 120 (recommended)', 'Авто: �
 # Mouse camera sensitivity in tenths (bbport.ini mouse_sensitivity; 10 = 900 counts per radian).
 MOUSE_SPEEDS = [(str(v), (f'{v / 10:.1f}x',)) for v in (5, 7, 10, 13, 16, 20, 30)]
 FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
+
+# Graphics presets, after Lantern Launcher's idea (Low to Ultra, recommended from the GPU) but
+# with this port's own settings: only the ones that cost GPU time. The upscaler (DLSS needs an
+# RTX card, FSR 4 its assets), the output resolution (the display's) and the look-only effects
+# (chromatic aberration, depth of field, motion blur, the game's AA) stay as the player set them.
+# Balanced is the shipped defaults. Any other combination shows as Custom; nothing changes
+# until a preset is chosen. All of it applies when the game next starts (the upscaling preset
+# live as well when live resolution is on).
+GRAPHICS_PRESETS = {
+    'low': {'preset': '3', 'model_lod': '1', 'effect_ssao': '0', 'effect_dynamic_shadows': '0',
+            'effect_ssr': '0', 'fps_mode': '60'},
+    'balanced': {'preset': '2', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
+                 'effect_ssr': '0', 'fps_mode': 'uncap'},
+    'high': {'preset': '1', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
+             'effect_ssr': '0', 'fps_mode': 'uncap'},
+    'ultra': {'preset': '0', 'model_lod': '-2', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
+              'effect_ssr': '1', 'fps_mode': 'uncap'},
+}
+GRAPHICS_PRESET_INFO = {
+    'low': ('Low', 'Performance upscaling (×2), lower model detail, no SSAO or dynamic-light shadows, 60 FPS. '
+                   'For integrated graphics, the Steam Deck and cards with under 4 GB.'),
+    'balanced': ('Balanced', "Balanced upscaling (×1.7) and the game's own detail, unlocked frame rate. "
+                             'The default; for cards with 4-8 GB.'),
+    'high': ('High', "Quality upscaling (×1.5) and the game's own detail, unlocked frame rate. "
+                     'For cards with 8-12 GB.'),
+    'ultra': ('Ultra', 'Native resolution, highest model detail and screen-space reflections (not in the '
+                       'original game), unlocked frame rate. For cards with 12 GB or more.'),
+    'custom': ('Custom', 'Your own combination. Choosing a preset changes only upscaling, model detail, SSAO, '
+                         'dynamic-light shadows, reflections and the frame rate.'),
+}
+
+
+def graphics_preset_of(ini, app):
+    """The preset the current settings match, or 'custom'."""
+    for name, values in GRAPHICS_PRESETS.items():
+        if all(str((app if key in APP_DEFAULTS else ini).get(key, '')) == value for key, value in values.items()):
+            return name
+    return 'custom'
+
+
+def apply_graphics_preset(name, ini, app):
+    for key, value in GRAPHICS_PRESETS[name].items():
+        (app if key in APP_DEFAULTS else ini)[key] = value
+
+
+def recommended_graphics_preset(gpu):
+    """From bb-gpu-capabilities' "NAME, discrete, 8192 MiB" (the launcher's GPU status); None when
+    the card is unknown. Video memory stands in for speed: a rough guide, said so in the UI."""
+    match = re.search(r', (discrete|integrated or other), (\d+) MiB', gpu or '')
+    if not match:
+        return None
+    memory = int(match.group(2))
+    if match.group(1) != 'discrete' or memory < 3500:
+        return 'low'
+    return 'balanced' if memory < 7500 else 'high' if memory < 11500 else 'ultra'
 UI_LANGUAGES = bbport_lang.LANGUAGE_NAMES
 
 FSR4_COMMIT = 'ae8d628fae208813172446d1e49ed94150b04658'
