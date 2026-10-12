@@ -59,6 +59,12 @@ static uint64_t bytes_read;
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 
 static int save_path(const char *p) { return p && !strncmp(p,"/savedata",9); }
+/* BB_SAFE_SAVES=0: save files are written in place again, as before (no copy and rename). */
+static int safe_save_path(const char *p) {
+    static int on=-1;
+    if (on<0) { const char *e=getenv("BB_SAFE_SAVES"); on=!(e && !strcmp(e,"0")); }
+    return on && save_path(p);
+}
 static int temp_name(const char *name) {
     size_t n=strlen(name);
     return n>6 && !strcmp(name+n-6,".bbtmp");
@@ -94,7 +100,7 @@ int runtime_file_mount(const char *guest,const char *host) {
     snprintf(mounts[mount_count].guest,64,"%s",guest);
     snprintf(mounts[mount_count].host,512,"%s",host);
     ++mount_count;
-    if (save_path(guest)) remove_stale_temps(host,0);
+    if (safe_save_path(guest)) remove_stale_temps(host,0);
     pthread_mutex_unlock(&lock);
     return 0;
 }
@@ -346,14 +352,14 @@ static int64_t do_open(const char *guest,int flags,int mode) {
         if (e==ENOENT) { ++missing; printf("Runtime: open(%s) -> not found\n",guest); }
         return -e;
     } else {
-        if (save_path(guest) && (flags&3)) {
+        if (safe_save_path(guest) && (flags&3)) {
             char current[1024];
             snprintf(current,sizeof(current),"%s",path);
             current_copy(current,sizeof(current),0);
             host=open_for_commit(path,current,flags,mode,&commit,&temp);
             if (host<0) { errno=-host; host=-1; }
         } else {
-            if (save_path(guest)) current_copy(path,sizeof(path),0);
+            if (safe_save_path(guest)) current_copy(path,sizeof(path),0);
             host=open(path,host_flags(flags)&~O_DIRECTORY,_S_IREAD|_S_IWRITE);
         }
         if (save_trace() && save_path(guest))
@@ -367,14 +373,14 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     }
 #else
     int host;
-    if (save_path(guest) && (flags&3)) {
+    if (safe_save_path(guest) && (flags&3)) {
         char current[1024];
         snprintf(current,sizeof(current),"%s",path);
         current_copy(current,sizeof(current),0);
         host=open_for_commit(path,current,flags,mode,&commit,&temp);
         if (host<0) { errno=-host; host=-1; }
     } else {
-        if (save_path(guest)) current_copy(path,sizeof(path),0);
+        if (safe_save_path(guest)) current_copy(path,sizeof(path),0);
         host=open(path,host_flags(flags),mode ? mode : 0644);
     }
     if (save_trace() && save_path(guest))
@@ -529,7 +535,7 @@ static int64_t do_stat(const char *guest,GuestStat *out) {
     char path[1024]; HostStat s;
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;
-    if (save_path(guest)) current_copy(path,sizeof(path),0);
+    if (safe_save_path(guest)) current_copy(path,sizeof(path),0);
     if (!out) return -EFAULT;
     if (host_stat(path,&s)) return -errno;
     convert_stat(&s,out); return 0;
@@ -598,7 +604,7 @@ static int64_t do_truncate(const char *guest,int64_t length) {
     char path[1024];
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;
-    if (save_path(guest)) current_copy(path,sizeof(path),1);
+    if (safe_save_path(guest)) current_copy(path,sizeof(path),1);
 #ifdef _WIN32
     int h=open(path,O_RDWR|O_BINARY);
     if (h<0) return -errno;
@@ -614,7 +620,7 @@ static int64_t do_access(const char *guest,int mode) {
     char path[1024];
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;
-    if (save_path(guest)) current_copy(path,sizeof(path),0);
+    if (safe_save_path(guest)) current_copy(path,sizeof(path),0);
 #ifdef _WIN32
     return access(path,mode&6) ? -errno : 0; /* X_OK is invalid for the CRT */
 #else

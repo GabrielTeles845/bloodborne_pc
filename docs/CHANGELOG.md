@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Safer saves:** a save file is written to a copy and replaces the old one in a single step,
+  so a crash or a kill while the game saves can no longer leave a damaged save
+  ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), parsifal295, from
+  bbport 0.5). `BB_SAFE_SAVES=0` writes in place as before.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
