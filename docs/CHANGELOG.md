@@ -4,6 +4,15 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Sprinting no longer sticks at half speed above 90-120 FPS** after bumping into something:
+  the game's blocked-movement check assumed 30 FPS and now uses the real frame time. Applied
+  with every preset above 30 FPS, only when the game's code is exactly as expected
+  ([#33](https://github.com/Supermedo/bloodborne_pc/pull/33), Aljoscha-Ide; the same fix as
+  [#31](https://github.com/Supermedo/bloodborne_pc/pull/31), DUDUYG). `sprint_fix=0` in
+  bbport.ini or `BB_SPRINT_FIX=0` turns it off. The 120 FPS cap stays the default.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.

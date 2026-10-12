@@ -149,6 +149,7 @@ page take precedence:
 | Two invaders | `pc_two_invaders=1` | `BB_PC_TWO_INVADERS=1` |
 | Mouse camera | `mouse_camera=0` turns it off | `BB_MOUSE_CAMERA=0` |
 | 12-second respawn wait | | `BB_RESPAWN_DELAY_FIX=0` restores it |
+| High-FPS sprint fix | `sprint_fix=0` turns it off | `BB_SPRINT_FIX=0` |
 | All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 
 ## Known issues
@@ -157,7 +158,8 @@ page take precedence:
   includes a fix that still needs confirming in play. Backing out and choosing New Game again
   restores it.
 - Rebirth and two invaders have not been tested in play yet.
-- Keep the frame cap at 120 FPS or lower; higher caps can slow movement.
+- Keep the frame cap at 120 FPS or lower. The sprint fix removes the known half-speed sprint
+  above it, but higher caps are not tested yet.
 - New areas stutter briefly the first time while shaders compile. On a black screen, try
   **Advanced → Clear shader cache**.
 
