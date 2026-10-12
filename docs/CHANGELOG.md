@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Less GPU work for nothing:** draws with no colour or depth target and no memory writes,
+  which on the PS4 only fed occlusion counters this port answers itself, are skipped
+  ([Supermedo #34](https://github.com/Supermedo/bloodborne_pc/pull/34), Aljoscha-Ide).
+  `BB_SKIP_EMPTY_DRAWS=0` draws them.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
