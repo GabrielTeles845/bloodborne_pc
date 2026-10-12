@@ -4,6 +4,14 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Every retail release recognised:** external patch files, mods wrapped in a serial folder
+  and the save sound fix now accept all nine retail Bloodborne serials (Japanese and US Old
+  Hunters editions included), which run the same 1.09 game
+  ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47), parsifal295, from
+  bbport 0.51).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
