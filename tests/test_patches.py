@@ -9,7 +9,7 @@ from patches import (EBOOT_BASE, OUTPUT_SIZE, RESOLUTION_TEMPLATE, SCENE_HEIGHT,
                      SCENE_WIDTH, UI_HEIGHT, UI_WIDTH, compile_patches,
                      render_size, resolution_writes, scaled_sizes, effect_patches,
                      validate_patch_requirements, external_patches, external_selection,
-                     compile_external)
+                     compile_external, frame_rate_fixes, sprint_fix_enabled)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -107,6 +107,33 @@ class FpsPatchTests(unittest.TestCase):
             writes = compile_patches(path, ['60 FPS++'], '01.08', SEGMENTS)
             self.assertIn(0x011383ca - EBOOT_BASE, [at for at, data in writes])
             self.assertNotIn(0x00f383ca - EBOOT_BASE, [at for at, data in writes])
+
+
+def fake_elf(vaddr, code):
+    # One PT_LOAD segment holding `code` at `vaddr` (file offset 0x1000).
+    header = bytearray(0x1000)
+    struct.pack_into('<Q', header, 0x20, 0x40)
+    struct.pack_into('<HH', header, 0x36, 56, 1)
+    struct.pack_into('<IIQQQQQQ', header, 0x40, 1, 5, 0x1000, vaddr, vaddr, len(code), len(code), 0x1000)
+    return bytes(header) + code
+
+
+class SprintFixTests(unittest.TestCase):
+    def test_blocked_movement_check_divides_by_frame_time(self):
+        elf = fake_elf(0x1514c24, bytes.fromhex('c5fa590500174103'))
+        self.assertEqual(frame_rate_fixes(elf), [(0x1514c24, bytes.fromhex('c5fa5e458c0f1f00'))])
+
+    def test_unexpected_code_is_left_alone(self):
+        elf = fake_elf(0x1514c24, bytes.fromhex('9090909090909090'))
+        self.assertEqual(frame_rate_fixes(elf), [])
+
+    def test_switch(self):
+        from unittest import mock
+        with mock.patch.dict('os.environ', {}, clear=True):
+            self.assertTrue(sprint_fix_enabled({}))
+            self.assertFalse(sprint_fix_enabled({'sprint_fix': '0'}))
+        with mock.patch.dict('os.environ', {'BB_SPRINT_FIX': '0'}):
+            self.assertFalse(sprint_fix_enabled({'sprint_fix': '1'}))
 
 
 class DebugPatchTests(unittest.TestCase):
