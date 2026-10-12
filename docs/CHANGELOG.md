@@ -4,6 +4,12 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **A crash while a map loads** when a shader's descriptor table is unbound: the read now
+  returns an empty descriptor, which the renderer already handles, instead of reading address
+  zero (parsifal295's fix from [Mrsuss60's Windows port](https://github.com/Mrsuss60/bloodborne_pc_windows_port)).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
