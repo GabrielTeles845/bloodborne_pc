@@ -82,6 +82,44 @@ ApplicationWindow {
         locked: page === "Setup"
         onNavigate: (target) => { if (target === "Settings") openSettings("", ""); else page = target }
     }
+
+    // What the last action did (Home shows it in its status line): a short-lived message at the
+    // bottom of Settings, so a choice that needs something first says so.
+    Rectangle {
+        id: toast
+        property string message: ""
+        visible: opacity > 0
+        opacity: 0
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 28 }
+        width: Math.min(toastText.implicitWidth + 40, parent.width - 200)
+        height: toastText.paintedHeight + 24
+        radius: 6
+        color: Theme.surface
+        border.color: Theme.line
+        Rectangle {
+            width: 3; height: parent.height - 16; radius: 1.5; color: Theme.accent
+            anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
+        }
+        Text {
+            id: toastText
+            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 22; rightMargin: 18 }
+            text: toast.message
+            color: Theme.text; font.family: Theme.sans; font.pixelSize: 13
+            wrapMode: Text.WordWrap
+        }
+        MouseArea { anchors.fill: parent; onClicked: toast.opacity = 0 }
+        Timer { id: toastTimer; interval: 8000; onTriggered: toast.opacity = 0 }
+        Connections {
+            target: launcher
+            function onNoticeChanged() {
+                if (page !== "Settings" || launcher.notice === "" || launcher.notice === "Ready to hunt.") return
+                toast.message = launcher.notice
+                toast.opacity = 1
+                toastTimer.restart()
+            }
+        }
+    }
     font.family: Theme.sans
     palette.windowText: cream
     palette.buttonText: cream

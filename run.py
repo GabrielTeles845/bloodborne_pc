@@ -225,9 +225,11 @@ def main():
             live = env.get('BB_LIVE_RES') or ini_value(config, 'live_resolution') or '0'
             if live == 'auto':
                 caps = probe.parent / 'bb-gpu-capabilities.exe'
-                result = subprocess.run([str(caps), '--live-resolution'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                        text=True, creationflags=no_console())
-                live = result.stdout.strip() if result.returncode == 0 else '0'
+                live = '0'  # without the checker, the safe answer: no live changes
+                if caps.is_file():
+                    result = subprocess.run([str(caps), '--live-resolution'], stdin=subprocess.DEVNULL,
+                                            stdout=subprocess.PIPE, text=True, creationflags=no_console())
+                    live = result.stdout.strip() if result.returncode == 0 else '0'
             live = '1' if live == '1' or not patched else '0'
         if scaled_output or env.get('BB_OUTPUT_RES'):
             movie_output = scaled_output or env['BB_OUTPUT_RES']
