@@ -9,6 +9,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 
 from bbport_launcher_backend import LauncherBackend
+import bbport_launcher_win as launcher_core
 import bbport_startup
 
 # How long the "Launching Bloodborne" toast stays up if the game does not report running sooner.
@@ -89,6 +90,8 @@ def run_ui(route=None):
             show_launcher()
 
     keys.timeout.connect(check_keys)
+    # The update check waits until the game is running and only remembers what it finds.
+    backend.gameStarted.connect(lambda: launcher_core.start_quiet_update_check(backend.app))
     splash.openLauncher.connect(show_launcher)
     backend.gameStarted.connect(close_splash)
     backend.gameFinished.connect(finished)

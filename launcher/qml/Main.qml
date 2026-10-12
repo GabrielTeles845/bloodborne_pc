@@ -182,6 +182,7 @@ ApplicationWindow {
                         id: updateRow
                         anchors.centerIn: parent; spacing: 12
                         Text { text: "Update available: " + launcher.updateVersion; color: "#b9ebc5"; font.pixelSize: 13; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+                        GlassButton { text: "Install update"; width: 118; height: 30; highlighted: true; enabled: !launcher.running; onClicked: launcher.installUpdate() }
                         GlassButton { text: "View release"; width: 112; height: 30; onClicked: launcher.viewRelease() }
                     }
                 }
