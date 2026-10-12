@@ -234,6 +234,33 @@ Rectangle {
                 }
             }
         }
+        // Graphics preset; the suggestion (★) comes from the detected card's video memory.
+        Rectangle {
+            width: parent.width; height: wizardPresets.implicitHeight + 20; radius: 8
+            color: "#5628323d"; border.color: "#5a9daab1"
+            Column {
+                id: wizardPresets
+                x: 12; y: 10; width: parent.width - 24; spacing: 7
+                Row {
+                    spacing: 8
+                    Text { text: "Graphics"; color: "#eef0ed"; font.pixelSize: 14; width: 82; anchors.verticalCenter: parent.verticalCenter }
+                    Repeater {
+                        model: ["low", "balanced", "high", "ultra"]
+                        delegate: GlassButton {
+                            width: 100; height: 32
+                            text: launcher.presetLabel(modelData) + (launcher.recommendedPreset === modelData ? " ★" : "")
+                            highlighted: launcher.graphicsPreset === modelData
+                            onClicked: launcher.applyGraphicsPreset(modelData)
+                        }
+                    }
+                }
+                Text {
+                    width: parent.width; wrapMode: Text.WordWrap; color: "#aebac1"; font.pixelSize: 12
+                    text: launcher.presetDescription(launcher.graphicsPreset) +
+                          (launcher.recommendedPreset !== "" ? "  ★ suggested for your graphics card." : "")
+                }
+            }
+        }
         Rectangle {
             width: parent.width; height: 58; radius: 8
             color: "#5628323d"; border.color: "#5a9daab1"

@@ -298,6 +298,43 @@ ApplicationWindow {
                                 GlassButton { text: "✕"; width: 34; height: 32; onClicked: launcher.dismissProblem() }
                             }
                         }
+                        // Graphics presets: choosing one rewrites the rows below; any other combination is Custom.
+                        Rectangle {
+                            visible: page === "Graphics"
+                            width: parent.width; height: visible ? presetColumn.implicitHeight + 24 : 0; radius: 8
+                            color: "#86151d27"; border.color: "#6a9dc6b2"
+                            Column {
+                                id: presetColumn
+                                x: 14; y: 12; width: parent.width - 28; spacing: 9
+                                Row {
+                                    spacing: 10
+                                    Text { text: "Graphics preset"; color: "#e7edf1"; font.pixelSize: 14; font.bold: true; anchors.verticalCenter: parent.verticalCenter; width: 132 }
+                                    Repeater {
+                                        model: ["low", "balanced", "high", "ultra"]
+                                        delegate: GlassButton {
+                                            width: 104; height: 34
+                                            text: launcher.presetLabel(modelData) + (launcher.recommendedPreset === modelData ? " ★" : "")
+                                            highlighted: launcher.graphicsPreset === modelData
+                                            onClicked: launcher.applyGraphicsPreset(modelData)
+                                        }
+                                    }
+                                    Text {
+                                        visible: launcher.graphicsPreset === "custom"
+                                        text: "Custom"; color: mint; font.pixelSize: 13; font.bold: true; anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                                Text {
+                                    width: parent.width; wrapMode: Text.WordWrap; color: "#cfd7dc"; font.pixelSize: 12
+                                    text: launcher.presetDescription(launcher.graphicsPreset)
+                                }
+                                Text {
+                                    width: parent.width; wrapMode: Text.WordWrap; color: quiet; font.pixelSize: 11
+                                    text: (launcher.recommendedPreset !== ""
+                                           ? "★ Suggested for " + launcher.gpuStatus + ", judged by video memory only. "
+                                           : "") + "Presets leave the upscaler, output resolution and look-only effects alone. Changes apply the next time the game starts."
+                                }
+                            }
+                        }
                         Rectangle {
                             visible: page === "Game"
                             width: parent.width; height: visible ? 82 : 0; radius: 8
@@ -384,7 +421,8 @@ ApplicationWindow {
                             }
                         }
                         Repeater {
-                            model: page === "Home" || page === "Log" ? [] : launcher.fields(page)
+                            // settingsRevision: rebuilt after a preset rewrites several rows.
+                            model: page === "Home" || page === "Log" || launcher.settingsRevision < 0 ? [] : launcher.fields(page)
                             delegate: FieldRow { width: settingsColumn.width; field: modelData }
                         }
                         Text { visible: page === "Advanced"; text: "DIAGNOSTICS"; color: mint; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.7; topPadding: 12 }
