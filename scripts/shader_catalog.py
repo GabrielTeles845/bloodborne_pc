@@ -9,6 +9,7 @@ pipeline's state (.key) - in the current format. No SPIR-V and no game code: eac
 translates the shaders from its own game files.
 
   shader_catalog.py <catalog folder> <cache folder> [<cache folder> ...]
+  shader_catalog.py --status <cache folder>     how much a play session has recorded
 """
 from pathlib import Path
 import shutil
@@ -43,7 +44,21 @@ def merge(catalog, caches):
     return added, total
 
 
+def status(cache):
+    """Current-format records in a cache: shader variants and pipelines seen so far."""
+    cache = Path(cache)
+    if not cache.is_dir():
+        return 0, 0
+    records = [p for p in cache.iterdir() if p.suffix in ('.meta', '.key') and current(p)]
+    shaders = sum(p.suffix == '.meta' for p in records)
+    return shaders, len(records) - shaders
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--status':
+        shaders, pipelines = status(sys.argv[2])
+        print(f'Recorded so far: {shaders} shader variants, {pipelines} pipelines.')
+        return
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     added, total = merge(sys.argv[1], sys.argv[2:])
