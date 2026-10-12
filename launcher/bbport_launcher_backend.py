@@ -3,6 +3,7 @@
 The Qt Quick view talks to this object through a small set of slots. The game still
 uses the same settings.json, bbport.ini, mods.json and run.py as the original UI.
 """
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -333,6 +334,25 @@ class LauncherBackend(QObject):
         return (f"{self.ini.get('output_res', '1920x1080').replace('x', ' × ')}  ·  "
                 f"{self.app.get('fps_mode', 'uncap').upper()} FPS  ·  "
                 f"{self.ini.get('upscaler', 'dlss').upper()}")
+
+    @Property('QVariantMap', notify=changed)
+    def setupFacts(self):
+        fps = str(self.app.get('fps_mode', 'uncap'))
+        return {
+            'resolution': self.ini.get('output_res', '1920x1080').replace('x', ' × '),
+            'frameRate': 'Unlocked' if fps == 'uncap' else f'{fps} FPS',
+            'upscaler': str(self.ini.get('upscaler', 'dlss')).upper(),
+            'display': 'Fullscreen' if self.app.get('fullscreen') else 'Windowed',
+        }
+
+    @Slot(result=bool)
+    def controllerConnected(self):
+        try:
+            xinput = ctypes.windll.xinput1_4
+            return any(xinput.XInputGetState(index, ctypes.create_string_buffer(16)) == 0
+                       for index in range(4))
+        except (AttributeError, OSError):
+            return False
 
     @Property(str, notify=changed)
     def gameFolder(self):

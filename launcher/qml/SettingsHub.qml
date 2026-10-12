@@ -109,20 +109,28 @@ Item {
                     id: card
                     width: (categoryGrid.width - cardGap) / 2; height: cardHeight
                     radius: 6; clip: true
-                    color: cardMouse.containsMouse ? "#19232c" : "#11191f"
+                    color: "#11191f"
                     border.color: cardMouse.containsMouse ? "#b28b8a" : "#49545d"
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 130 } }
                     Image {
                         anchors.fill: parent
-                        source: Qt.resolvedUrl("../art/hero.png")
-                        fillMode: Image.PreserveAspectCrop; opacity: 0.075
+                        source: Qt.resolvedUrl("../assets/ui/tile-" + modelData.icon + ".png")
+                        fillMode: Image.PreserveAspectCrop; smooth: true
+                    }
+                    Rectangle {
+                        anchors.fill: parent
+                        gradient: Gradient { orientation: Gradient.Horizontal
+                            GradientStop { position: 0; color: "#e20b1118" }
+                            GradientStop { position: 0.48; color: "#b70b1118" }
+                            GradientStop { position: 1; color: "#290b1118" }
+                        }
                     }
                     Rectangle {
                         id: iconDisc
-                        width: Math.min(82, card.height * 0.58)
+                        width: Math.min(64, card.height * 0.46)
                         height: width; radius: width / 2
-                        x: hub.compact ? 22 : 29
+                        x: hub.compact ? 17 : 22
                         anchors.verticalCenter: parent.verticalCenter
                         color: modelData.warm ? "#3c171d" : "#202a35"
                         border.color: modelData.warm ? "#a8525d" : "#6d8095"
@@ -135,13 +143,13 @@ Item {
                         }
                     }
                     Column {
-                        x: iconDisc.x + iconDisc.width + (hub.compact ? 22 : 32)
+                        x: iconDisc.x + iconDisc.width + (hub.compact ? 17 : 22)
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - x - 52
+                        width: parent.width - x - 43
                         spacing: hub.compact ? 3 : 6
                         Text {
                             width: parent.width; text: modelData.name; color: "#f3f0ec"
-                            font.family: "Georgia"; font.pixelSize: hub.compact ? 23 : 30
+                            font.family: "Georgia"; font.pixelSize: hub.compact ? 23 : 29
                             elide: Text.ElideRight
                         }
                         Text {

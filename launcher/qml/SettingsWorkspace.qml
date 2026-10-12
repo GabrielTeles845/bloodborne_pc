@@ -70,8 +70,8 @@ Item {
     Row {
         visible: category !== ""
         x: 30; y: 22; spacing: 18
-        GlassButton { text: "←  Back to launcher"; width: 174; height: 36; onClicked: workspace.backToLauncher() }
-        GlassButton { visible: category !== ""; text: "All settings"; width: 112; height: 36; onClicked: workspace.openAt("", "") }
+        GlassButton { text: "←  All settings"; width: 174; height: 36; onClicked: workspace.openAt("", "") }
+        GlassButton { text: "Launcher"; width: 112; height: 36; onClicked: workspace.backToLauncher() }
     }
     Text { visible: category !== ""; x: 34; y: 76; text: "SETTINGS  /  " + category.toUpperCase(); color: "#e2b7a3"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 2.4 }
     Text { visible: category !== ""; x: 32; y: 91; text: category; color: cream; font.family: "Georgia"; font.pixelSize: 40 }
