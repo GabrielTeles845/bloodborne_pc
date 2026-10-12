@@ -536,9 +536,7 @@ class LauncherBackend(QObject):
             QTimer.singleShot(5000, self.closeRequested.emit)
 
     def _read_output(self, process):
-        log_dir = Path(self.app.get('user_dir') or core.DATA_DIR / 'user')
-        log_dir.mkdir(parents=True, exist_ok=True)
-        with open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1) as log:
+        with core.open_run_log(self.app.get('user_dir') or core.DATA_DIR / 'user') as log:
             for raw in iter(process.stdout.readline, b''):
                 line = raw.decode('utf-8', errors='replace')
                 log.write(line)

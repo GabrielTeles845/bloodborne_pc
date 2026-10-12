@@ -1727,9 +1727,7 @@ class Launcher:
         """Helper thread: the game's output to the Log page and to <saves folder>/last_run.log."""
         log = None
         try:
-            log_dir = Path(self.app.get('user_dir') or DATA_DIR / 'user')
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log = open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1)
+            log = open_run_log(self.app.get('user_dir') or DATA_DIR / 'user')
         except OSError:
             pass
         for raw in iter(process.stdout.readline, b''):
@@ -1992,13 +1990,30 @@ class GameJob:
             self.handle = None
 
 
+
+RUN_LOGS_KEPT = 3
+
+
+def open_run_log(log_dir):
+    """<saves folder>/last_run.log for a new run. The previous runs' logs move to
+    last_run.1.log, last_run.2.log ... (RUN_LOGS_KEPT in all): starting again after a crash
+    no longer loses the log of the run that crashed."""
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    names = ['last_run.log'] + [f'last_run.{n}.log' for n in range(1, RUN_LOGS_KEPT)]
+    for older, newer in zip(reversed(names[1:]), reversed(names[:-1])):
+        try:
+            (log_dir / newer).replace(log_dir / older)
+        except OSError:
+            pass
+    return open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1)
+
+
 def play_without_window(settings):
     """--play: the game with the saved settings (shortcuts, Steam). Output goes to the console
     when there is one and to <saves folder>/last_run.log."""
     attach_stdio()
-    log_dir = Path(settings.get('user_dir') or DATA_DIR / 'user')
-    log_dir.mkdir(parents=True, exist_ok=True)
-    with open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1) as log:
+    with open_run_log(settings.get('user_dir') or DATA_DIR / 'user') as log:
         process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(settings),
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
