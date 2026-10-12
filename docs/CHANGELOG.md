@@ -4,6 +4,14 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Update check on direct launches.** Starting the game straight from a shortcut or Steam now
+  asks GitHub quietly, 20 seconds after the game starts and at most every 6 hours, and only
+  remembers the answer. The next time the launcher opens, the Home banner shows the new version
+  at once, with **Install update** beside **View release**. Off with the launcher's *Check for
+  updates* switch, like every other check.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.

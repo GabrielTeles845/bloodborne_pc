@@ -138,7 +138,8 @@ class LauncherBackend(QObject):
         self._notice = 'Ready to hunt.'
         self._mods = []
         self._patches = []
-        self._update = None
+        # A newer release found earlier (a direct launch checks quietly): shown at once.
+        self._update = core.remembered_update() if self.app.get('check_updates') else None
         self._gpu_status = 'Checking graphics card…'
         self._setup_running = False
         self.workerNotice.connect(self._set_notice)
@@ -727,8 +728,10 @@ class LauncherBackend(QObject):
                 version, url, page = core.latest_release()
                 if core.release_is_newer(version):
                     self.updateAvailable.emit(version, url or '', page)
-                elif manual:
-                    self.workerNotice.emit(f'You have the latest version ({core.VERSION}).')
+                else:
+                    self.updateAvailable.emit('', '', '')  # forget a remembered one
+                    if manual:
+                        self.workerNotice.emit(f'You have the latest version ({core.VERSION}).')
             except (OSError, ValueError, KeyError) as error:
                 if manual:
                     self.workerNotice.emit(f'Could not check for updates: {error}')
@@ -736,7 +739,12 @@ class LauncherBackend(QObject):
 
     @Slot(str, str, str)
     def _offer_update(self, version, url, page):
-        self._update = (version, url, page)
+        if not version:
+            if self._update:
+                self._update = None
+                self.noticeChanged.emit()
+            return
+        self._update = (version, url or None, page)
         self._set_notice(f'Version {version} is available.')
 
     @Property(bool, notify=noticeChanged)

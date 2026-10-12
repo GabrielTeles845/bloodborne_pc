@@ -50,6 +50,11 @@ COMMUNITY_SERVER = 'https://thehuntersdream.com'
 RELEASES_API = 'https://api.github.com/repos/Jgamrot/bloodborne_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/Jgamrot/bloodborne_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'bbport-update'
+# The last answer from GitHub, so a direct launch (no launcher window) can check quietly and the
+# launcher shows the result the next time it opens. Off with check_updates like every check.
+UPDATE_CACHE = CONFIG_DIR / 'update-check.json'
+QUIET_CHECK_DELAY = 20  # seconds after a direct launch starts the game
+QUIET_CHECK_INTERVAL = 6 * 3600  # at most this often from direct launches
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'bbport.ini', 'mods.json', 'patches.json', 'last_run.log')
 
@@ -513,6 +518,8 @@ class Launcher:
         root.after(100, self.drain_output)
         threading.Thread(target=self.detect_gpu, daemon=True).start()
         if self.app.get('check_updates', True) and not COOP_TEST:
+            if remembered := remembered_update():  # found by a direct launch's quiet check
+                self.offer_update(*remembered)
             threading.Thread(target=self.check_update, daemon=True).start()
 
     def px(self, size):
@@ -1996,6 +2003,7 @@ def play_without_window(settings):
     """--play: the game with the saved settings (shortcuts, Steam). Output goes to the console
     when there is one and to <saves folder>/last_run.log."""
     attach_stdio()
+    start_quiet_update_check(settings)
     log_dir = Path(settings.get('user_dir') or DATA_DIR / 'user')
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1) as log:
@@ -2035,7 +2043,48 @@ def latest_release():
     version = release['tag_name']
     url = next((asset['browser_download_url'] for asset in release.get('assets', [])
                 if asset.get('name', '').lower().endswith('.zip')), None)
-    return version, url, release.get('html_url') or RELEASES_PAGE
+    page = release.get('html_url') or RELEASES_PAGE
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        UPDATE_CACHE.write_text(json.dumps({'checked': time.time(), 'version': version, 'url': url,
+                                            'page': page}), encoding='utf-8')
+    except OSError:
+        pass
+    return version, url, page
+
+
+def remembered_update():
+    """(version, zip URL, page URL) of the last release GitHub reported, if it is newer than
+    this launcher; None otherwise (also once this version is installed)."""
+    cached = load_json(UPDATE_CACHE, {})
+    version = cached.get('version') if isinstance(cached, dict) else None
+    if not isinstance(version, str) or not release_is_newer(version):
+        return None
+    return version, cached.get('url') or None, cached.get('page') or RELEASES_PAGE
+
+
+def quiet_update_check(settings, now=None):
+    """Direct launches: asks GitHub at most every QUIET_CHECK_INTERVAL and only remembers the
+    answer (UPDATE_CACHE); nothing is shown while the game runs."""
+    if not settings.get('check_updates', True) or COOP_TEST:
+        return False
+    cached = load_json(UPDATE_CACHE, {})
+    checked = cached.get('checked') if isinstance(cached, dict) else None
+    now = time.time() if now is None else now
+    if isinstance(checked, (int, float)) and 0 <= now - checked < QUIET_CHECK_INTERVAL:
+        return False
+    try:
+        latest_release()
+    except (OSError, ValueError, KeyError):
+        return False
+    return True
+
+
+def start_quiet_update_check(settings):
+    timer = threading.Timer(QUIET_CHECK_DELAY, quiet_update_check, args=(settings,))
+    timer.daemon = True
+    timer.start()
+    return timer
 
 
 def install_update(target, wait_pid):
