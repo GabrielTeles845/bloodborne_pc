@@ -4,6 +4,16 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Ultrawide, 16:10 and other aspect ratios**: new output resolutions (2560x1080, 3440x1440,
+  5120x2160, 5120x1440, 1280x800, portrait) and any WxH typed in the classic launcher. The
+  camera is widened with the vertical field of view kept, the HUD stays centered at 16:9, and
+  enemy health bars reach the wider edges. Only on the verified 1.09 game; aspect changes need
+  a restart. `BB_ASPECT=0` turns it off. From
+  [Supermedo #12](https://github.com/Supermedo/bloodborne_pc/pull/12) by FIocker, adapting
+  [bbhost](https://github.com/droogie/bbhost)'s camera and UI fixes (GPL-3.0-or-later).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.

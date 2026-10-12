@@ -14,6 +14,9 @@ The Windows camera hook checks the unmodified ELF PT_LOAD fingerprint and all re
 instructions/constants before writing any hook. Unsupported eboots and conflicting
 camera/UI patches are logged and skipped. This hook is currently Windows only.
 
+`BB_ASPECT=0` (the launcher's Advanced overrides) turns the camera and HUD correction off;
+a 16:9 output never uses it.
+
 ## Attribution and license
 
 Camera/UI corrections and the SysV trampoline are adapted from
