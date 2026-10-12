@@ -188,6 +188,10 @@ page take precedence:
 ## Requirements
 
 - Windows 10 (1903 or later) or Windows 11, 64-bit, and a graphics card with Vulkan 1.3.
+- An Intel Core 4th generation (Haswell, 2013) or newer, or an AMD Ryzen: the game uses
+  instructions of the PS4's processor (AVX, BMI1, MOVBE, LZCNT). Intel 2nd and 3rd generation
+  (Sandy and Ivy Bridge, many Xeon E5 v1/v2) run with those instructions translated, best effort;
+  CPUs without AVX cannot run the game.
 - About 6 GB of available memory (RAM plus page file), 10 GB for 1440p or 4K output.
 - DLSS needs an NVIDIA GeForce RTX 20 series or newer; FSR works on other cards.
 

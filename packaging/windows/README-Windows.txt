@@ -7,6 +7,9 @@ the community patches (60/90/unlocked FPS, resolution, effects); other versions 
 
 Requirements
 - Windows 10 (1903 or later) or Windows 11, 64-bit.
+- An Intel Core of the 4th generation (Haswell, 2013) or newer, or an AMD Ryzen: the game uses
+  instructions of the PS4's processor (AVX, BMI1, MOVBE, LZCNT). On an older processor the game
+  says which ones are missing.
 - A Vulkan 1.3 graphics card with a current driver.
 - About 6 GB of free memory commit (RAM + page file), 10 GB for 1440p/4K output.
   Nothing else: Python and the libraries are inside this folder.
