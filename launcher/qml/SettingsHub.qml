@@ -17,7 +17,7 @@ Item {
     Rectangle { anchors.fill: parent; color: "#0b1015" }
     Image {
         x: 0; y: 0; width: parent.width; height: heroHeight
-        source: Qt.resolvedUrl("../assets/ui/launcher-bridge.png")
+        source: Qt.resolvedUrl("../art/hero.png")
         fillMode: Image.PreserveAspectCrop
         verticalAlignment: Image.AlignTop
         horizontalAlignment: Image.AlignHCenter

@@ -43,9 +43,9 @@ Item {
     Image {
         visible: category !== ""
         x: 0; y: 0; width: parent.width; height: 232
-        source: Qt.resolvedUrl("../art/hero.png")
+        source: Qt.resolvedUrl("../art/strip.png")
         fillMode: Image.PreserveAspectCrop; verticalAlignment: Image.AlignTop
-        horizontalAlignment: Image.AlignRight
+        horizontalAlignment: Image.AlignHCenter
         smooth: true
     }
     Rectangle {
