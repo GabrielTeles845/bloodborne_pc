@@ -74,6 +74,10 @@ follows. It includes everything in 1.6.12.
   a restart. `BB_ASPECT=0` turns it off. From
   [Supermedo #12](https://github.com/Supermedo/bloodborne_pc/pull/12) by FIocker, adapting
   [bbhost](https://github.com/droogie/bbhost)'s camera and UI fixes (GPL-3.0-or-later).
+- **The game no longer stops at start when DLSS cannot load** although the NVIDIA driver
+  advertised it: device creation is retried without DLSS and FSR 3.1 is used; your DLSS choice
+  is kept for the next start ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140),
+  Obrikash).
 
 ## 1.6.12 preview
 
