@@ -4,18 +4,30 @@
 #include "engine_features.h"
 #include "engine_hooks.h"
 #include "key_prompts.h"
+#include "menu_pointer.h"
 #include "mouse_camera.h"
 #include "pc_menu.h"
 #include "rebirth.h"
 
 #include <stddef.h>
+#include <stdio.h>
 
 typedef int (*Install)(void);
 typedef void (*Frame)(void);
 
+/* The menu pointer rides on the menus' list update, which the PC menu hooks when it is on. */
+static int menu_pointer_install(void) {
+    if (!bb_menu_pointer_install()) return 0;
+    const int hooks = bb_menu_lists_hook();
+    if (bb_menu_lists_hooked()) return 1 + hooks;
+    bb_menu_pointer_off();
+    puts("Menu pointer: off - the menus' list update could not be hooked");
+    return 0;
+}
+
 static const Install installs[] = {bb_pc_menu_install, bb_rebirth_install, bb_mouse_camera_install,
-                                   bb_key_prompts_install};
-static const Frame frames[] = {bb_pc_menu_frame};
+                                   bb_key_prompts_install, menu_pointer_install};
+static const Frame frames[] = {bb_pc_menu_frame, bb_menu_pointer_frame};
 
 int bb_engine_install(void) {
     int hooks = 0;

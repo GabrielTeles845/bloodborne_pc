@@ -81,6 +81,7 @@ FIELDS = {
     ],
     'Controller': [
         row('mouse_camera', 'Mouse camera (click the game window to use it)', 'toggle'),
+        row('mouse_menu', "Mouse pointer in the game's menus (hover, click, right-click back)", 'toggle'),
         row('mouse_sensitivity', 'Mouse sensitivity', 'choice', core.MOUSE_SPEEDS),
         row('mouse_invert_y', 'Invert mouse Y', 'toggle'),
         row('debug_camera', 'Free camera', 'toggle'),

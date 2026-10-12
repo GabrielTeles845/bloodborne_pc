@@ -89,6 +89,9 @@ struct Values {
     std::atomic<bool> mouse_camera{true};
     std::atomic<int> mouse_sensitivity{10};
     std::atomic<bool> mouse_invert_y{false};
+    /// Menu pointer (src/menu_pointer.c): the mouse points and clicks in the game's menus.
+    /// BB_MOUSE_MENU=0 turns it off.
+    std::atomic<bool> mouse_menu{true};
     std::atomic<int> active_render_width{1920}, active_render_height{1080};
     /// Applied at start (patches.py); the menu shows when a restart is needed.
     std::atomic<bool> effects[EffectCount]{};

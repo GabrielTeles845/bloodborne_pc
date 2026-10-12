@@ -41,6 +41,8 @@
 #undef MemoryBarrier // bbport: winnt.h macro (through fmt), clashes with vk::MemoryBarrier
 #endif
 
+void BbNotePresentedFrame(int width, int height); // bbport: window.cpp (the menu pointer)
+
 namespace Vulkan {
 
 bool CanBlitToSwapchain(const vk::PhysicalDevice physical_device, vk::Format format) {
@@ -118,6 +120,7 @@ static vk::Rect2D FitImage(s32 frame_width, s32 frame_height, s32 swapchain_widt
 
 [[nodiscard]] vk::ImageBlit MakeImageBlitFit(s32 frame_width, s32 frame_height, s32 swapchain_width,
                                              s32 swapchain_height) {
+    ::BbNotePresentedFrame(frame_width, frame_height);
     const auto& dst_rect = FitImage(frame_width, frame_height, swapchain_width, swapchain_height);
 
     return MakeImageBlit(frame_width, frame_height, dst_rect.extent.width, dst_rect.extent.height,

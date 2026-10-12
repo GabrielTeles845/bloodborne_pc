@@ -21,6 +21,14 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
 - **Guide controls.** Console-style movement: along the icon rail the page follows, Right enters
   the page and Left returns to the rail. L3 + R3 is shown as the way to close; on a keyboard,
   Insert opens and closes the guide. The mouse pointer shows as soon as the guide opens.
+- **Mouse pointer in the game's menus.** Point at a row to move the game's cursor there, click
+  to choose it (on an option's value, the side you click steps it), right-click to go back, and
+  scroll with the wheel. It works in the title, System, the PC sections and the other menus
+  with lists. While a menu is open the window shows the pointer; the mouse camera takes the
+  mouse back when the menu closes. Mouse buttons do not trigger their gameplay bindings in
+  menus. Off with *Mouse pointer in the game's menus* on the Controller page (`mouse_menu=0`,
+  `BB_MOUSE_MENU=0`). Ported from [droogie's bbhost](https://github.com/droogie/bbhost)
+  (`menu_pointer.cpp`, GPL-3.0-or-later).
 - Developers: `overlay-preview` (an opt-in build target) renders the guide to an image
   without starting the game.
 

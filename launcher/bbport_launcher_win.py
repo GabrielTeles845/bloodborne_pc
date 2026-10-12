@@ -181,11 +181,11 @@ ENHANCEMENTS = [
     ('pc_enhanced_lamps', ('Lamps: Level Up and Storage at every lit lamp',
                            'Фонари: повышение уровня и хранилище у каждого фонаря'), False),
 ]
-INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y',
+INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y', 'mouse_menu',
              *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}
 INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'model_lod': '0',
-                'live_resolution': 'auto', 'mouse_camera': '1', 'mouse_sensitivity': '10',
+                'live_resolution': 'auto', 'mouse_camera': '1', 'mouse_sensitivity': '10', 'mouse_menu': '1',
                 'mouse_invert_y': '0',
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',

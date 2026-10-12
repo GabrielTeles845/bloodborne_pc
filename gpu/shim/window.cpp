@@ -1,4 +1,5 @@
 // bbport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -9,12 +10,16 @@
 #include "common/logging/log.h"
 #include "sdl_window.h"
 #include "bbport_overlay.h"
+#include "stage_point.h"
 #include "bbport_settings.h"
 #include "../bbgpu.h"
 
 void NoteMouseWheel(float y); // below: wheel notches for the pad read
 void NoteMouseMotion(float x, float y); // below: motion for the mouse camera
 void SetMouseCaptured(bool captured);
+static std::atomic<bool> g_menu_pointer{false}; // below: a menu shows the pointer
+static std::atomic<bool> g_window_focused{false};
+static std::atomic<int> g_window_points_w{0}, g_window_points_h{0};
 
 namespace Frontend {
 
@@ -112,10 +117,28 @@ bool WindowSDL::PollEvents() {
     // The mouse camera (src/mouse_camera.c) holds the mouse after a click in the window, while
     // the setting is on and nothing else needs the pointer: focus elsewhere, the overlay or a
     // text entry gives it back (a click takes it again).
+    const bool focused = SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS;
+    g_window_focused.store(focused, std::memory_order_relaxed);
+    {
+        int w = 0, h = 0;
+        SDL_GetWindowSize(window, &w, &h);
+        g_window_points_w.store(w, std::memory_order_relaxed);
+        g_window_points_h.store(h, std::memory_order_relaxed);
+    }
+    // A menu with the pointer (src/menu_pointer.c) shows the cursor; the camera takes the mouse
+    // back without a click when the menu closes, if it held it when the menu opened.
+    const bool menu_pointer = g_menu_pointer.load(std::memory_order_relaxed);
+    if (menu_pointer && !menu_pointer_seen) {
+        menu_pointer_seen = true;
+        rearm_after_menu = mouse_captured;
+    } else if (!menu_pointer && menu_pointer_seen) {
+        menu_pointer_seen = false;
+        mouse_armed = mouse_armed || rearm_after_menu;
+        rearm_after_menu = false;
+    }
     const bool can_capture = BbSettings::Get().mouse_camera.load() && !text_active &&
-                             !bbgpu_overlay_captures_input() &&
-                             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
-    if (!can_capture) {
+                             !bbgpu_overlay_captures_input() && focused && !menu_pointer;
+    if (!can_capture && !menu_pointer) {
         mouse_armed = false;
     }
     if ((can_capture && mouse_armed) != mouse_captured) {
@@ -165,7 +188,7 @@ bool WindowSDL::PollEvents() {
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            mouse_armed = can_capture;
+            mouse_armed = can_capture; // a click in a menu is the pointer's, not the camera's
             break;
         case SDL_EVENT_MOUSE_MOTION:
             if (mouse_captured) {
@@ -234,6 +257,31 @@ void SetMouseCaptured(bool captured) {
     g_motion_x.store(0, std::memory_order_relaxed);
     g_motion_y.store(0, std::memory_order_relaxed);
 }
+extern "C" void bbgpu_set_menu_pointer(int active) {
+    g_menu_pointer.store(active != 0, std::memory_order_relaxed);
+}
+
+// The presented frame's size (vk_presenter.cpp letterboxes it into the window).
+static std::atomic<int> g_frame_w{0}, g_frame_h{0};
+void BbNotePresentedFrame(int width, int height) {
+    g_frame_w.store(width, std::memory_order_relaxed);
+    g_frame_h.store(height, std::memory_order_relaxed);
+}
+
+extern "C" int bbgpu_mouse_stage_position(float* x, float* y) {
+    const float ww = float(g_window_points_w.load(std::memory_order_relaxed));
+    const float wh = float(g_window_points_h.load(std::memory_order_relaxed));
+    const float fw = float(g_frame_w.load(std::memory_order_relaxed));
+    const float fh = float(g_frame_h.load(std::memory_order_relaxed));
+    if (!g_window_focused.load(std::memory_order_relaxed) || ww <= 0 || wh <= 0 || fw <= 0 || fh <= 0 ||
+        g_mouse_captured.load(std::memory_order_relaxed)) {
+        return 0;
+    }
+    float mx = 0, my = 0;
+    SDL_GetMouseState(&mx, &my); // window points, like SDL_GetWindowSize
+    return BbStage::Point(mx, my, ww, wh, fw, fh, x, y);
+}
+
 extern "C" int bbgpu_mouse_captured(void) {
     return g_mouse_captured.load(std::memory_order_relaxed);
 }

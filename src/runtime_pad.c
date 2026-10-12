@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "mouse_camera.h"
+#include "menu_pointer.h"
 #include "gpu/bbgpu.h"
 #include "input_bindings.h"
 #include <stdio.h>
@@ -151,6 +152,22 @@ static void sample_host(PadData *d) {
     } else {
         k=NULL;
     }
+    /* In a menu the pointer owns the mouse (menu_pointer.h): a left click goes to the row under
+     * it, a right click is the back button, the wheel scrolls; the buttons' gameplay bindings
+     * (Mouse1 attack is R1, a tab switch in menus) wait until the menu is closed. */
+    static uint32_t mouse_was;
+    if (bb_menu_pointer_owns_mouse()) {
+        const uint32_t edge=mouse & ~mouse_was;
+        if (edge & 1u) bb_menu_pointer_click();
+        if (edge & 2u) bb_menu_pointer_back();
+        if (mouse & (1u<<5)) d->buttons|=BTN_UP;
+        if (mouse & (1u<<6)) d->buttons|=BTN_DOWN;
+        mouse_was=mouse;
+        mouse=0;
+    } else {
+        mouse_was=mouse;
+    }
+    d->buttons|=bb_menu_pointer_buttons();
     BindOutput o;
     bb_bindings_apply(k,nkeys,mouse,&o);
     if (o.any) {

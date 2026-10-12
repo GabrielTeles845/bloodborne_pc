@@ -250,7 +250,7 @@ if (WIN32)
     target_compile_options(atrac9 PRIVATE -w)
     set_target_properties(atrac9 PROPERTIES C_STANDARD 99 INTERPROCEDURAL_OPTIMIZATION OFF)
     add_executable(bb-probe ../src/probe.c ${BB_RUNTIME} ../src/compat_win.c ../src/vulkan_smoke.c
-        ../src/engine_hooks.c ../src/engine_features.c ../src/pc_menu.c ../src/rebirth.c ../src/input_bindings.c ../src/mouse_camera.c ../src/key_prompts.c
+        ../src/engine_hooks.c ../src/engine_features.c ../src/pc_menu.c ../src/rebirth.c ../src/input_bindings.c ../src/mouse_camera.c ../src/key_prompts.c ../src/menu_pointer.c
         ../packaging/windows/bb-probe.rc)
     target_sources(bb-probe PRIVATE ../src/aspect_ratio.cpp)
     target_compile_definitions(bb-probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
@@ -310,6 +310,9 @@ if(WIN32)
     target_sources(overlay-preview PRIVATE ../src/compat_win.c)
     target_link_libraries(overlay-preview PRIVATE bcrypt onecore ws2_32 -pthread)
 endif()
+add_executable(stage-point-test EXCLUDE_FROM_ALL ../tests/test_stage_point.cpp)
+target_compile_options(stage-point-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+target_include_directories(stage-point-test PRIVATE shim)
 
 add_executable(motion-history-test EXCLUDE_FROM_ALL ../tests/test_motion_history.cpp)
 target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
