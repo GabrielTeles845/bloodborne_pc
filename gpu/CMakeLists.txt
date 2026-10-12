@@ -297,6 +297,20 @@ target_compile_options(shader-user-data-test PRIVATE -UNDEBUG)
 target_include_directories(shader-user-data-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(shader-user-data-test PRIVATE fmt::fmt Boost::headers)
 
+# The in-game guide drawn offscreen (tools/overlay_preview.cpp): its own code through ImGui's SDL
+# software renderer, for working on its look without the game.
+add_executable(overlay-preview EXCLUDE_FROM_ALL tools/overlay_preview.cpp
+    third_party/imgui/backends/imgui_impl_sdlrenderer3.cpp)
+# The guide's source is compiled here as in the library: same definitions, includes and options.
+target_include_directories(overlay-preview PRIVATE $<TARGET_PROPERTY:bbgpu,INCLUDE_DIRECTORIES>)
+target_compile_definitions(overlay-preview PRIVATE $<TARGET_PROPERTY:bbgpu,COMPILE_DEFINITIONS>)
+target_compile_options(overlay-preview PRIVATE $<TARGET_PROPERTY:bbgpu,COMPILE_OPTIONS>)
+target_link_libraries(overlay-preview PRIVATE bbgpu)
+if(WIN32)
+    target_sources(overlay-preview PRIVATE ../src/compat_win.c)
+    target_link_libraries(overlay-preview PRIVATE bcrypt onecore ws2_32 -pthread)
+endif()
+
 add_executable(motion-history-test EXCLUDE_FROM_ALL ../tests/test_motion_history.cpp)
 target_compile_options(motion-history-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(motion-history-test PRIVATE ..)

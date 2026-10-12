@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -34,8 +35,10 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-// DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license).
-#ifdef _WIN32
+// DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license). The offscreen
+// preview (tools/overlay_preview.cpp) includes this file and uses the library's copy.
+#ifdef BB_OVERLAY_PREVIEW
+#elif defined(_WIN32)
 asm(".section .rdata,\"dr\"\n"
     ".balign 16\n"
     ".global bb_font_ttf\n"
@@ -270,23 +273,229 @@ void Store(std::atomic<T>& target, T value, bool changed) {
     }
 }
 
+// The guide's look, shared with the launcher (launcher/qml/Theme.qml): near-black panels, warm
+// off-white text, one crimson accent. Colours go through GetColorU32 so disabled rows fade.
+namespace Ink {
+constexpr ImU32 Text = IM_COL32(236, 231, 223, 255);
+constexpr ImU32 Dim = IM_COL32(163, 158, 151, 255);
+constexpr ImU32 Faint = IM_COL32(111, 107, 102, 255);
+constexpr ImU32 Line = IM_COL32(38, 43, 49, 255);
+constexpr ImU32 LineStrong = IM_COL32(54, 60, 67, 255);
+constexpr ImU32 Panel = IM_COL32(11, 13, 16, 255);
+constexpr ImU32 Rail = IM_COL32(9, 11, 14, 255);
+constexpr ImU32 Surface = IM_COL32(20, 24, 29, 255);
+constexpr ImU32 SurfaceHover = IM_COL32(26, 31, 37, 255);
+constexpr ImU32 Accent = IM_COL32(200, 50, 63, 255);
+constexpr ImU32 AccentSoft = IM_COL32(42, 18, 22, 255);
+constexpr ImU32 Good = IM_COL32(143, 197, 156, 255);
+constexpr ImU32 Warn = IM_COL32(227, 168, 120, 255);
+} // namespace Ink
+ImVec4 Vec(ImU32 c) { return ImGui::ColorConvertU32ToFloat4(c); }
+float Px(float v) { return v * base_scale; }
+// A one-pixel rule (filled, so it stays solid at any scale and on any renderer).
+void Rule(ImDrawList* draw, float x0, float x1, float y, ImU32 color = Ink::Line) {
+    draw->AddRectFilled(ImVec2(x0, y), ImVec2(x1, y + std::max(1.0f, std::floor(base_scale))), color);
+}
+
+// Settings are rows of a two-column table: label left, control right, a hairline between rows. A
+// section header or a note closes the table; the next row opens a new one.
+bool rows_open = false;
+int rows_id = 0;
+ImVec2 last_label_min{}, last_label_max{};
+float RowHeight() { return Px(54.0f); }
+float ControlWidth() { return std::min(Px(300.0f), ImGui::GetContentRegionAvail().x * 0.46f); }
+void CloseRows() {
+    if (!rows_open) return;
+    ImGui::EndTable();
+    rows_open = false;
+}
+void OpenRows() {
+    if (rows_open) return;
+    // A name per table, not PushID: BeginTable keeps its own ID pushed until EndTable.
+    char id[24];
+    std::snprintf(id, sizeof(id), "##rows%d", ++rows_id);
+    const bool open = ImGui::BeginTable(id, 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_NoSavedSettings);
+    if (!open) return;
+    ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("control", ImGuiTableColumnFlags_WidthFixed, ControlWidth());
+    rows_open = true;
+}
+// Starts a row: its label, vertically centred, then the control column, ready for a control of
+// the given height.
+void RowLabel(const char* label, float control_height) {
+    OpenRows();
+    const float h = RowHeight();
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, h);
+    ImGui::TableSetColumnIndex(0);
+    const float y = ImGui::GetCursorPosY();
+    ImGui::SetCursorPosY(y + (h - ImGui::GetTextLineHeight()) * 0.5f - ImGui::GetStyle().CellPadding.y);
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Text));
+    ImGui::TextUnformatted(label);
+    ImGui::PopStyleColor();
+    last_label_min = ImGui::GetItemRectMin();
+    last_label_max = ImGui::GetItemRectMax();
+    ImGui::TableSetColumnIndex(1);
+    ImGui::SetCursorPosY(y + (h - control_height) * 0.5f - ImGui::GetStyle().CellPadding.y);
+}
+// The section's small-caps title, with space above it.
+void Section(const char* title) {
+    CloseRows();
+    ImGui::Dummy(ImVec2(0, Px(18.0f)));
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Dim));
+    std::string upper(title);
+    std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return char(std::toupper(c)); });
+    ImGui::TextUnformatted(upper.c_str());
+    ImGui::PopStyleColor();
+    const ImVec2 min = ImGui::GetItemRectMin();
+    Rule(ImGui::GetWindowDrawList(), min.x, min.x + ImGui::GetContentRegionAvail().x, ImGui::GetItemRectMax().y + Px(8.0f));
+    ImGui::Dummy(ImVec2(0, Px(6.0f)));
+}
+// A page's serif title and its rule.
+void PageTitle(const char* title) {
+    CloseRows();
+    ImGui::PushFont(guide_serif_font, 39.0f);
+    ImGui::TextUnformatted(title);
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(0, Px(6.0f)));
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    Rule(ImGui::GetWindowDrawList(), at.x, at.x + ImGui::GetContentRegionAvail().x, at.y);
+    ImGui::Dummy(ImVec2(0, Px(10.0f)));
+}
+// Explanatory text outside the rows (dim), or a warning (amber).
+void Note(const char* text, ImU32 color = Ink::Dim) {
+    CloseRows();
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(color));
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextUnformatted(text);
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+}
+void NoteF(ImU32 color, const char* format, ...) {
+    char text[512];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    Note(text, color);
+}
+// A row that only reports something: label and value.
+void InfoRow(const char* label, const char* format, ...) {
+    char value[256];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(value, sizeof(value), format, args);
+    va_end(args);
+    RowLabel(label, ImGui::GetTextLineHeight());
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Dim));
+    ImGui::TextUnformatted(value);
+    ImGui::PopStyleColor();
+}
+
+// A switch: crimson when on. The whole switch is the (navigable) button.
+bool Switch(const char* id, bool* value) {
+    const float w = Px(42.0f), h = Px(24.0f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - w);
+    const bool pressed = ImGui::InvisibleButton(id, ImVec2(w, h), ImGuiButtonFlags_EnableNav);
+    if (pressed) *value = !*value;
+    const bool hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+    const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(min, max, ImGui::GetColorU32(*value ? Ink::Accent : hot ? IM_COL32(42, 48, 55, 255) : IM_COL32(34, 39, 45, 255)), h * 0.5f);
+    if (!*value) draw->AddRect(min, max, ImGui::GetColorU32(hot ? Ink::Dim : Ink::LineStrong), h * 0.5f, 0, Px(1.0f));
+    const float r = h * 0.5f - Px(4.0f);
+    draw->AddCircleFilled(ImVec2(*value ? max.x - h * 0.5f : min.x + h * 0.5f, (min.y + max.y) * 0.5f), r,
+                          ImGui::GetColorU32(*value ? IM_COL32(255, 246, 242, 255) : Ink::Dim));
+    return pressed;
+}
+
 void Checkbox(const char* label, std::atomic<bool>& value) {
+    RowLabel(label, Px(24.0f));
     bool v = value;
-    const bool changed = ImGui::Checkbox(label, &v);
+    ImGui::PushID(label);
+    const bool changed = Switch("##switch", &v);
+    ImGui::PopID();
     Store(value, v, changed);
+}
+bool Toggle(const char* label, bool* value) {
+    RowLabel(label, Px(24.0f));
+    ImGui::PushID(label);
+    const bool changed = Switch("##switch", value);
+    ImGui::PopID();
+    return changed;
 }
 
 void Slider(const char* label, std::atomic<float>& value, float lo, float hi) {
+    RowLabel(label, ImGui::GetFrameHeight());
     float v = value;
-    const bool changed = ImGui::SliderFloat(label, &v, lo, hi, "%.2f");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    const std::string id = std::string("##slider_") + label;
+    const bool changed = ImGui::SliderFloat(id.c_str(), &v, lo, hi, "%.2f");
     Store(value, v, changed);
 }
 
+// A pick list in a row: as ImGui::BeginCombo; EndCombo when it returns true.
+bool ComboRow(const char* label, const char* preview) {
+    RowLabel(label, ImGui::GetFrameHeight());
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    // An ID string, not PushID: an open combo continues in its popup window. The arrow is the
+    // launcher's thin chevron, drawn on the row's window after the frame.
+    const std::string id = std::string("##combo_") + label;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const float w = ImGui::GetContentRegionAvail().x, h = ImGui::GetFrameHeight();
+    const bool open = ImGui::BeginCombo(id.c_str(), preview, ImGuiComboFlags_NoArrowButton);
+    const ImVec2 c(at.x + w - Px(18.0f), at.y + h * 0.5f);
+    const float k = Px(4.5f);
+    draw->PathLineTo(ImVec2(c.x - k, c.y - k * 0.5f));
+    draw->PathLineTo(ImVec2(c.x, c.y + k * 0.5f));
+    draw->PathLineTo(ImVec2(c.x + k, c.y - k * 0.5f));
+    draw->PathStroke(ImGui::GetColorU32(open ? Ink::Text : Ink::Dim), ImDrawFlags_None, Px(1.6f));
+    return open;
+}
+
+// One of several choices: a row with a radio mark on the right.
+bool ChoiceRow(const char* label, bool selected) {
+    RowLabel(label, Px(22.0f));
+    const float d = Px(22.0f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - d);
+    ImGui::PushID(label);
+    const bool pressed = ImGui::InvisibleButton("##choice", ImVec2(d, d), ImGuiButtonFlags_EnableNav);
+    ImGui::PopID();
+    const bool hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const ImVec2 c(min.x + d * 0.5f, min.y + d * 0.5f);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddCircle(c, d * 0.5f - Px(1.0f), ImGui::GetColorU32(selected ? Ink::Accent : hot ? Ink::Dim : Ink::LineStrong), 0, Px(1.6f));
+    if (selected) draw->AddCircleFilled(c, d * 0.25f, ImGui::GetColorU32(Ink::Accent));
+    return pressed;
+}
+
+// The one primary action of a page (crimson, full width).
+bool PrimaryButton(const char* label) {
+    CloseRows();
+    ImGui::Dummy(ImVec2(0, Px(6.0f)));
+    ImGui::PushStyleColor(ImGuiCol_Button, Vec(Ink::Accent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Vec(IM_COL32(217, 65, 78, 255)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, Vec(IM_COL32(169, 42, 53, 255)));
+    const bool pressed = ImGui::Button(label, ImVec2(-FLT_MIN, Px(48.0f)));
+    ImGui::PopStyleColor(3);
+    return pressed;
+}
+
+// What the last row does: a small marker after its label, the text on hover or focus.
 void Hint(const char* text) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip()) {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+    const bool hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+    const ImVec2 c(last_label_max.x + Px(13.0f), (last_label_min.y + last_label_max.y) * 0.5f);
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 ink = ImGui::GetColorU32(hot ? Ink::Text : Ink::Dim);
+    draw->AddCircle(c, Px(7.5f), ink, 0, Px(1.2f));
+    draw->AddRectFilled(ImVec2(c.x - Px(0.75f), c.y - Px(1.0f)), ImVec2(c.x + Px(0.75f), c.y + Px(4.0f)), ink); // an "i"
+    draw->AddCircleFilled(ImVec2(c.x, c.y - Px(3.4f)), Px(1.0f), ink);
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const bool over_marker = std::abs(mouse.x - c.x) < Px(10.0f) && std::abs(mouse.y - c.y) < Px(10.0f);
+    if (hot || over_marker) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 26.0f);
         ImGui::TextUnformatted(text);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
@@ -322,9 +531,8 @@ bool ExtrasRestartNeeded() {
 
 void RestartPrompt() {
     if (!RestartNeeded()) return;
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
-                       "Changes will apply after restarting the game");
-    if (ImGui::Button("Apply and restart")) {
+    Note("Changes apply after restarting the game.", Ink::Warn);
+    if (PrimaryButton("Apply and restart")) {
         BbSettings::Save();
         runtime_restart();
     }
@@ -332,17 +540,13 @@ void RestartPrompt() {
 
 void SettingsTab() {
     auto& s = BbSettings::Get();
-    ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted("Visual settings");
-    ImGui::PopFont();
-    ImGui::Separator();
-    ImGui::Spacing();
-    ImGui::SeparatorText("Temporal upscaling");
+    PageTitle("Visual settings");
+    Section("Temporal upscaling");
     static const char* upscalers[] = {"Off", "FSR 3.1", "FSR 4 (INT8)", "FSR 4.1.1 (INT8)",
                                      "TAA (native anti-aliasing)", "DLSS (NVIDIA RTX)"};
     static const char* later[] = {"XeSS"};
     int upscaler = s.upscaler;
-    if (ImGui::BeginCombo("Upscaler", upscalers[upscaler])) {
+    if (ComboRow("Upscaler", upscalers[upscaler])) {
         for (int i = 0; i < BbSettings::UpscalerCount; ++i) {
             const bool supported = i == BbSettings::UpscalerFsr4 ? s.fsr4_supported.load()
                 : i == BbSettings::UpscalerFsr411 ? s.fsr411_supported.load()
@@ -367,14 +571,12 @@ void SettingsTab() {
         ImGui::EndCombo();
     }
     if (const char* problem = s.dlss_problem.load(); problem && upscaler == BbSettings::UpscalerDlss) {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "DLSS: %s", problem);
+        NoteF(Ink::Warn, "DLSS: %s", problem);
     }
     if (const char* problem = s.fsr4_problem.load()) {
-        ImGui::PushTextWrapPos();
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "FSR 4 unavailable: %s", problem);
+        NoteF(Ink::Warn, "FSR 4 unavailable: %s", problem);
         if (!BbSettings::IsFsr4(s.upscaler))
-            ImGui::TextUnformatted("The selected mode is active. You can select FSR 4 again.");
-        ImGui::PopTextWrapPos();
+            Note("The selected mode is active. You can select FSR 4 again.");
     }
     if (BbSettings::IsFsr4(s.upscaler)) {
         if (s.upscaler == BbSettings::UpscalerFsr411) {
@@ -394,7 +596,7 @@ void SettingsTab() {
     char preset_label[64];
     std::snprintf(preset_label, sizeof(preset_label), "%s (x%.1f)", BbSettings::PresetName(preset),
                   BbSettings::PresetScale(preset));
-    if (ImGui::BeginCombo("Preset", preset_label)) {
+    if (ComboRow("Preset", preset_label)) {
         for (int i = 0; i < BbSettings::PresetCount; ++i) {
             char label[64];
             const float scale = BbSettings::PresetScale(i);
@@ -411,14 +613,14 @@ void SettingsTab() {
     }
     ImGui::EndDisabled();
     if (taa) {
-        ImGui::TextWrapped("TAA smooths the scene at output resolution without FSR upscaling. The saved upscaling preset returns when you select an upscaler.");
+        Note("TAA smooths the scene at output resolution without FSR upscaling. The saved upscaling preset returns when you select an upscaler.");
     }
-    ImGui::Text("Active scene resolution: %d x %d", s.active_render_width.load(),
-                s.active_render_height.load());
+    InfoRow("Active scene resolution", "%d x %d", s.active_render_width.load(),
+            s.active_render_height.load());
     if (BbSettings::AspectNeedsRestart()) {
         Hint("Changing aspect ratio requires a restart. HUD remains centered at 16:9.");
     } else if (BbSettings::FixedRenderSession()) {
-        ImGui::Text("Startup preset: %s", BbSettings::PresetName(s.startup_preset));
+        InfoRow("Startup preset", "%s", BbSettings::PresetName(s.startup_preset));
         if (const char* automatic = std::getenv("BB_AUTO_RENDER_RES");
             automatic && automatic[0] == '1') {
             Hint("At outputs other than 1080p, the scene resolution is patched at startup. Changes to the preset or output require a restart. This saves GPU work on older GPUs. Non-16:9 outputs always use this path to keep camera and HUD geometry synchronized.");
@@ -436,7 +638,7 @@ void SettingsTab() {
     Checkbox("Subpixel jitter", s.jitter);
     Hint("The camera shifts by a fraction of a pixel each frame so the upscaler can recover detail across multiple frames. Without jitter, it only smooths using frame history.");
 
-    ImGui::SeparatorText("Reactive mask");
+    Section("Reactive mask");
     ImGui::BeginDisabled(taa);
     Checkbox("Enable mask", s.reactive);
     Hint("Marks transparent effects such as particles and fog so the upscaler relies less on history. Reduces trails, but can increase shimmer behind those effects.");
@@ -445,7 +647,7 @@ void SettingsTab() {
     Slider("Threshold", s.reactive_threshold, 0.0f, 1.0f);
     Slider("Maximum", s.reactive_max, 0.0f, 1.0f);
     bool show_mask = s.debug_view == BbSettings::DebugReactive;
-    if (ImGui::Checkbox("Show mask (debug)", &show_mask)) {
+    if (Toggle("Show mask (debug)", &show_mask)) {
         s.debug_view = show_mask ? BbSettings::DebugReactive : BbSettings::DebugNone;
     }
     ImGui::EndDisabled();
@@ -453,19 +655,19 @@ void SettingsTab() {
     Checkbox("Object motion vectors", s.object_motion);
     Hint("Accurate vectors for animated objects reduce breakup on clothing and weapons during movement. Static geometry receives no extra pass. Changes require a restart.");
     bool show_motion = s.debug_view == BbSettings::DebugMotion;
-    if (ImGui::Checkbox("Show motion vectors (debug)", &show_motion)) {
+    if (Toggle("Show motion vectors (debug)", &show_motion)) {
         s.debug_view = show_motion ? BbSettings::DebugMotion : BbSettings::DebugNone;
     }
     Hint("Red/green: horizontal/vertical motion (8 pixels = full brightness). Blue: the pixel has accurate object motion, beyond camera motion. A moving object with no blue or red/green is treated as stationary and may leave trails.");
     ImGui::EndDisabled(); // upscaler off
 
-    ImGui::SeparatorText("Output resolution");
+    Section("Output resolution");
     auto output_label = [](int i) {
         return std::to_string(BbSettings::OutputWidths[i]) + " x " +
                std::to_string(BbSettings::OutputHeights[i]);
     };
     int output = s.output_res;
-    if (ImGui::BeginCombo("Output resolution", output_label(output).c_str())) {
+    if (ComboRow("Output resolution", output_label(output).c_str())) {
         for (int i = 0; i < BbSettings::OutputCount; ++i) {
             if (ImGui::Selectable(output_label(i).c_str(), i == output)) {
                 Store(s.output_res, i, true);
@@ -482,7 +684,7 @@ void SettingsTab() {
     }
     static const char* live_modes[] = {"Auto (based on GPU)", "Off (faster)", "On"};
     int live = s.live_resolution + 1;
-    if (ImGui::BeginCombo("Live resolution changes", live_modes[live])) {
+    if (ComboRow("Live resolution changes", live_modes[live])) {
         for (int i = 0; i < 3; ++i) {
             if (ImGui::Selectable(live_modes[i], i == live)) {
                 Store(s.live_resolution, i - 1, true);
@@ -491,14 +693,14 @@ void SettingsTab() {
         ImGui::EndCombo();
     }
     Hint("On: output and presets change without restarting, while game post-processing stays at 1080p. Off: the scene is patched to the preset resolution at startup. Auto enables the live path on capable discrete GPUs. Changes apply after restarting the game.");
-    ImGui::SeparatorText("Game effects (restart required)");
+    Section("Game effects (restart required)");
     static const char* lods[] = {"Highest (-2)", "Original", "Lower (1)", "Lowest (2)"};
     static constexpr int lod_values[] = {-2, 0, 1, 2};
     int lod_index = 1;
     for (int i = 0; i < 4; ++i) {
         if (lod_values[i] == s.model_lod) lod_index = i;
     }
-    if (ImGui::BeginCombo("Model detail", lods[lod_index])) {
+    if (ComboRow("Model detail", lods[lod_index])) {
         for (int i = 0; i < 4; ++i) {
             if (ImGui::Selectable(lods[i], i == lod_index)) {
                 Store(s.model_lod, lod_values[i], true);
@@ -513,31 +715,28 @@ void SettingsTab() {
 
     RestartPrompt();
 
-    ImGui::SeparatorText("Other");
+    Section("Other");
     Checkbox("Show FPS counter", s.show_fps);
 }
 
 void ImageToolsTab() {
     auto& s = BbSettings::Get();
-    ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted("Image tools");
-    ImGui::PopFont();
-    ImGui::Separator();
-    ImGui::TextWrapped("Graphics, display, effects and the FPS counter are in Pause > System. "
-                       "These tools provide diagnostics beyond the game menu.");
-    ImGui::SeparatorText("Current image");
-    ImGui::Text("Scene resolution: %d x %d", s.active_render_width.load(),
-                s.active_render_height.load());
+    PageTitle("Image tools");
+    Note("Graphics, display, effects and the FPS counter are in Pause > System. These tools are "
+         "diagnostics beyond the game menu.");
+    Section("Current image");
+    InfoRow("Scene resolution", "%d x %d", s.active_render_width.load(),
+            s.active_render_height.load());
     if (BbSettings::FixedRenderSession())
-        ImGui::Text("Startup preset: %s (changes need a restart)",
-                    BbSettings::PresetName(s.startup_preset));
+        InfoRow("Startup preset", "%s (changes need a restart)",
+                BbSettings::PresetName(s.startup_preset));
     if (const char* problem = s.dlss_problem.load();
         problem && s.upscaler == BbSettings::UpscalerDlss)
-        ImGui::TextWrapped("DLSS: %s", problem);
+        NoteF(Ink::Warn, "DLSS: %s", problem);
     if (const char* problem = s.fsr4_problem.load())
-        ImGui::TextWrapped("FSR 4 unavailable: %s", problem);
+        NoteF(Ink::Warn, "FSR 4 unavailable: %s", problem);
 
-    ImGui::SeparatorText("Fine tuning");
+    Section("Fine tuning");
     ImGui::BeginDisabled(!s.sharpen);
     Slider("Sharpness", s.sharpness, 0.0f, 2.0f);
     ImGui::EndDisabled();
@@ -559,13 +758,13 @@ void ImageToolsTab() {
     ImGui::EndDisabled();
     Hint("Marks particles and fog so the upscaler relies less on frame history.");
 
-    ImGui::SeparatorText("Debug views");
+    Section("Debug views");
     int view = s.debug_view;
-    if (ImGui::RadioButton("Normal image", view == BbSettings::DebugNone))
+    if (ChoiceRow("Normal image", view == BbSettings::DebugNone))
         s.debug_view = BbSettings::DebugNone;
-    if (ImGui::RadioButton("Reactive mask view", view == BbSettings::DebugReactive))
+    if (ChoiceRow("Reactive mask view", view == BbSettings::DebugReactive))
         s.debug_view = BbSettings::DebugReactive;
-    if (ImGui::RadioButton("Motion vector view", view == BbSettings::DebugMotion))
+    if (ChoiceRow("Motion vector view", view == BbSettings::DebugMotion))
         s.debug_view = BbSettings::DebugMotion;
     Hint("Debug views are temporary diagnostics; return to Normal image to play.");
 }
@@ -635,18 +834,15 @@ bool SetPromptEnabled(const std::string& folder, bool enabled) {
 void ModsTab() {
     auto& s = BbSettings::Get();
     const bool native = NativePcMenuAvailable();
-    ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted(native ? "Gameplay extras" : "Mods & patches");
-    ImGui::PopFont();
-    ImGui::Separator();
-    ImGui::TextWrapped(native ?
-        "Gameplay tweaks and PC settings are in Pause > System. Cheats and enhancements remain here because the game menu has no room for them." :
-        "Select button prompts and gameplay patches, then restart to apply them.");
+    PageTitle(native ? "Gameplay extras" : "Mods & patches");
+    Note(native ?
+        "Gameplay tweaks and PC settings are in Pause > System. Cheats and enhancements stay here because the game menu has no room for them." :
+        "Choose button prompts and gameplay patches, then restart to apply them.");
     if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
-        ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Mod loading is off in the launcher. Enable it there first.");
+        Note("Mod loading is off in the launcher. Turn it on there first.", Ink::Warn);
     // 0 the game's PlayStation buttons, 1 the Xbox prompt mod, 2 the keyboard key images the
     // launcher imports (PCBButtons; run.py reads the choice again at every start).
-    ImGui::SeparatorText("Button prompts");
+    Section("Button prompts");
     static const auto xbox_folder = XboxPromptFolder();
     static const std::optional<std::string> keyboard_folder = [] () -> std::optional<std::string> {
         const char* configured = std::getenv("BB_MODS_DIR");
@@ -662,12 +858,12 @@ void ModsTab() {
         prompt_choice = keyboard_folder && PromptEnabled(*keyboard_folder) ? 2
                       : xbox_folder && PromptEnabled(*xbox_folder) ? 1 : 0;
     int choice = prompt_choice;
-    if (ImGui::RadioButton("Original PlayStation buttons", choice == 0)) choice = 0;
+    if (ChoiceRow("PlayStation buttons", choice == 0)) choice = 0;
     ImGui::BeginDisabled(!xbox_folder);
-    if (ImGui::RadioButton("Xbox buttons", choice == 1)) choice = 1;
+    if (ChoiceRow("Xbox buttons", choice == 1)) choice = 1;
     ImGui::EndDisabled();
     ImGui::BeginDisabled(!keyboard_folder);
-    if (ImGui::RadioButton("Keyboard keys", choice == 2)) choice = 2;
+    if (ChoiceRow("Keyboard keys", choice == 2)) choice = 2;
     ImGui::EndDisabled();
     if (choice != prompt_choice) {
         const bool saved = (!xbox_folder || SetPromptEnabled(*xbox_folder, choice == 1)) &&
@@ -679,32 +875,36 @@ void ModsTab() {
         } else mod_selection_error = "Could not save mods.json. Check the port folder permissions.";
     }
     if (!xbox_folder)
-        ImGui::TextDisabled("Install an Xbox prompt mod in the launcher's Mods folder to enable Xbox buttons.");
+        Note("Xbox buttons need the Xbox prompt mod in the launcher's mods folder.", Ink::Faint);
     if (!keyboard_folder)
-        ImGui::TextDisabled("Keyboard keys: choose Keyboard once on the launcher's Controller page to import them.");
+        Note("Keyboard keys: choose Keyboard once in the launcher (Settings > Controls) to import them.", Ink::Faint);
     if (!mod_selection_error.empty())
-        ImGui::TextColored(ImVec4(.95f,.35f,.35f,1), "%s", mod_selection_error.c_str());
-    if (!native) ImGui::SeparatorText("Gameplay and debug");
-    else ImGui::SeparatorText("Cheats (restart required)");
+        Note(mod_selection_error.c_str(), Ink::Accent);
+    if (!native) Section("Gameplay and debug");
+    else Section("Cheats (restart required)");
     for (int e = native ? 10 : 8;
-         e < (native ? 15 : BbSettings::FirstEnhancement); ++e)
-        Checkbox(BbSettings::Effects[e].label, s.effects[e]);
+         e < (native ? 15 : BbSettings::FirstEnhancement); ++e) {
+        const char* label = BbSettings::Effects[e].label;
+        if (!std::strncmp(label, "Cheat: ", 7)) label += 7;
+        const std::string shown = std::string(1, char(std::toupper((unsigned char)label[0]))) + (label + 1);
+        Checkbox(shown.c_str(), s.effects[e]);
+    }
     if (!native)
         Hint("Free camera: hold Cross/A and press L3 (keyboard: E + Left Ctrl). The debug menu needs DbgFont14h.ccm and DbgFont14h.tpf in dvdroot_ps4/font.");
-    ImGui::SeparatorText("PC enhancements (restart required)");
+    Section("PC enhancements (restart required)");
     for (int e = BbSettings::FirstEnhancement; e < BbSettings::EffectCount; ++e)
         Checkbox(BbSettings::Effects[e].label, s.effects[e]);
     Hint("Made from your own game files at start; off is the game as it shipped. The mirror in the Hunter's Dream opens the appearance editor. Two invaders: Mensis, Mergo's Loft, the Nightmare Frontier and the Old Hunters' areas allow two, as the chalice dungeons do. After bbhost by droogie.");
-    ImGui::Separator();
+    CloseRows();
     const bool needs_restart = mod_selection_changed ||
         (native ? ExtrasRestartNeeded() : RestartNeeded());
     if (needs_restart)
-        ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Changes are ready. Restart to apply them.");
-    if (needs_restart && ImGui::Button("Apply extras and restart", ImVec2(-1, 0))) {
+        Note("Changes are ready. Restart to apply them.", Ink::Warn);
+    if (needs_restart && PrimaryButton("Apply and restart")) {
         BbSettings::Save();
         runtime_restart();
     }
-    ImGui::TextDisabled("Other mod choices and load order are managed in the launcher.");
+    Note("Other mods and their load order are in the launcher.", Ink::Faint);
 }
 
 std::string UnlockDate(std::int64_t timestamp) {
@@ -746,13 +946,12 @@ void AchievementRow(const BbTrophies::Entry& entry) {
     const std::string score = secret || entry.score < 0 ? "??G" :
                               std::to_string(entry.score) + "G";
     const ImVec4 name_clip(text_x, min.y, right_x - 7.0f * base_scale, max.y);
-    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                  ImVec2(text_x, min.y + 10.0f * base_scale),
-                  earned ? IM_COL32(240, 247, 241, 255) : IM_COL32(158, 165, 161, 255),
-                  name.c_str(), nullptr, 0.0f, &name_clip);
-    draw->AddText(ImVec2(right_x, min.y + 10.0f * base_scale),
-                  earned ? IM_COL32(126, 224, 135, 255) : IM_COL32(133, 141, 136, 255),
-                  gallery ? (earned ? "Earned" : "Locked") : score.c_str());
+    const float name_y = gallery ? min.y + (h - ImGui::GetFontSize()) * 0.5f : min.y + 10.0f * base_scale;
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(text_x, name_y),
+                  earned ? Ink::Text : Ink::Dim, name.c_str(), nullptr, 0.0f, &name_clip);
+    const char* state = gallery ? (earned ? "Earned" : "Locked") : score.c_str();
+    draw->AddText(ImVec2(max.x - ImGui::CalcTextSize(state).x - 4.0f * base_scale, name_y),
+                  earned ? Ink::Good : Ink::Faint, state);
     if (!gallery && !detail.empty())
         draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * .83f,
                       ImVec2(text_x, min.y + 34.0f * base_scale),
@@ -764,8 +963,7 @@ void AchievementRow(const BbTrophies::Entry& entry) {
                       ImVec2(text_x, min.y + 76.0f * base_scale),
                       IM_COL32(137, 209, 145, 255), date.c_str());
     }
-    draw->AddLine(ImVec2(min.x, max.y), ImVec2(max.x, max.y),
-                  IM_COL32(80, 93, 83, 130));
+    Rule(draw, min.x, max.x, max.y - 1.0f);
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::TextUnformatted(name.c_str());
@@ -782,13 +980,9 @@ void AchievementsTab() {
     int earned = 0;
     for (const auto& entry : entries) earned += entry.unlocked_at > 0;
     const int score = BbTrophies::EarnedScore();
-    ImGui::PushFont(guide_serif_font, 39.0f);
-    ImGui::TextUnformatted(gallery ? "Trophy gallery" : "Trophies");
-    ImGui::PopFont();
-    ImGui::Separator();
-    ImGui::Spacing();
+    PageTitle(gallery ? "Trophy gallery" : "Trophies");
     if (gallery)
-        ImGui::TextWrapped("Browse trophy artwork here. Full details, dates and Gamerscore are in Pause > System > Achievements.");
+        Note("Trophy artwork. Full details, dates and Gamerscore are in Pause > System > Achievements.");
     else {
         if (BbTrophies::TotalScore() == 1000)
             ImGui::Text("Gamerscore: %d / 1000G", score);
@@ -809,12 +1003,12 @@ void AchievementsTab() {
         ++queued_toasts;
     }
     ImGui::EndDisabled();
-    ImGui::TextDisabled("Preview only: this does not unlock or save a trophy.");
+    Note("Shows the unlock banner only; nothing is unlocked or saved.", Ink::Faint);
     if (!BbTrophies::HasMetadata())
-        ImGui::TextWrapped("Names and scores need the trophy key from your own PS4. Icons and local unlock history still work.");
-    ImGui::Separator();
+        Note("Names and scores need the trophy key from your own PS4. Icons and local unlock history still work.");
+    ImGui::Dummy(ImVec2(0, Px(8.0f)));
     if (entries.empty()) {
-        ImGui::TextDisabled("No trophy pack found in the selected game folder.");
+        Note("No trophy pack in the selected game folder.", Ink::Faint);
         return;
     }
     ImGuiListClipper clipper;
@@ -825,6 +1019,73 @@ void AchievementsTab() {
     if (!gallery) ImGui::TextDisabled("Local achievements only. No online account is connected.");
 }
 
+// Line icons, the launcher's set (launcher/qml/NavIcon.qml) on its 24 × 24 grid.
+void Glyph(ImDrawList* draw, const char* kind, ImVec2 center, float size, ImU32 ink, float stroke) {
+    const float k = size / 24.0f;
+    auto P = [&](float x, float y) { return ImVec2(center.x + (x - 12.0f) * k, center.y + (y - 12.0f) * k); };
+    auto poly = [&](std::initializer_list<float> v, bool closed) {
+        draw->PathClear();
+        for (auto it = v.begin(); it != v.end(); it += 2) draw->PathLineTo(P(*it, *(it + 1)));
+        draw->PathStroke(ink, closed ? ImDrawFlags_Closed : ImDrawFlags_None, stroke);
+    };
+    if (!std::strcmp(kind, "hunter")) { // a blade crossed with a compass rose
+        poly({12, 1.5f, 12, 22.5f}, false);
+        poly({3.5f, 12, 20.5f, 12}, false);
+        poly({12, 5, 15, 12, 12, 19, 9, 12}, true);
+        poly({9.5f, 20, 12, 22.5f, 14.5f, 20}, false);
+    } else if (!std::strcmp(kind, "gear")) {
+        draw->AddCircle(P(12, 12), 3.2f * k, ink, 0, stroke);
+        draw->AddCircle(P(12, 12), 6.4f * k, ink, 0, stroke);
+        for (int a = 0; a < 8; ++a) {
+            const float t = float(a) * 3.14159265f / 4.0f;
+            draw->AddLine(P(12 + 6.4f * std::cos(t), 12 + 6.4f * std::sin(t)),
+                          P(12 + 9.0f * std::cos(t), 12 + 9.0f * std::sin(t)), ink, stroke);
+        }
+    } else if (!std::strcmp(kind, "puzzle")) { // a jigsaw piece, knobs on top and right
+        draw->PathClear();
+        draw->PathLineTo(P(4, 7.5f));
+        draw->PathLineTo(P(9.2f, 7.5f));
+        draw->PathBezierCubicCurveTo(P(8.2f, 5.8f), P(8.6f, 3.5f), P(11, 3.5f));
+        draw->PathBezierCubicCurveTo(P(13.4f, 3.5f), P(13.8f, 5.8f), P(12.8f, 7.5f));
+        draw->PathLineTo(P(17.5f, 7.5f));
+        draw->PathLineTo(P(17.5f, 11.7f));
+        draw->PathBezierCubicCurveTo(P(19.2f, 10.7f), P(21.5f, 11.1f), P(21.5f, 13.5f));
+        draw->PathBezierCubicCurveTo(P(21.5f, 15.9f), P(19.2f, 16.3f), P(17.5f, 15.3f));
+        draw->PathLineTo(P(17.5f, 20.5f));
+        draw->PathLineTo(P(4, 20.5f));
+        draw->PathStroke(ink, ImDrawFlags_Closed, stroke);
+    } else if (!std::strcmp(kind, "chevron")) {
+        poly({9, 5, 16, 12, 9, 19}, false);
+    } else if (!std::strcmp(kind, "menu")) { // the Close mark: three bars in a circle
+        draw->AddCircle(P(12, 12), 10.5f * k, ink, 0, stroke * 0.8f);
+        for (int i = -1; i <= 1; ++i) poly({7.5f, 12 + 3.5f * i, 16.5f, 12 + 3.5f * i}, false);
+    }
+}
+
+struct GuideSection {
+    const char* icon;
+    const char* label;
+};
+GuideSection GuideSectionOf(int tab, bool native) {
+    switch (tab) {
+    case 0: return {"hunter", "The Hunt"};
+    case 1: return {"trophy", native ? "Trophy gallery" : "View trophies"};
+    case 2: return {"gear", native ? "Image tools" : "Visual settings"};
+    default: return {"puzzle", native ? "Gameplay extras" : "Mods & patches"};
+    }
+}
+void SectionGlyph(ImDrawList* draw, int tab, ImVec2 center, float size, ImU32 ink) {
+    const GuideSection section = GuideSectionOf(tab, NativePcMenuAvailable());
+    if (!std::strcmp(section.icon, "trophy")) {
+        TrophyGlyph(draw, center, size * 1.05f, float((ink >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f * 0.85f);
+        return;
+    }
+    Glyph(draw, section.icon, center, size, ink, Px(2.0f));
+}
+
+// A row under the mouse takes the outline from the focused one; with neither, the first row has it.
+bool hunt_row_hovered_last = false, hunt_row_focused_last = false;
+
 void HomeTab() {
     const bool native = NativePcMenuAvailable();
     const auto entries = BbTrophies::Entries();
@@ -832,245 +1093,175 @@ void HomeTab() {
                                          [](const auto& e) { return e.unlocked_at > 0; }));
     const float s = base_scale;
     const float width = ImGui::GetContentRegionAvail().x;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
     ImGui::PushFont(guide_serif_font, 48.0f);
     ImGui::TextUnformatted("The Hunt");
     ImGui::PopFont();
-    ImGui::Dummy(ImVec2(0, 8.0f * s));
-    ImGui::Separator();
-    ImGui::Dummy(ImVec2(0, 9.0f * s));
+    ImGui::Dummy(ImVec2(0, 10.0f * s));
+    Rule(draw, ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().x + width, ImGui::GetCursorScreenPos().y);
+    ImGui::Dummy(ImVec2(0, 14.0f * s));
     ImGui::PushFont(guide_serif_font, 23.0f);
-    ImGui::Text("%.0f FPS  ·  %.1f ms", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
-                frame_ms_avg);
+    ImGui::Text("%.0f FPS  ·  %.1f ms", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f, frame_ms_avg);
     ImGui::PopFont();
-    ImGui::Dummy(ImVec2(0, 25.0f * s));
+    ImGui::Dummy(ImVec2(0, 24.0f * s));
 
-    const ImVec2 trophy_pos = ImGui::GetCursorScreenPos();
-    TrophyGlyph(ImGui::GetWindowDrawList(),
-                ImVec2(trophy_pos.x + 19.0f * s, trophy_pos.y + 20.0f * s),
-                43.0f * s, .82f);
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 68.0f * s);
+    // Trophy progress: the cup, the count, a crimson bar.
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    TrophyGlyph(draw, ImVec2(at.x + 21.0f * s, at.y + 24.0f * s), 44.0f * s, .85f);
+    ImGui::SetCursorScreenPos(ImVec2(at.x + 70.0f * s, at.y));
     ImGui::PushFont(guide_serif_font, 22.0f);
-    ImGui::Text("%d of %d trophies", earned, int(entries.size()));
+    if (entries.empty()) ImGui::TextUnformatted("No trophy pack");
+    else ImGui::Text("%d of %d trophies", earned, int(entries.size()));
     ImGui::PopFont();
     const char* local = "Local only";
-    ImGui::SameLine(width - ImGui::CalcTextSize(local).x);
-    ImGui::TextDisabled("%s", local);
-    const ImVec2 bar = ImGui::GetCursorScreenPos();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const float bar_x = bar.x + 68.0f * s;
-    const float bar_width = std::max(80.0f * s, width - 190.0f * s);
-    draw->AddRectFilled(ImVec2(bar_x, bar.y), ImVec2(bar_x + bar_width, bar.y + 10.0f * s),
-                        IM_COL32(43, 49, 55, 255), 5.0f * s);
-    if (!entries.empty())
-        draw->AddRectFilled(ImVec2(bar_x, bar.y),
-                            ImVec2(bar_x + bar_width * float(earned) / entries.size(), bar.y + 10.0f * s),
-                            IM_COL32(194, 49, 65, 255), 5.0f * s);
-    ImGui::Dummy(ImVec2(0, 42.0f * s));
+    const ImVec2 local_size = ImGui::CalcTextSize(local);
+    draw->AddText(ImVec2(at.x + width - local_size.x, at.y + 4.0f * s), ImGui::GetColorU32(Ink::Dim), local);
+    const float bar_x = at.x + 70.0f * s, bar_y = at.y + 38.0f * s;
+    const float bar_w = std::max(80.0f * s, width - 70.0f * s - local_size.x - 40.0f * s);
+    draw->AddRectFilled(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w, bar_y + 9.0f * s), IM_COL32(40, 45, 51, 255), 4.5f * s);
+    if (!entries.empty() && earned > 0)
+        draw->AddRectFilled(ImVec2(bar_x, bar_y),
+                            ImVec2(bar_x + std::max(9.0f * s, bar_w * float(earned) / entries.size()), bar_y + 9.0f * s),
+                            Ink::Accent, 4.5f * s);
+    ImGui::SetCursorScreenPos(ImVec2(at.x, at.y + 76.0f * s));
 
-    const char* labels[] = {
-        native ? "Trophy gallery" : "View trophies",
-        native ? "Image tools" : "Visual settings",
-        native ? "Gameplay extras" : "Mods & patches",
-    };
-    for (int i = 0; i < 3; ++i) {
+    // The sections as rows: icon, serif label, chevron. The focused row (or the one under the
+    // mouse) has the crimson outline.
+    bool any_hovered = false, any_focused = false;
+    for (int i = 1; i <= 3; ++i) {
         ImGui::PushID(i);
+        const float h = 70.0f * s;
         const ImVec2 min = ImGui::GetCursorScreenPos();
-        if (ImGui::InvisibleButton("##guide_action", ImVec2(width, 70.0f * s),
-                                   ImGuiButtonFlags_EnableNav)) active_tab = i + 1;
-        const bool highlight = ImGui::IsItemHovered() || ImGui::IsItemFocused();
-        const ImVec2 max(min.x + width, min.y + 70.0f * s);
-        draw->AddRectFilled(min, max, IM_COL32(20, 24, 28, 245), 8.0f * s);
-        draw->AddRect(min, max, highlight || i == 0 ? IM_COL32(193, 52, 67, 255) :
-                      IM_COL32(53, 60, 66, 255), 8.0f * s, 0, highlight || i == 0 ? 2.0f * s : 1.0f * s);
-        const ImVec2 icon_center(min.x + 39.0f * s, min.y + 35.0f * s);
-        const ImU32 ink = IM_COL32(222, 221, 221, 255);
-        if (i == 0) TrophyGlyph(draw, icon_center, 35.0f * s, .84f);
-        else if (i == 1) {
-            const float r = 16.0f * s;
-            draw->AddCircle(icon_center, r * .52f, ink, 0, 2.0f * s);
-            for (int spoke = 0; spoke < 8; ++spoke) {
-                const float a = float(spoke) * 3.14159265f / 4.0f;
-                draw->AddLine(ImVec2(icon_center.x + std::cos(a) * r * .7f,
-                                     icon_center.y + std::sin(a) * r * .7f),
-                              ImVec2(icon_center.x + std::cos(a) * r,
-                                     icon_center.y + std::sin(a) * r), ink, 3.0f * s);
-            }
-        } else {
-            const float r = 15.0f * s;
-            draw->AddRect(ImVec2(icon_center.x-r*.7f, icon_center.y-r*.7f),
-                          ImVec2(icon_center.x+r*.7f, icon_center.y+r*.7f),
-                          ink, 3.0f * s, 0, 2.0f * s);
-            draw->AddCircle(ImVec2(icon_center.x, icon_center.y-r*.7f),
-                            r*.25f, ink, 0, 2.0f * s);
-            draw->AddCircle(ImVec2(icon_center.x+r*.7f, icon_center.y),
-                            r*.25f, ink, 0, 2.0f * s);
-        }
-        draw->AddText(guide_serif_font ? guide_serif_font : ImGui::GetFont(), 23.0f * s,
-                      ImVec2(min.x + 85.0f * s, min.y + 19.0f * s),
-                      IM_COL32(238, 235, 234, 255), labels[i]);
-        draw->AddText(ImVec2(max.x - 36.0f * s, min.y + 23.0f * s), ink, ">");
-        ImGui::Dummy(ImVec2(0, 15.0f * s));
+        if (ImGui::InvisibleButton("##guide_section", ImVec2(width, h), ImGuiButtonFlags_EnableNav)) active_tab = i;
+        if (i == 1 && ImGui::IsWindowAppearing()) ImGui::SetItemDefaultFocus();
+        const bool hovered = ImGui::IsItemHovered();
+        any_hovered |= hovered;
+        const bool focused = ImGui::IsItemFocused();
+        any_focused |= focused;
+        const bool selected = hovered || (focused && !hunt_row_hovered_last) ||
+                              (i == 1 && !hunt_row_hovered_last && !hunt_row_focused_last);
+        const ImVec2 max(min.x + width, min.y + h);
+        draw->AddRectFilled(min, max, selected ? IM_COL32(22, 25, 29, 250) : IM_COL32(17, 20, 24, 245), 6.0f * s);
+        draw->AddRect(min, max, selected ? Ink::Accent : Ink::Line, 6.0f * s, 0, selected ? 1.6f * s : 1.0f * s);
+        SectionGlyph(draw, i, ImVec2(min.x + 40.0f * s, min.y + h * 0.5f), 28.0f * s, IM_COL32(222, 217, 209, 255));
+        ImFont* serif = guide_serif_font ? guide_serif_font : ImGui::GetFont();
+        draw->AddText(serif, 23.0f * s, ImVec2(min.x + 84.0f * s, min.y + (h - 23.0f * s) * 0.5f - 1.0f * s),
+                      Ink::Text, GuideSectionOf(i, native).label);
+        Glyph(draw, "chevron", ImVec2(max.x - 30.0f * s, min.y + h * 0.5f), 18.0f * s, IM_COL32(207, 202, 194, 255), 1.8f * s);
+        ImGui::Dummy(ImVec2(0, 4.0f * s));
         ImGui::PopID();
     }
+    hunt_row_hovered_last = any_hovered;
+    hunt_row_focused_last = any_focused;
     if (native) {
-        ImGui::Spacing();
-        ImGui::TextDisabled("For standard options, pause the game and open System.");
-    }
-}
-
-void GuideNavGlyph(ImDrawList* draw, int tab, ImVec2 center, float size, ImU32 ink) {
-    const float x = center.x, y = center.y, r = size * .5f;
-    if (tab == 0) {
-        draw->AddLine(ImVec2(x, y-r), ImVec2(x, y+r), ink, 2.0f * base_scale);
-        draw->AddLine(ImVec2(x-r*.58f, y), ImVec2(x+r*.58f, y), ink, 2.0f * base_scale);
-        draw->AddLine(ImVec2(x, y-r*.74f), ImVec2(x+r*.45f, y), ink, 1.7f * base_scale);
-        draw->AddLine(ImVec2(x+r*.45f, y), ImVec2(x, y+r*.74f), ink, 1.7f * base_scale);
-        draw->AddLine(ImVec2(x, y+r*.74f), ImVec2(x-r*.45f, y), ink, 1.7f * base_scale);
-        draw->AddLine(ImVec2(x-r*.45f, y), ImVec2(x, y-r*.74f), ink, 1.7f * base_scale);
-    } else if (tab == 1) {
-        TrophyGlyph(draw, center, size, .73f);
-    } else if (tab == 2) {
-        draw->AddCircle(center, r*.58f, ink, 0, 2.7f * base_scale);
-        draw->AddCircle(center, r*.18f, ink, 0, 2.0f * base_scale);
-        for (int spoke = 0; spoke < 8; ++spoke) {
-            const float a = float(spoke) * 3.14159265f / 4.0f;
-            draw->AddLine(ImVec2(x + std::cos(a)*r*.65f, y + std::sin(a)*r*.65f),
-                          ImVec2(x + std::cos(a)*r, y + std::sin(a)*r), ink, 3.2f * base_scale);
-        }
-    } else {
-        draw->AddRect(ImVec2(x-r*.72f, y-r*.72f), ImVec2(x+r*.72f, y+r*.72f),
-                      ink, 3.0f * base_scale, 0, 2.1f * base_scale);
-        draw->AddCircle(ImVec2(x, y-r*.72f), r*.23f, ink, 0, 2.0f * base_scale);
-        draw->AddCircle(ImVec2(x+r*.72f, y), r*.23f, ink, 0, 2.0f * base_scale);
+        ImGui::Dummy(ImVec2(0, 6.0f * s));
+        Note("The game's own options, and the PC settings, are in Pause > System.", Ink::Faint);
     }
 }
 
 void Menu() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float s = base_scale;
-    const float appear = std::clamp(float(ClockMs() - menu_opened_ms.load()) / 180.0f,
-                                    0.0f, 1.0f);
+    const float appear = std::clamp(float(ClockMs() - menu_opened_ms.load()) / 180.0f, 0.0f, 1.0f);
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
-        IM_COL32(0, 0, 0, int(38 * appear)));
+        IM_COL32(0, 0, 0, int(56 * appear)));
     const float panel_width = std::min(viewport->WorkSize.x,
-        std::clamp(viewport->WorkSize.x * .425f, 500.0f * s, 840.0f * s));
+        std::clamp(viewport->WorkSize.x * .43f, 500.0f * s, 840.0f * s));
     const float rail_width = 112.0f * s;
-    const float pad = 34.0f * s;
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x - (1.0f - appear) * 36.0f * s,
-                                   viewport->WorkPos.y));
+    const float pad = 40.0f * s;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x - (1.0f - appear) * 36.0f * s, viewport->WorkPos.y));
     ImGui::SetNextWindowSize(ImVec2(panel_width, viewport->WorkSize.y));
-    ImGui::SetNextWindowBgAlpha(.99f * appear);
+    ImGui::SetNextWindowBgAlpha(.985f * appear);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, .6f + .4f * appear);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.035f, .050f, .060f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(.035f, .050f, .060f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.18f, .14f, .16f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.24f, .13f, .16f, 1));
-    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(.79f, .23f, .30f, 1));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.10f, .13f, .15f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.20f, .15f, .17f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.28f, .13f, .17f, 1));
     ImGui::Begin("##bloodborne_guide", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     const ImVec2 panel_pos = ImGui::GetWindowPos();
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(panel_pos.x + panel_width - 1.0f, panel_pos.y),
-        ImVec2(panel_pos.x + panel_width - 1.0f, panel_pos.y + viewport->WorkSize.y),
-        IM_COL32(84, 91, 96, 200));
+    const float panel_h = viewport->WorkSize.y;
+    ImDrawList* frame = ImGui::GetWindowDrawList();
+    frame->AddRectFilled(ImVec2(panel_pos.x + panel_width - 1.0f, panel_pos.y),
+                         ImVec2(panel_pos.x + panel_width, panel_pos.y + panel_h), Ink::LineStrong);
 
+    // The rail: the four sections as icons, the open one marked in crimson.
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImGui::BeginChild("##guide_rail", ImVec2(rail_width, 0), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     const ImVec2 rail_pos = ImGui::GetWindowPos();
-    ImDrawList* rail_draw = ImGui::GetWindowDrawList();
-    rail_draw->AddRectFilled(rail_pos, ImVec2(rail_pos.x + rail_width,
-                              rail_pos.y + ImGui::GetWindowHeight()), IM_COL32(11, 16, 20, 255));
-    rail_draw->AddLine(ImVec2(rail_pos.x + rail_width - 1, rail_pos.y),
-                       ImVec2(rail_pos.x + rail_width - 1,
-                              rail_pos.y + ImGui::GetWindowHeight()), IM_COL32(48, 54, 59, 255));
+    ImDrawList* rail = ImGui::GetWindowDrawList();
+    rail->AddRectFilled(rail_pos, ImVec2(rail_pos.x + rail_width, rail_pos.y + panel_h), Ink::Rail);
+    rail->AddRectFilled(ImVec2(rail_pos.x + rail_width - 1.0f, rail_pos.y),
+                        ImVec2(rail_pos.x + rail_width, rail_pos.y + panel_h), Ink::Line);
     const bool native = NativePcMenuAvailable();
-    const char* nav_ids[] = {"Hunt##nav", "Trophies##nav",
-                             native ? "Image tools##nav" : "Visual settings##nav",
-                             native ? "Gameplay extras##nav" : "Mods and patches##nav"};
     for (int i = 0; i < 4; ++i) {
         ImGui::SetCursorPos(ImVec2(16.0f * s, (50.0f + 104.0f * i) * s));
-        if (ImGui::InvisibleButton(nav_ids[i], ImVec2(rail_width - 32.0f * s, 96.0f * s),
-                                   ImGuiButtonFlags_EnableNav))
+        ImGui::PushID(i);
+        if (ImGui::InvisibleButton("##rail", ImVec2(rail_width - 32.0f * s, 96.0f * s), ImGuiButtonFlags_EnableNav))
             active_tab = i;
+        ImGui::PopID();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", GuideSectionOf(i, native).label);
         const bool selected = active_tab == i;
-        const bool hovered = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+        const bool hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
         const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
-        if (selected || hovered)
-            rail_draw->AddRectFilled(ImVec2(rail_pos.x + 16.0f * s, min.y),
-                                     ImVec2(rail_pos.x + rail_width - 16.0f * s, max.y),
-                                     selected ? IM_COL32(38, 24, 28, 255) : IM_COL32(28, 34, 39, 255));
+        if (selected || hot)
+            rail->AddRectFilled(min, max, selected ? IM_COL32(30, 19, 22, 255) : IM_COL32(21, 24, 28, 255), 4.0f * s);
         if (selected)
-            rail_draw->AddRectFilled(ImVec2(rail_pos.x, min.y),
-                                     ImVec2(rail_pos.x + 4.0f * s, max.y),
-                                     IM_COL32(207, 52, 68, 255));
-        GuideNavGlyph(rail_draw, i, ImVec2((min.x + max.x) * .5f, (min.y + max.y) * .5f),
-                      38.0f * s, selected ? IM_COL32(242, 236, 231, 255) :
-                                             IM_COL32(160, 165, 168, 255));
-        rail_draw->AddLine(ImVec2(min.x + 18.0f * s, max.y + 2.0f * s),
-                           ImVec2(max.x - 18.0f * s, max.y + 2.0f * s), IM_COL32(55, 60, 64, 180));
+            rail->AddRectFilled(ImVec2(rail_pos.x, min.y), ImVec2(rail_pos.x + 4.0f * s, max.y), Ink::Accent);
+        SectionGlyph(rail, i, ImVec2((min.x + max.x) * .5f, (min.y + max.y) * .5f), 38.0f * s,
+                     selected ? IM_COL32(242, 236, 231, 255) : hot ? IM_COL32(205, 200, 193, 255) : IM_COL32(143, 138, 132, 255));
+        Rule(rail, min.x + 18.0f * s, max.x - 18.0f * s, max.y + 3.0f * s, IM_COL32(42, 47, 53, 255));
     }
     ImGui::EndChild();
+
+    // The page: breadcrumb and Close, the section's content, the key help.
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::BeginChild("##guide_main", ImVec2(0, 0), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     const ImVec2 main_pos = ImGui::GetWindowPos();
     const ImVec2 main_size = ImGui::GetWindowSize();
-    ImDrawList* main_draw = ImGui::GetWindowDrawList();
-    ImGui::SetCursorPos(ImVec2(pad, 47.0f * s));
+    ImDrawList* main = ImGui::GetWindowDrawList();
+    ImGui::SetCursorPos(ImVec2(pad, 50.0f * s));
     ImGui::PushFont(guide_serif_font, 20.0f);
     ImGui::TextUnformatted("BLOODBORNE");
     ImGui::PopFont();
-    ImGui::SameLine();
-    ImGui::TextDisabled("/   HUNTER'S GUIDE");
-    ImGui::SetCursorPos(ImVec2(main_size.x - pad - 92.0f * s, 43.0f * s));
-    if (ImGui::InvisibleButton("Close guide", ImVec2(92.0f * s, 40.0f * s),
-                               ImGuiButtonFlags_EnableNav)) SetOpen(false);
-    const ImU32 header_ink = IM_COL32(235, 231, 226, 255);
-    main_draw->AddText(ImVec2(main_pos.x + main_size.x - pad - 92.0f * s,
-                              main_pos.y + 51.0f * s), header_ink, "Close");
-    const ImVec2 close_center(main_pos.x + main_size.x - pad - 16.0f * s,
-                               main_pos.y + 63.0f * s);
-    main_draw->AddCircle(close_center, 14.0f * s, header_ink, 0, 1.4f * s);
-    for (int i = -1; i <= 1; ++i)
-        main_draw->AddLine(ImVec2(close_center.x - 6.0f * s, close_center.y + i * 4.0f * s),
-                           ImVec2(close_center.x + 6.0f * s, close_center.y + i * 4.0f * s),
-                           header_ink, 1.2f * s);
-    main_draw->AddLine(ImVec2(main_pos.x + pad, main_pos.y + 112.0f * s),
-                       ImVec2(main_pos.x + main_size.x - pad, main_pos.y + 112.0f * s),
-                       IM_COL32(62, 68, 72, 255));
+    ImGui::SameLine(0.0f, 16.0f * s);
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Faint));
+    ImGui::TextUnformatted("/");
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0.0f, 16.0f * s);
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Dim));
+    ImGui::TextUnformatted("HUNTER'S GUIDE");
+    ImGui::PopStyleColor();
+    ImGui::SetCursorPos(ImVec2(main_size.x - pad - 104.0f * s, 44.0f * s));
+    if (ImGui::InvisibleButton("Close guide", ImVec2(104.0f * s, 40.0f * s), ImGuiButtonFlags_EnableNav)) SetOpen(false);
+    const bool close_hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+    const ImU32 close_ink = close_hot ? IM_COL32(255, 250, 245, 255) : Ink::Text;
+    main->AddText(ImVec2(main_pos.x + main_size.x - pad - 104.0f * s, main_pos.y + 53.0f * s), close_ink, "Close");
+    Glyph(main, "menu", ImVec2(main_pos.x + main_size.x - pad - 16.0f * s, main_pos.y + 64.0f * s), 30.0f * s, close_ink, 1.4f * s);
+    Rule(main, main_pos.x + pad, main_pos.x + main_size.x - pad, main_pos.y + 112.0f * s);
 
     ImGui::SetCursorPos(ImVec2(pad, 142.0f * s));
     ImGui::BeginChild("##guide_content", ImVec2(main_size.x - 2.0f * pad,
-                      std::max(100.0f * s, main_size.y - 260.0f * s)), false);
+                      std::max(100.0f * s, main_size.y - 272.0f * s)), false);
+    rows_id = 0;
     switch (active_tab) {
     case 0: HomeTab(); break;
     case 1: AchievementsTab(); break;
     case 2: if (native) ImageToolsTab(); else SettingsTab(); break;
     case 3: ModsTab(); break;
     }
+    CloseRows();
     ImGui::EndChild();
-    main_draw->AddLine(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 112.0f * s),
-                       ImVec2(main_pos.x + main_size.x - pad, main_pos.y + main_size.y - 112.0f * s),
-                       IM_COL32(62, 68, 72, 255));
-    main_draw->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 82.0f * s),
-                       IM_COL32(170, 174, 178, 255),
-                       "D-pad  Move   ·   A  Select   ·   B  Back   ·   LB/RB  Sections");
-    main_draw->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 48.0f * s),
-                       IM_COL32(170, 174, 178, 255), "Insert or L3+R3 closes guide");
+    Rule(main, main_pos.x + pad, main_pos.x + main_size.x - pad, main_pos.y + main_size.y - 112.0f * s);
+    main->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 84.0f * s), Ink::Dim,
+                  "D-pad  Move    ·    A  Select    ·    B  Back    ·    LB/RB  Sections");
+    main->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 52.0f * s), Ink::Faint,
+                  "Insert or L3+R3 closes the guide");
     ImGui::EndChild();
     ImGui::End();
-    ImGui::PopStyleColor(8);
-    ImGui::PopStyleVar(4);
+    ImGui::PopStyleVar(2);
 }
 
 // The game's text dialog: what is typed, and how to finish (keyboard or controller).
@@ -1183,6 +1374,106 @@ void TrophyToast() {
     ImGui::PopStyleVar(2);
 }
 
+// The ImGui style and fonts of the guide (Init; also the offscreen preview, tools/overlay_preview.cpp).
+void ConfigureContext() {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    // The launcher's theme (launcher/qml/Theme.qml): flat near-black surfaces, hairlines, crimson.
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 0.0f;
+    style.PopupRounding = 6.0f;
+    style.FrameRounding = 6.0f;
+    style.GrabRounding = 4.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.WindowBorderSize = 0.0f;
+    style.PopupBorderSize = 1.0f;
+    style.FrameBorderSize = 1.0f;
+    style.FramePadding = ImVec2(12.0f, 8.0f);
+    style.ItemSpacing = ImVec2(10.0f, 10.0f);
+    style.CellPadding = ImVec2(2.0f, 4.0f);
+    style.GrabMinSize = 14.0f;
+    style.ScrollbarSize = 10.0f;
+    style.DisabledAlpha = 0.4f;
+    ImVec4* c = style.Colors;
+    c[ImGuiCol_Text] = Vec(Ink::Text);
+    c[ImGuiCol_TextDisabled] = Vec(Ink::Faint);
+    c[ImGuiCol_WindowBg] = Vec(Ink::Panel);
+    c[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0);
+    c[ImGuiCol_PopupBg] = Vec(IM_COL32(21, 25, 30, 252));
+    c[ImGuiCol_Border] = Vec(Ink::Line);
+    c[ImGuiCol_FrameBg] = Vec(Ink::Surface);
+    c[ImGuiCol_FrameBgHovered] = Vec(Ink::SurfaceHover);
+    c[ImGuiCol_FrameBgActive] = Vec(Ink::SurfaceHover);
+    c[ImGuiCol_Button] = Vec(Ink::Surface);
+    c[ImGuiCol_ButtonHovered] = Vec(Ink::SurfaceHover);
+    c[ImGuiCol_ButtonActive] = Vec(Ink::AccentSoft);
+    c[ImGuiCol_Header] = Vec(Ink::AccentSoft);
+    c[ImGuiCol_HeaderHovered] = Vec(Ink::SurfaceHover);
+    c[ImGuiCol_HeaderActive] = Vec(Ink::AccentSoft);
+    c[ImGuiCol_SliderGrab] = Vec(Ink::Accent);
+    c[ImGuiCol_SliderGrabActive] = Vec(IM_COL32(217, 65, 78, 255));
+    c[ImGuiCol_CheckMark] = Vec(Ink::Accent);
+    c[ImGuiCol_Separator] = Vec(Ink::Line);
+    c[ImGuiCol_TableBorderLight] = Vec(Ink::Line);
+    c[ImGuiCol_TableBorderStrong] = Vec(Ink::Line);
+    c[ImGuiCol_PlotHistogram] = Vec(Ink::Accent);
+    c[ImGuiCol_NavCursor] = Vec(Ink::Accent);
+    c[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
+    c[ImGuiCol_ScrollbarGrab] = Vec(Ink::LineStrong);
+    c[ImGuiCol_ScrollbarGrabHovered] = Vec(Ink::Faint);
+    c[ImGuiCol_ScrollbarGrabActive] = Vec(Ink::Dim);
+
+    // Text in Segoe UI (as the launcher) where Windows has it; the embedded DejaVu Sans fills in
+    // any character it lacks and is the face everywhere else.
+    ImFontConfig font_config;
+    font_config.FontDataOwnedByAtlas = false;
+    bool system_sans = false;
+#ifdef _WIN32
+    if (const char* windows = std::getenv("WINDIR")) {
+        const auto segoe = std::filesystem::path(windows) / "Fonts" / "segoeui.ttf";
+        if (std::filesystem::is_regular_file(segoe))
+            system_sans = io.Fonts->AddFontFromFileTTF(segoe.string().c_str(), 19.0f) != nullptr;
+    }
+#endif
+    font_config.MergeMode = system_sans;
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bb_font_ttf),
+                                   int(bb_font_ttf_end - bb_font_ttf), 18.0f, &font_config);
+#ifdef _WIN32
+    // The system serif for the guide's titles, without bundling a Windows font.
+    if (const char* windows = std::getenv("WINDIR")) {
+        const auto georgia = std::filesystem::path(windows) / "Fonts" / "georgia.ttf";
+        if (std::filesystem::is_regular_file(georgia))
+            guide_serif_font = io.Fonts->AddFontFromFileTTF(georgia.string().c_str(), 28.0f);
+    }
+#endif
+}
+
+// One frame's windows, between NewFrame and Render (Render; also the offscreen preview).
+void DrawWindows(float display_height) {
+    // UI scale follows the display height (1080p = 1).
+    const float scale = std::max(display_height / 1080.0f, 0.75f);
+    if (std::abs(scale - base_scale) > 0.01f) {
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.ScaleAllSizes(scale / base_scale);
+        style.FontScaleMain = scale;
+        base_scale = scale;
+    }
+
+    if (menu_open) {
+        Menu();
+    }
+    if (BbSettings::Get().show_fps && !menu_open) {
+        FpsCounter();
+    }
+    if (text_entry_active) {
+        TextEntryBox();
+    }
+    if (active_toast.load() >= 0 || queued_toasts.load() > 0) {
+        TrophyToast();
+    }
+}
+
 } // namespace
 
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
@@ -1198,36 +1489,7 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
     io.BackendPlatformName = "bbport";
 
-    ImGui::StyleColorsDark();
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 6.0f;
-    style.FrameRounding = 4.0f;
-    style.GrabRounding = 4.0f;
-    style.Colors[ImGuiCol_WindowBg].w = 0.92f;
-    // Slate controls with a crimson interaction state shared by the launcher.
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(.16f, .19f, .23f, 1);
-    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(.25f, .22f, .28f, 1);
-    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(.32f, .20f, .25f, 1);
-    style.Colors[ImGuiCol_SliderGrab] = ImVec4(.57f, .31f, .39f, 1);
-    style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(.73f, .36f, .47f, 1);
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(.40f, .83f, .48f, 1);
-    style.Colors[ImGuiCol_NavHighlight] = ImVec4(.79f, .23f, .30f, 1);
-    style.Colors[ImGuiCol_Separator] = ImVec4(.33f, .35f, .40f, 1);
-    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(.35f, .36f, .41f, 1);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(.48f, .40f, .48f, 1);
-
-    ImFontConfig font_config;
-    font_config.FontDataOwnedByAtlas = false;
-    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bb_font_ttf),
-                                   int(bb_font_ttf_end - bb_font_ttf), 18.0f, &font_config);
-#ifdef _WIN32
-    // Use the system serif for the guide's display typography without bundling a Windows font.
-    if (const char* windows = std::getenv("WINDIR")) {
-        const auto georgia = std::filesystem::path(windows) / "Fonts" / "georgia.ttf";
-        if (std::filesystem::is_regular_file(georgia))
-            guide_serif_font = io.Fonts->AddFontFromFileTTF(georgia.string().c_str(), 28.0f);
-    }
-#endif
+    ConfigureContext();
 
     const vk::Instance vk_instance = instance.GetInstance();
     ImGui_ImplVulkan_LoadFunctions(
@@ -1453,29 +1715,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(float(extent.width), float(extent.height));
     io.DeltaTime = ms > 0.0f && ms < 1000.0f ? ms / 1000.0f : 1.0f / 60.0f;
-    // UI scale follows the display height (1080p = 1).
-    const float scale = std::max(float(extent.height) / 1080.0f, 0.75f);
-    if (std::abs(scale - base_scale) > 0.01f) {
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.ScaleAllSizes(scale / base_scale);
-        style.FontScaleMain = scale;
-        base_scale = scale;
-    }
-
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
-    if (menu_open) {
-        Menu();
-    }
-    if (BbSettings::Get().show_fps && !menu_open) {
-        FpsCounter();
-    }
-    if (text_entry_active) {
-        TextEntryBox();
-    }
-    if (active_toast.load() >= 0 || queued_toasts.load() > 0) {
-        TrophyToast();
-    }
+    DrawWindows(float(extent.height));
     ImGui::Render();
 
     const vk::RenderingAttachmentInfo attachment{
