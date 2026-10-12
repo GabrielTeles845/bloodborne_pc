@@ -149,6 +149,7 @@ page take precedence:
 | Two invaders | `pc_two_invaders=1` | `BB_PC_TWO_INVADERS=1` |
 | Mouse camera | `mouse_camera=0` turns it off | `BB_MOUSE_CAMERA=0` |
 | 12-second respawn wait | | `BB_RESPAWN_DELAY_FIX=0` restores it |
+| Pad stick neutral and travel per controller (clone pads) | | `BB_PAD_CENTER_CAL=0`, `BB_PAD_DEADZONE`, `BB_PAD_CENTER` |
 | All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 
 ## Known issues

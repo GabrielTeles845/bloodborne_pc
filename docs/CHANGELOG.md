@@ -4,6 +4,14 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Clone pads that spin the camera or never run:** each pad's stick neutral is measured when
+  it connects, and an axis that only uses part of the range is scaled to full deflection, so
+  knock-off controllers (for example Switch Pro clones) read correctly. A genuine pad reads as
+  before. `BB_PAD_CENTER_CAL=0` turns it off; `BB_PAD_DEADZONE` sets an inner dead zone
+  ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71), Bainianzzz).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
