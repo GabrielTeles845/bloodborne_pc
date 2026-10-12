@@ -9,7 +9,7 @@ and the [shadPS4](https://github.com/shadps4-emu/shadPS4) renderer.
 > **No game files are included.** You need your own dump of Bloodborne. This project is not
 > affiliated with Sony Interactive Entertainment or FromSoftware.
 
-![The launcher](docs/images/launcher-cinematic.jpg)
+![The launcher](docs/images/launcher.jpg)
 
 ## Download
 
@@ -67,7 +67,7 @@ the guide. They are made from your own game files at start, which stay unchanged
 
 What changed in each release: [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
-![The in-game guide](docs/images/guide-in-game.jpg)
+![The in-game guide](docs/images/guide.jpg)
 
 ## First-time setup
 

@@ -4,6 +4,19 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Redesigned launcher.** One minimal layout: an icon rail (Home, Settings), a Home page
+  with a single status line and one primary button (Play, or the fix that blocks it), and four
+  rows for Graphics, Controls, Game files and Mods. Settings is a category list with search on
+  the left and sectioned rows on the right. The setup wizard uses the same style. Builds on
+  Codex's redesign branch; colours and type come from one theme file (`launcher/qml/Theme.qml`).
+- **Redesigned in-game guide**, in the launcher's style: an icon rail, a Hunt page of menu
+  rows, and settings laid out as label/control rows with switches. Every option is where it
+  was and does the same thing.
+- Developers: `overlay-preview` (an opt-in build target) renders the guide to an image
+  without starting the game.
+
 ## 1.6.13 preview
 
 A pre-release, like 1.6.12: the launcher's updater does not offer it until a full release
