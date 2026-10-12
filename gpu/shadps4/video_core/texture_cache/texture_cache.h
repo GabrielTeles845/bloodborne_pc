@@ -203,7 +203,7 @@ public:
 
     /// Retrieves the image with the specified id.
     Image* TryGetImage(ImageId id, u64 uid) {
-        if (!slot_images.is_allocated(id)) return nullptr;
+        if (!slot_images.IsAllocated(id)) return nullptr;
         auto& image = slot_images[id];
         return !uid || image.image_uid == uid ? &image : nullptr;
     }
@@ -223,7 +223,7 @@ public:
         if (!image.depth_id) {
             return {};
         }
-        if (slot_images.is_allocated(image.depth_id)) {
+        if (slot_images.IsAllocated(image.depth_id)) {
             auto& depth_image = slot_images[image.depth_id];
             if (depth_image.image_uid == image.depth_uid &&
                 depth_image.flags & ImageFlagBits::Registered) {
@@ -394,10 +394,10 @@ private:
     AmdGpu::Liverpool* liverpool;
     BufferCache& buffer_cache;
     PageManager& tracker;
-    BlitHelper blit_helper;
-    TileManager tile_manager;
     Common::SlotVector<Image> slot_images;
     Common::SlotVector<ImageView> slot_image_views;
+    BlitHelper blit_helper;
+    TileManager tile_manager;
     tsl::robin_map<u64, Sampler> samplers;
     std::unordered_set<ImageId> download_images;
     u64 total_used_memory = 0;

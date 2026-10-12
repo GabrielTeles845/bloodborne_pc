@@ -1223,7 +1223,7 @@ int PS4_SYSV_ABI sceGnmMapComputeQueue(u32 pipe_id, u32 queue_id, VAddr ring_bas
     }
 
     const auto vqid =
-        liverpool->asc_queues.insert(VAddr(ring_base_addr), read_ptr_addr, ring_size_dw, pipe_id);
+        liverpool->asc_queues.Insert(VAddr(ring_base_addr), read_ptr_addr, ring_size_dw, pipe_id);
     // We need to offset index as `dingDong` assumes it to be from the range [1..64]
     const auto gnm_vqid = vqid.index + 1;
     LOG_INFO(Lib_GnmDriver, "ASC pipe {} queue {} mapped to vqueue {}", pipe_id, queue_id,
@@ -2368,7 +2368,7 @@ s32 PS4_SYSV_ABI sceGnmSubmitDone() {
 }
 
 int PS4_SYSV_ABI sceGnmUnmapComputeQueue(u32 vqid) {
-    liverpool->asc_queues.erase(Common::SlotId{vqid - 1});
+    liverpool->asc_queues.Erase(Common::SlotId{vqid - 1});
     return ORBIS_OK;
 }
 
