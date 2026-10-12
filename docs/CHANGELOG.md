@@ -16,6 +16,9 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   ([#33](https://github.com/Supermedo/bloodborne_pc/pull/33), Aljoscha-Ide; the same fix as
   [#31](https://github.com/Supermedo/bloodborne_pc/pull/31), DUDUYG). `sprint_fix=0` in
   bbport.ini or `BB_SPRINT_FIX=0` turns it off. The 120 FPS cap stays the default.
+- **A crash while a map loads** when a shader's descriptor table is unbound: the read now
+  returns an empty descriptor, which the renderer already handles, instead of reading address
+  zero (parsifal295's fix from [Mrsuss60's Windows port](https://github.com/Mrsuss60/bloodborne_pc_windows_port)).
 
 ## 1.6.12 preview
 
