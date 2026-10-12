@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **The game no longer stops at start when DLSS cannot load** although the NVIDIA driver
+  advertised it: device creation is retried without DLSS and FSR 3.1 is used; your DLSS choice
+  is kept for the next start ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140),
+  Obrikash).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
