@@ -4,6 +4,14 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Key items on Xbox pads:** Back + d-pad right clicks the right half of the touchpad (key
+  items, and the right-hand choice of some prompts), Back + d-pad left the left half; Back on
+  its own still opens gestures, now when released
+  ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39), parsifal295).
+  `BB_PAD_BACK_COMBO=0` restores the old Back.
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
