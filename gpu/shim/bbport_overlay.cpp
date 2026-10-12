@@ -78,6 +78,7 @@ std::string mod_selection_error;
 bool text_entry_active = false;
 std::string text_entry_prompt, text_entry_text;
 float base_scale = 1.0f;
+ImFont* guide_serif_font = nullptr; // Georgia from Windows when present; embedded font remains the fallback.
 
 // Present rate for the FPS counter.
 std::chrono::steady_clock::time_point last_present{};
@@ -196,7 +197,10 @@ void SetOpen(bool value) {
         return;
     }
     ImGui::GetIO().MouseDrawCursor = value;
-    if (value) menu_opened_ms = ClockMs();
+    if (value) {
+        active_tab = 0;
+        menu_opened_ms = ClockMs();
+    }
     else for (const auto key : {ImGuiKey_GamepadLStickLeft, ImGuiKey_GamepadLStickRight,
                                 ImGuiKey_GamepadLStickUp, ImGuiKey_GamepadLStickDown})
         ImGui::GetIO().AddKeyAnalogEvent(key, false, 0.0f);
@@ -312,6 +316,11 @@ void RestartPrompt() {
 
 void SettingsTab() {
     auto& s = BbSettings::Get();
+    ImGui::PushFont(guide_serif_font, 39.0f);
+    ImGui::TextUnformatted("Visual settings");
+    ImGui::PopFont();
+    ImGui::Separator();
+    ImGui::Spacing();
     ImGui::SeparatorText("Temporal upscaling");
     static const char* upscalers[] = {"Off", "FSR 3.1", "FSR 4 (INT8)", "FSR 4.1.1 (INT8)",
                                      "TAA (native anti-aliasing)", "DLSS (NVIDIA RTX)"};
@@ -556,7 +565,10 @@ bool SetPromptEnabled(const std::string& folder, bool enabled) {
 
 void ModsTab() {
     auto& s = BbSettings::Get();
-    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Mods / Cheats");
+    ImGui::PushFont(guide_serif_font, 39.0f);
+    ImGui::TextUnformatted("Mods & patches");
+    ImGui::PopFont();
+    ImGui::Separator();
     ImGui::TextWrapped("Select button prompts and gameplay patches, then restart to apply them.");
     if (const char* enabled = std::getenv("BB_MODS_ENABLED"); enabled && std::strcmp(enabled,"0") == 0)
         ImGui::TextColored(ImVec4(.95f,.73f,.40f,1), "Mod loading is off in the launcher. Enable it there first.");
@@ -691,7 +703,11 @@ void AchievementsTab() {
     int earned = 0;
     for (const auto& entry : entries) earned += entry.unlocked_at > 0;
     const int score = BbTrophies::EarnedScore();
-    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Achievements");
+    ImGui::PushFont(guide_serif_font, 39.0f);
+    ImGui::TextUnformatted("Trophies");
+    ImGui::PopFont();
+    ImGui::Separator();
+    ImGui::Spacing();
     if (BbTrophies::TotalScore() == 1000)
         ImGui::Text("Gamerscore: %d / 1000G", score);
     else
@@ -730,76 +746,217 @@ void HomeTab() {
     const auto entries = BbTrophies::Entries();
     const int earned = int(std::count_if(entries.begin(), entries.end(),
                                          [](const auto& e) { return e.unlocked_at > 0; }));
-    ImGui::TextColored(ImVec4(.39f, .86f, .46f, 1), "Bloodborne");
-    ImGui::Text("%.0f FPS  |  %.1f ms", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
-                frame_ms_avg);
+    const float s = base_scale;
+    const float width = ImGui::GetContentRegionAvail().x;
+    ImGui::PushFont(guide_serif_font, 48.0f);
+    ImGui::TextUnformatted("The Hunt");
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(0, 8.0f * s));
     ImGui::Separator();
-    ImGui::Text("%d of %d achievements unlocked", earned, int(entries.size()));
-    if (BbTrophies::TotalScore() == 1000)
-        ImGui::Text("%d / 1000G", BbTrophies::EarnedScore());
-    if (ImGui::Button("View achievements", ImVec2(-1, 0))) active_tab = 1;
-    if (ImGui::Button("Settings", ImVec2(-1, 0))) active_tab = 2;
-    if (ImGui::Button("Mods / Cheats", ImVec2(-1, 0))) active_tab = 3;
-    ImGui::Spacing();
-    ImGui::TextDisabled("Insert or L3+R3 closes the guide.");
+    ImGui::Dummy(ImVec2(0, 9.0f * s));
+    ImGui::PushFont(guide_serif_font, 23.0f);
+    ImGui::Text("%.0f FPS  ·  %.1f ms", frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f,
+                frame_ms_avg);
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(0, 25.0f * s));
+
+    const ImVec2 trophy_pos = ImGui::GetCursorScreenPos();
+    TrophyGlyph(ImGui::GetWindowDrawList(),
+                ImVec2(trophy_pos.x + 19.0f * s, trophy_pos.y + 20.0f * s),
+                43.0f * s, .82f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 68.0f * s);
+    ImGui::PushFont(guide_serif_font, 22.0f);
+    ImGui::Text("%d of %d trophies", earned, int(entries.size()));
+    ImGui::PopFont();
+    const char* local = "Local only";
+    ImGui::SameLine(width - ImGui::CalcTextSize(local).x);
+    ImGui::TextDisabled("%s", local);
+    const ImVec2 bar = ImGui::GetCursorScreenPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float bar_x = bar.x + 68.0f * s;
+    const float bar_width = std::max(80.0f * s, width - 190.0f * s);
+    draw->AddRectFilled(ImVec2(bar_x, bar.y), ImVec2(bar_x + bar_width, bar.y + 10.0f * s),
+                        IM_COL32(43, 49, 55, 255), 5.0f * s);
+    if (!entries.empty())
+        draw->AddRectFilled(ImVec2(bar_x, bar.y),
+                            ImVec2(bar_x + bar_width * float(earned) / entries.size(), bar.y + 10.0f * s),
+                            IM_COL32(194, 49, 65, 255), 5.0f * s);
+    ImGui::Dummy(ImVec2(0, 42.0f * s));
+
+    const char* labels[] = {"View trophies", "Visual settings", "Mods & patches"};
+    for (int i = 0; i < 3; ++i) {
+        ImGui::PushID(i);
+        const ImVec2 min = ImGui::GetCursorScreenPos();
+        if (ImGui::InvisibleButton("##guide_action", ImVec2(width, 70.0f * s),
+                                   ImGuiButtonFlags_EnableNav)) active_tab = i + 1;
+        const bool highlight = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+        const ImVec2 max(min.x + width, min.y + 70.0f * s);
+        draw->AddRectFilled(min, max, IM_COL32(20, 24, 28, 245), 8.0f * s);
+        draw->AddRect(min, max, highlight || i == 0 ? IM_COL32(193, 52, 67, 255) :
+                      IM_COL32(53, 60, 66, 255), 8.0f * s, 0, highlight || i == 0 ? 2.0f * s : 1.0f * s);
+        const ImVec2 icon_center(min.x + 39.0f * s, min.y + 35.0f * s);
+        const ImU32 ink = IM_COL32(222, 221, 221, 255);
+        if (i == 0) TrophyGlyph(draw, icon_center, 35.0f * s, .84f);
+        else if (i == 1) {
+            const float r = 16.0f * s;
+            draw->AddCircle(icon_center, r * .52f, ink, 0, 2.0f * s);
+            for (int spoke = 0; spoke < 8; ++spoke) {
+                const float a = float(spoke) * 3.14159265f / 4.0f;
+                draw->AddLine(ImVec2(icon_center.x + std::cos(a) * r * .7f,
+                                     icon_center.y + std::sin(a) * r * .7f),
+                              ImVec2(icon_center.x + std::cos(a) * r,
+                                     icon_center.y + std::sin(a) * r), ink, 3.0f * s);
+            }
+        } else {
+            const float r = 15.0f * s;
+            draw->AddRect(ImVec2(icon_center.x-r*.7f, icon_center.y-r*.7f),
+                          ImVec2(icon_center.x+r*.7f, icon_center.y+r*.7f),
+                          ink, 3.0f * s, 0, 2.0f * s);
+            draw->AddCircle(ImVec2(icon_center.x, icon_center.y-r*.7f),
+                            r*.25f, ink, 0, 2.0f * s);
+            draw->AddCircle(ImVec2(icon_center.x+r*.7f, icon_center.y),
+                            r*.25f, ink, 0, 2.0f * s);
+        }
+        draw->AddText(guide_serif_font ? guide_serif_font : ImGui::GetFont(), 23.0f * s,
+                      ImVec2(min.x + 85.0f * s, min.y + 19.0f * s),
+                      IM_COL32(238, 235, 234, 255), labels[i]);
+        draw->AddText(ImVec2(max.x - 36.0f * s, min.y + 23.0f * s), ink, ">");
+        ImGui::Dummy(ImVec2(0, 15.0f * s));
+        ImGui::PopID();
+    }
+}
+
+void GuideNavGlyph(ImDrawList* draw, int tab, ImVec2 center, float size, ImU32 ink) {
+    const float x = center.x, y = center.y, r = size * .5f;
+    if (tab == 0) {
+        draw->AddLine(ImVec2(x, y-r), ImVec2(x, y+r), ink, 2.0f * base_scale);
+        draw->AddLine(ImVec2(x-r*.58f, y), ImVec2(x+r*.58f, y), ink, 2.0f * base_scale);
+        draw->AddLine(ImVec2(x, y-r*.74f), ImVec2(x+r*.45f, y), ink, 1.7f * base_scale);
+        draw->AddLine(ImVec2(x+r*.45f, y), ImVec2(x, y+r*.74f), ink, 1.7f * base_scale);
+        draw->AddLine(ImVec2(x, y+r*.74f), ImVec2(x-r*.45f, y), ink, 1.7f * base_scale);
+        draw->AddLine(ImVec2(x-r*.45f, y), ImVec2(x, y-r*.74f), ink, 1.7f * base_scale);
+    } else if (tab == 1) {
+        TrophyGlyph(draw, center, size, .73f);
+    } else if (tab == 2) {
+        draw->AddCircle(center, r*.58f, ink, 0, 2.7f * base_scale);
+        draw->AddCircle(center, r*.18f, ink, 0, 2.0f * base_scale);
+        for (int spoke = 0; spoke < 8; ++spoke) {
+            const float a = float(spoke) * 3.14159265f / 4.0f;
+            draw->AddLine(ImVec2(x + std::cos(a)*r*.65f, y + std::sin(a)*r*.65f),
+                          ImVec2(x + std::cos(a)*r, y + std::sin(a)*r), ink, 3.2f * base_scale);
+        }
+    } else {
+        draw->AddRect(ImVec2(x-r*.72f, y-r*.72f), ImVec2(x+r*.72f, y+r*.72f),
+                      ink, 3.0f * base_scale, 0, 2.1f * base_scale);
+        draw->AddCircle(ImVec2(x, y-r*.72f), r*.23f, ink, 0, 2.0f * base_scale);
+        draw->AddCircle(ImVec2(x+r*.72f, y), r*.23f, ink, 0, 2.0f * base_scale);
+    }
 }
 
 void Menu() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float s = base_scale;
     const float appear = std::clamp(float(ClockMs() - menu_opened_ms.load()) / 180.0f,
                                     0.0f, 1.0f);
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
-        IM_COL32(0, 0, 0, int(145 * appear)));
-    const float margin = 24.0f * base_scale;
-    const float width = std::min(610.0f * base_scale, viewport->WorkSize.x - margin * 2.0f);
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + margin -
-                                   (1.0f - appear) * 36.0f * base_scale,
-                                   viewport->WorkPos.y + margin));
-    ImGui::SetNextWindowSize(ImVec2(width, viewport->WorkSize.y - margin * 2.0f));
-    ImGui::SetNextWindowBgAlpha(.97f * appear);
+        IM_COL32(0, 0, 0, int(38 * appear)));
+    const float panel_width = std::min(viewport->WorkSize.x,
+        std::clamp(viewport->WorkSize.x * .425f, 500.0f * s, 840.0f * s));
+    const float rail_width = 112.0f * s;
+    const float pad = 34.0f * s;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x - (1.0f - appear) * 36.0f * s,
+                                   viewport->WorkPos.y));
+    ImGui::SetNextWindowSize(ImVec2(panel_width, viewport->WorkSize.y));
+    ImGui::SetNextWindowBgAlpha(.99f * appear);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, .6f + .4f * appear);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f * base_scale);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(20.0f * base_scale, 18.0f * base_scale));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.13f, .13f, .14f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.23f, .22f, .26f, 1));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.27f, .25f, .31f, 1));
-    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(.70f, .48f, .94f, 1));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.20f, .20f, .22f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.28f, .26f, .31f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.34f, .28f, .40f, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(.035f, .050f, .060f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(.035f, .050f, .060f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(.18f, .14f, .16f, 1));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(.24f, .13f, .16f, 1));
+    ImGui::PushStyleColor(ImGuiCol_NavHighlight, ImVec4(.79f, .23f, .30f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.10f, .13f, .15f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.20f, .15f, .17f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.28f, .13f, .17f, 1));
     ImGui::Begin("##bloodborne_guide", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings);
-    ImGui::TextColored(ImVec4(.90f, .91f, .91f, 1), "BLOODBORNE");
-    ImGui::SameLine();
-    ImGui::TextDisabled("/ GUIDE");
-    ImGui::Spacing();
-    const char* tabs[] = {"Home", "Achievements", "Settings", "Mods"};
-    const float tab_width = (ImGui::GetContentRegionAvail().x -
-                             ImGui::GetStyle().ItemSpacing.x * 3.0f) / 4.0f;
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const ImVec2 panel_pos = ImGui::GetWindowPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(panel_pos.x + panel_width - 1.0f, panel_pos.y),
+        ImVec2(panel_pos.x + panel_width - 1.0f, panel_pos.y + viewport->WorkSize.y),
+        IM_COL32(84, 91, 96, 200));
+
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::BeginChild("##guide_rail", ImVec2(rail_width, 0), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const ImVec2 rail_pos = ImGui::GetWindowPos();
+    ImDrawList* rail_draw = ImGui::GetWindowDrawList();
+    rail_draw->AddRectFilled(rail_pos, ImVec2(rail_pos.x + rail_width,
+                              rail_pos.y + ImGui::GetWindowHeight()), IM_COL32(11, 16, 20, 255));
+    rail_draw->AddLine(ImVec2(rail_pos.x + rail_width - 1, rail_pos.y),
+                       ImVec2(rail_pos.x + rail_width - 1,
+                              rail_pos.y + ImGui::GetWindowHeight()), IM_COL32(48, 54, 59, 255));
+    const char* nav_ids[] = {"Hunt##nav", "Trophies##nav", "Visual settings##nav", "Mods and patches##nav"};
     for (int i = 0; i < 4; ++i) {
-        if (i) ImGui::SameLine();
-        const bool selected = i == active_tab;
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * base_scale);
-        ImGui::PushStyleColor(ImGuiCol_Button, selected ?
-            ImVec4(.23f, .22f, .26f, 1) : ImVec4(.16f, .16f, .17f, 1));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.29f, .27f, .32f, 1));
-        if (ImGui::Button(tabs[i], ImVec2(tab_width, 46.0f * base_scale))) active_tab = i;
-        if (selected) {
-            const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                ImVec2(min.x + 14.0f * base_scale, max.y - 3.0f * base_scale),
-                ImVec2(max.x - 14.0f * base_scale, max.y), IM_COL32(166, 107, 224, 255),
-                2.0f * base_scale);
-        }
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar();
+        ImGui::SetCursorPos(ImVec2(16.0f * s, (50.0f + 104.0f * i) * s));
+        if (ImGui::InvisibleButton(nav_ids[i], ImVec2(rail_width - 32.0f * s, 96.0f * s),
+                                   ImGuiButtonFlags_EnableNav))
+            active_tab = i;
+        const bool selected = active_tab == i;
+        const bool hovered = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+        const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+        if (selected || hovered)
+            rail_draw->AddRectFilled(ImVec2(rail_pos.x + 16.0f * s, min.y),
+                                     ImVec2(rail_pos.x + rail_width - 16.0f * s, max.y),
+                                     selected ? IM_COL32(38, 24, 28, 255) : IM_COL32(28, 34, 39, 255));
+        if (selected)
+            rail_draw->AddRectFilled(ImVec2(rail_pos.x, min.y),
+                                     ImVec2(rail_pos.x + 4.0f * s, max.y),
+                                     IM_COL32(207, 52, 68, 255));
+        GuideNavGlyph(rail_draw, i, ImVec2((min.x + max.x) * .5f, (min.y + max.y) * .5f),
+                      38.0f * s, selected ? IM_COL32(242, 236, 231, 255) :
+                                             IM_COL32(160, 165, 168, 255));
+        rail_draw->AddLine(ImVec2(min.x + 18.0f * s, max.y + 2.0f * s),
+                           ImVec2(max.x - 18.0f * s, max.y + 2.0f * s), IM_COL32(55, 60, 64, 180));
     }
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::BeginChild("##guide_content", ImVec2(0, -35.0f * base_scale), false);
+    ImGui::EndChild();
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::BeginChild("##guide_main", ImVec2(0, 0), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const ImVec2 main_pos = ImGui::GetWindowPos();
+    const ImVec2 main_size = ImGui::GetWindowSize();
+    ImDrawList* main_draw = ImGui::GetWindowDrawList();
+    ImGui::SetCursorPos(ImVec2(pad, 47.0f * s));
+    ImGui::PushFont(guide_serif_font, 20.0f);
+    ImGui::TextUnformatted("BLOODBORNE");
+    ImGui::PopFont();
+    ImGui::SameLine();
+    ImGui::TextDisabled("/   HUNTER'S GUIDE");
+    ImGui::SetCursorPos(ImVec2(main_size.x - pad - 92.0f * s, 43.0f * s));
+    if (ImGui::InvisibleButton("Close guide", ImVec2(92.0f * s, 40.0f * s),
+                               ImGuiButtonFlags_EnableNav)) SetOpen(false);
+    const ImU32 header_ink = IM_COL32(235, 231, 226, 255);
+    main_draw->AddText(ImVec2(main_pos.x + main_size.x - pad - 92.0f * s,
+                              main_pos.y + 51.0f * s), header_ink, "Close");
+    const ImVec2 close_center(main_pos.x + main_size.x - pad - 16.0f * s,
+                               main_pos.y + 63.0f * s);
+    main_draw->AddCircle(close_center, 14.0f * s, header_ink, 0, 1.4f * s);
+    for (int i = -1; i <= 1; ++i)
+        main_draw->AddLine(ImVec2(close_center.x - 6.0f * s, close_center.y + i * 4.0f * s),
+                           ImVec2(close_center.x + 6.0f * s, close_center.y + i * 4.0f * s),
+                           header_ink, 1.2f * s);
+    main_draw->AddLine(ImVec2(main_pos.x + pad, main_pos.y + 112.0f * s),
+                       ImVec2(main_pos.x + main_size.x - pad, main_pos.y + 112.0f * s),
+                       IM_COL32(62, 68, 72, 255));
+
+    ImGui::SetCursorPos(ImVec2(pad, 142.0f * s));
+    ImGui::BeginChild("##guide_content", ImVec2(main_size.x - 2.0f * pad,
+                      std::max(100.0f * s, main_size.y - 260.0f * s)), false);
     switch (active_tab) {
     case 0: HomeTab(); break;
     case 1: AchievementsTab(); break;
@@ -807,11 +964,18 @@ void Menu() {
     case 3: ModsTab(); break;
     }
     ImGui::EndChild();
-    ImGui::Separator();
-    ImGui::TextDisabled("D-pad / stick  Move     A  Select     B  Back     LB/RB  Tabs");
+    main_draw->AddLine(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 112.0f * s),
+                       ImVec2(main_pos.x + main_size.x - pad, main_pos.y + main_size.y - 112.0f * s),
+                       IM_COL32(62, 68, 72, 255));
+    main_draw->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 82.0f * s),
+                       IM_COL32(170, 174, 178, 255),
+                       "D-pad  Move   ·   A  Select   ·   B  Back   ·   LB/RB  Sections");
+    main_draw->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 48.0f * s),
+                       IM_COL32(170, 174, 178, 255), "Insert or L3+R3 closes guide");
+    ImGui::EndChild();
     ImGui::End();
-    ImGui::PopStyleColor(7);
-    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(8);
+    ImGui::PopStyleVar(4);
 }
 
 // The game's text dialog: what is typed, and how to finish (keyboard or controller).
@@ -945,15 +1109,14 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     style.FrameRounding = 4.0f;
     style.GrabRounding = 4.0f;
     style.Colors[ImGuiCol_WindowBg].w = 0.92f;
-    // Slate controls, crimson interaction, Xbox green checks and a muted violet focus ring.
-    // Explicitly override ImGui's default blue slider and frame palette.
+    // Slate controls with a crimson interaction state shared by the launcher.
     style.Colors[ImGuiCol_FrameBg] = ImVec4(.16f, .19f, .23f, 1);
     style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(.25f, .22f, .28f, 1);
     style.Colors[ImGuiCol_FrameBgActive] = ImVec4(.32f, .20f, .25f, 1);
     style.Colors[ImGuiCol_SliderGrab] = ImVec4(.57f, .31f, .39f, 1);
     style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(.73f, .36f, .47f, 1);
     style.Colors[ImGuiCol_CheckMark] = ImVec4(.40f, .83f, .48f, 1);
-    style.Colors[ImGuiCol_NavHighlight] = ImVec4(.66f, .43f, .78f, 1);
+    style.Colors[ImGuiCol_NavHighlight] = ImVec4(.79f, .23f, .30f, 1);
     style.Colors[ImGuiCol_Separator] = ImVec4(.33f, .35f, .40f, 1);
     style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(.35f, .36f, .41f, 1);
     style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(.48f, .40f, .48f, 1);
@@ -962,6 +1125,14 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     font_config.FontDataOwnedByAtlas = false;
     io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(bb_font_ttf),
                                    int(bb_font_ttf_end - bb_font_ttf), 18.0f, &font_config);
+#ifdef _WIN32
+    // Use the system serif for the guide's display typography without bundling a Windows font.
+    if (const char* windows = std::getenv("WINDIR")) {
+        const auto georgia = std::filesystem::path(windows) / "Fonts" / "georgia.ttf";
+        if (std::filesystem::is_regular_file(georgia))
+            guide_serif_font = io.Fonts->AddFontFromFileTTF(georgia.string().c_str(), 28.0f);
+    }
+#endif
 
     const vk::Instance vk_instance = instance.GetInstance();
     ImGui_ImplVulkan_LoadFunctions(
