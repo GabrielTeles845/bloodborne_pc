@@ -43,6 +43,8 @@ private:
     bool fullscreen_applied{}; // what the window was last set to (BbSettings::Values::fullscreen)
     bool mouse_armed{};        // a click asked for the mouse camera (window.cpp)
     bool mouse_captured{};     // relative mouse mode is on
+    bool menu_pointer_seen{};  // a menu showed the pointer (src/menu_pointer.c)
+    bool rearm_after_menu{};   // ... while the camera held the mouse: it takes it back after
     int text_state{};
     std::string text, text_prompt, base_title;
     void UpdateTextTitle();

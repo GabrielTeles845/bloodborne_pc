@@ -67,6 +67,13 @@ uint32_t bbgpu_mouse_wheel_take(void);
  * the last call in mouse counts (right and down positive); 1 when there was any. */
 int bbgpu_mouse_captured(void);
 int bbgpu_mouse_motion_take(float *dx, float *dy);
+/* The menu pointer (src/menu_pointer.c): a menu owns the mouse, so the window shows the cursor
+ * instead of holding it for the camera, and takes it back for the camera when the menu closes
+ * if it had it. */
+void bbgpu_set_menu_pointer(int active);
+/* The mouse on the menus' 1920x1080 stage (the movie's pixels: the presented frame letterboxed
+ * in the window, the stage centred in the frame); 0 when it is outside or the window has no focus. */
+int bbgpu_mouse_stage_position(float *x, float *y);
 /* Ends the game as closing its window does (the title menu's Quit Game). */
 void bbgpu_request_quit(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */

@@ -27,6 +27,7 @@
  * own and empties those (the menus' list update, hooked, says which list has the input). */
 #include "pc_menu.h"
 #include "engine_hooks.h"
+#include "menu_pointer.h"
 #include "gpu/bbgpu.h"
 #include "runtime.h"
 
@@ -412,6 +413,7 @@ static void ach_list_update(unsigned char *comp);  /* the Achievements section's
 /* Every menu list's update: a pick list taking the input blanks the rows under it; the rows
  * taking it back restore them. Achievements turns its pages. Then the game's own update. */
 static BB_GUEST_ABI int64_t list_update(unsigned char *comp, unsigned char *input) {
+    bb_menu_pointer_step(comp, input); /* before the pad, so a direction moves on from the pointer's row */
     if (input && *input) ach_list_update(comp);
     if (g_open.dialog && input && *input) {
         if (!open_alive()) {
@@ -810,7 +812,11 @@ static BB_GUEST_ABI void *title_finalize(void *out, void *builder, void *arg3) {
 
 /* The menus' list update: its vtable slot and its five direct callers go to list_update. All
  * are checked before anything is written; a refusal leaves pick lists without blanking. */
+static int g_lists_hooked;
 static int hook_list_update(void) {
+    static int done = -1;
+    if (done >= 0) return 0;
+    done = 0;
     const uint64_t slot = BB_BN(LIST_VTABLE) + 3 * 8, original = addr(LIST_UPDATE), ours = ptr((const void *)list_update);
     for (int i = 0; i < COUNT(LIST_UPDATE_CALLS); ++i) {
         const unsigned char *site = bb_guest(BB_BN(LIST_UPDATE_CALLS[i].at));
@@ -829,8 +835,15 @@ static int hook_list_update(void) {
     int hooks = 1;
     for (int i = 0; i < COUNT(LIST_UPDATE_CALLS); ++i)
         hooks += !bb_hook_call(BB_BN(LIST_UPDATE_CALLS[i].at), BB_BN(LIST_UPDATE), (void *)list_update);
+    done = hooks;
+    g_lists_hooked = 1;
     return hooks;
 }
+
+/* The menu pointer needs the list update even when the PC menu is off (its part then does
+ * nothing: no section is ever open). */
+int bb_menu_lists_hook(void) { return hook_list_update(); }
+int bb_menu_lists_hooked(void) { return g_lists_hooked; }
 
 int bb_pc_menu_install(void) {
     const char *menu = getenv("BB_PC_MENU"), *assets = getenv("BB_PC_MENU_ASSETS");

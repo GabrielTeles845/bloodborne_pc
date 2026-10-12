@@ -148,6 +148,7 @@ page take precedence:
 | Hunter's Dream mirror | `pc_mirror_appearance=1` | `BB_PC_MIRROR=1` |
 | Two invaders | `pc_two_invaders=1` | `BB_PC_TWO_INVADERS=1` |
 | Mouse camera | `mouse_camera=0` turns it off | `BB_MOUSE_CAMERA=0` |
+| Mouse pointer in the game's menus | `mouse_menu=0` turns it off | `BB_MOUSE_MENU=0` |
 | 12-second respawn wait | | `BB_RESPAWN_DELAY_FIX=0` restores it |
 | All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 

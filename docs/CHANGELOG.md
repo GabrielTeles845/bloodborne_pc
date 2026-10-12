@@ -4,6 +4,17 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Mouse pointer in the game's menus.** Point at a row to move the game's cursor there, click
+  to choose it (on an option's value, the side you click steps it), right-click to go back, and
+  scroll with the wheel. It works in the title, System, the PC sections and the other menus
+  with lists. While a menu is open the window shows the pointer; the mouse camera takes the
+  mouse back when the menu closes. Mouse buttons do not trigger their gameplay bindings in
+  menus. Off with *Mouse pointer in the game's menus* on the Controller page (`mouse_menu=0`,
+  `BB_MOUSE_MENU=0`). Ported from [droogie's bbhost](https://github.com/droogie/bbhost)
+  (`menu_pointer.cpp`, GPL-3.0-or-later).
+
 ## 1.6.12 preview
 
 A pre-release: the launcher's updater does not offer it until a full release follows.
