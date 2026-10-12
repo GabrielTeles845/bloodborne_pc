@@ -155,6 +155,7 @@ page take precedence:
 | Ultrawide camera and centered HUD (non-16:9 outputs) | `output_res=16:9 size` | `BB_ASPECT=0` |
 | Indirect dispatch guard (skips implausible GPU work counts) | | `BB_INDIRECT_GUARD=0` |
 | Pad stick neutral and travel per controller (clone pads) | | `BB_PAD_CENTER_CAL=0`, `BB_PAD_DEADZONE`, `BB_PAD_CENTER` |
+| Safe saves (write to a copy, then replace) | | `BB_SAFE_SAVES=0` |
 | All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 
 ## Known issues

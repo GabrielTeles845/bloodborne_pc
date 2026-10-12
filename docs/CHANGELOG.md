@@ -92,6 +92,10 @@ follows. It includes everything in 1.6.12.
   Hunters editions included), which run the same 1.09 game
   ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47), parsifal295, from
   bbport 0.51).
+- **Safer saves:** a save file is written to a copy and replaces the old one in a single step,
+  so a crash or a kill while the game saves can no longer leave a damaged save
+  ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), parsifal295, from
+  bbport 0.5). `BB_SAFE_SAVES=0` writes in place as before.
 
 ## 1.6.12 preview
 
