@@ -5,6 +5,8 @@
 // The guide's own code is compiled here under another namespace; settings come from BB_CONFIG.
 #define BB_OVERLAY_PREVIEW 1
 #define BbOverlay BbOverlayPreview
+#include <string>
+#include <vector>
 #include "../shim/bbport_overlay.cpp"
 #undef BbOverlay
 
@@ -79,9 +81,30 @@ int main(int argc, char** argv) {
     active_tab = tab;
     frame_ms_avg = 1000.0f / 60.0f;
     menu_opened_ms = ClockMs() - 2000; // past the slide-in
-    for (int frame = 0; frame < 3; ++frame) { // layouts settle over a frame or two
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+    io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+    // BB_PREVIEW_KEYS=down,right,a,...: D-pad and face buttons pressed one after another, to
+    // check controller navigation (each press is held for a frame, then released).
+    std::vector<ImGuiKey> keys;
+    if (const char* list = std::getenv("BB_PREVIEW_KEYS")) {
+        std::string all(list);
+        for (size_t at = 0; at <= all.size();) {
+            const size_t end = std::min(all.find(',', at), all.size());
+            const std::string k = all.substr(at, end - at);
+            at = end + 1;
+            if (k == "up") keys.push_back(ImGuiKey_GamepadDpadUp);
+            else if (k == "down") keys.push_back(ImGuiKey_GamepadDpadDown);
+            else if (k == "left") keys.push_back(ImGuiKey_GamepadDpadLeft);
+            else if (k == "right") keys.push_back(ImGuiKey_GamepadDpadRight);
+            else if (k == "a") keys.push_back(ImGuiKey_GamepadFaceDown);
+        }
+    }
+    const int frames = 3 + int(keys.size()) * 4;
+    for (int frame = 0; frame < frames; ++frame) { // layouts settle over a frame or two
         io.DisplaySize = ImVec2(float(width), float(height));
         io.DeltaTime = 1.0f / 60.0f;
+        if (frame >= 2 && (frame - 2) / 4 < int(keys.size()) && (frame - 2) % 4 < 2)
+            io.AddKeyEvent(keys[(frame - 2) / 4], (frame - 2) % 4 == 0);
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui::NewFrame();
         DrawWindows(float(height));

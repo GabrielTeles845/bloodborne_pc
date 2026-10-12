@@ -74,6 +74,8 @@ std::atomic<bool> menu_open{false};
 std::atomic<std::int64_t> menu_opened_ms{0};
 bool l3_down = false, r3_down = false;
 int active_tab = 0; // Hunt, Trophy gallery, Image tools, Gameplay extras
+// Where the controller's focus was last frame: on a rail icon, or on the page beside it.
+bool rail_focused_last = false, page_focused_last = false;
 bool dirty = false; // settings changed while open: saved on close
 bool mod_selection_changed = false;
 std::string mod_selection_error;
@@ -1187,7 +1189,9 @@ void Menu() {
 
     // The rail: the four sections as icons, the open one marked in crimson.
     ImGui::SetCursorPos(ImVec2(0, 0));
-    ImGui::BeginChild("##guide_rail", ImVec2(rail_width, 0), false,
+    // The rail, the page and its content share one navigation space (NavFlattened), so the D-pad
+    // moves from a section icon straight into its rows and back.
+    ImGui::BeginChild("##guide_rail", ImVec2(rail_width, 0), ImGuiChildFlags_NavFlattened,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     const ImVec2 rail_pos = ImGui::GetWindowPos();
     ImDrawList* rail = ImGui::GetWindowDrawList();
@@ -1195,11 +1199,40 @@ void Menu() {
     rail->AddRectFilled(ImVec2(rail_pos.x + rail_width - 1.0f, rail_pos.y),
                         ImVec2(rail_pos.x + rail_width, rail_pos.y + panel_h), Ink::Line);
     const bool native = NativePcMenuAvailable();
+    // Console-style movement: along the rail the page follows the focus; Right enters the page at
+    // its first option and Left, from anywhere on the page, returns to the section's icon (not
+    // whichever icon happens to sit level with the option). The page is off the left-hand
+    // controls while a slider or text field is being edited.
+    const auto pressed = [](ImGuiKey a, ImGuiKey b, ImGuiKey c) {
+        return ImGui::IsKeyPressed(a) || ImGui::IsKeyPressed(b) || ImGui::IsKeyPressed(c);
+    };
+    const bool to_page = rail_focused_last &&
+        pressed(ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight, ImGuiKey_RightArrow);
+    const bool to_rail = page_focused_last && !ImGui::IsAnyItemActive() &&
+        pressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft, ImGuiKey_LeftArrow);
+    // The rail ends at its first and last icon rather than dropping into the page.
+    if (rail_focused_last &&
+        ((active_tab == 3 && pressed(ImGuiKey_GamepadDpadDown, ImGuiKey_GamepadLStickDown, ImGuiKey_DownArrow)) ||
+         (active_tab == 0 && pressed(ImGuiKey_GamepadDpadUp, ImGuiKey_GamepadLStickUp, ImGuiKey_UpArrow))))
+        ImGui::NavMoveRequestCancel();
+    if (to_rail) ImGui::NavMoveRequestCancel();
+    bool rail_focused = false;
     for (int i = 0; i < 4; ++i) {
         ImGui::SetCursorPos(ImVec2(16.0f * s, (50.0f + 104.0f * i) * s));
         ImGui::PushID(i);
         if (ImGui::InvisibleButton("##rail", ImVec2(rail_width - 32.0f * s, 96.0f * s), ImGuiButtonFlags_EnableNav))
             active_tab = i;
+        if (i == active_tab) {
+            ImGui::SetItemDefaultFocus();
+            if (to_rail) {
+                ImGui::SetFocusID(ImGui::GetItemID(), ImGui::GetCurrentWindow());
+                ImGui::SetNavCursorVisible(true);
+            }
+        }
+        if (ImGui::IsItemFocused() || (to_rail && i == active_tab)) {
+            rail_focused = true;
+            if (!to_page) active_tab = i;
+        }
         ImGui::PopID();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", GuideSectionOf(i, native).label);
         const bool selected = active_tab == i;
@@ -1217,7 +1250,7 @@ void Menu() {
 
     // The page: breadcrumb and Close, the section's content, the key help.
     ImGui::SameLine(0.0f, 0.0f);
-    ImGui::BeginChild("##guide_main", ImVec2(0, 0), false,
+    ImGui::BeginChild("##guide_main", ImVec2(0, 0), ImGuiChildFlags_NavFlattened,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     const ImVec2 main_pos = ImGui::GetWindowPos();
     const ImVec2 main_size = ImGui::GetWindowSize();
@@ -1234,18 +1267,48 @@ void Menu() {
     ImGui::PushStyleColor(ImGuiCol_Text, Vec(Ink::Dim));
     ImGui::TextUnformatted("HUNTER'S GUIDE");
     ImGui::PopStyleColor();
-    ImGui::SetCursorPos(ImVec2(main_size.x - pad - 104.0f * s, 44.0f * s));
-    if (ImGui::InvisibleButton("Close guide", ImVec2(104.0f * s, 40.0f * s), ImGuiButtonFlags_EnableNav)) SetOpen(false);
-    const bool close_hot = ImGui::IsItemHovered() || ImGui::IsItemFocused();
-    const ImU32 close_ink = close_hot ? IM_COL32(255, 250, 245, 255) : Ink::Text;
-    main->AddText(ImVec2(main_pos.x + main_size.x - pad - 104.0f * s, main_pos.y + 53.0f * s), close_ink, "Close");
-    Glyph(main, "menu", ImVec2(main_pos.x + main_size.x - pad - 16.0f * s, main_pos.y + 64.0f * s), 30.0f * s, close_ink, 1.4f * s);
+    // How to close: the buttons that do it (L3 + R3), as key caps. Clickable with the mouse, but
+    // not a navigation stop, so the D-pad never lands on it.
+    {
+        const float cap_w = 40.0f * s, cap_h = 28.0f * s, gap = 8.0f * s;
+        const ImVec2 word = ImGui::CalcTextSize("Close");
+        const ImVec2 plus = ImGui::CalcTextSize("+");
+        const float total = cap_w * 2.0f + plus.x + gap * 3.0f + word.x;
+        const float x0 = main_size.x - pad - total, y0 = 50.0f * s;
+        ImGui::SetCursorPos(ImVec2(x0, y0));
+        if (ImGui::InvisibleButton("Close guide", ImVec2(total, cap_h))) SetOpen(false);
+        const bool close_hot = ImGui::IsItemHovered();
+        const ImU32 ink = close_hot ? IM_COL32(255, 250, 245, 255) : Ink::Text;
+        float x = main_pos.x + x0;
+        const float y = main_pos.y + y0;
+        const float ty = y + (cap_h - word.y) * 0.5f;
+        for (const char* cap : {"L3", "R3"}) {
+            main->AddRect(ImVec2(x, y), ImVec2(x + cap_w, y + cap_h), close_hot ? Ink::Dim : Ink::LineStrong, cap_h * 0.5f, 0, 1.2f * s);
+            const ImVec2 t = ImGui::CalcTextSize(cap);
+            main->AddText(ImVec2(x + (cap_w - t.x) * 0.5f, ty), ink, cap);
+            x += cap_w + gap;
+            if (cap[0] == 'L') {
+                main->AddText(ImVec2(x, ty), Ink::Faint, "+");
+                x += plus.x + gap;
+            }
+        }
+        main->AddText(ImVec2(x, ty), ink, "Close");
+    }
     Rule(main, main_pos.x + pad, main_pos.x + main_size.x - pad, main_pos.y + 112.0f * s);
 
     ImGui::SetCursorPos(ImVec2(pad, 142.0f * s));
     ImGui::BeginChild("##guide_content", ImVec2(main_size.x - 2.0f * pad,
-                      std::max(100.0f * s, main_size.y - 272.0f * s)), false);
+                      std::max(100.0f * s, main_size.y - 272.0f * s)), ImGuiChildFlags_NavFlattened);
     rows_id = 0;
+    if (to_page) {
+        // The page's first option, as Tab would reach it (SetKeyboardFocusHere would also press it).
+        ImGui::SetNavWindow(ImGui::GetCurrentWindow());
+        ImGui::NavMoveRequestSubmit(ImGuiDir_None, ImGuiDir_Down, ImGuiNavMoveFlags_IsTabbing | ImGuiNavMoveFlags_FocusApi,
+                                    ImGuiScrollFlags_KeepVisibleEdgeX | ImGuiScrollFlags_KeepVisibleEdgeY);
+        GImGui->NavTabbingDir = 1;
+        GImGui->NavTabbingCounter = 1;
+        ImGui::SetNavCursorVisible(true);
+    }
     switch (active_tab) {
     case 0: HomeTab(); break;
     case 1: AchievementsTab(); break;
@@ -1254,11 +1317,13 @@ void Menu() {
     }
     CloseRows();
     ImGui::EndChild();
+    rail_focused_last = rail_focused;
+    page_focused_last = !rail_focused && ImGui::GetFocusID() != 0;
     Rule(main, main_pos.x + pad, main_pos.x + main_size.x - pad, main_pos.y + main_size.y - 112.0f * s);
     main->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 84.0f * s), Ink::Dim,
                   "D-pad  Move    ·    A  Select    ·    B  Back    ·    LB/RB  Sections");
     main->AddText(ImVec2(main_pos.x + pad, main_pos.y + main_size.y - 52.0f * s), Ink::Faint,
-                  "Insert or L3+R3 closes the guide");
+                  "Keyboard: Insert opens and closes the guide  ·  Arrows move  ·  Enter selects");
     ImGui::EndChild();
     ImGui::End();
     ImGui::PopStyleVar(2);
