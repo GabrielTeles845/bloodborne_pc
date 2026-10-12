@@ -28,7 +28,7 @@ bool Available();
 /// so a record made on another system is only an input, never the layout the pipeline uses.
 std::vector<u32> Translate(const Shader::Info& stored,
                            const std::optional<Shader::Gcn::FetchShaderData>& fetch,
-                           const Shader::StageSpecialization& spec, const Shader::Profile& profile,
-                           Shader::Info* translated = nullptr);
+                           const Shader::StageSpecialization& spec, size_t perm_idx,
+                           const Shader::Profile& profile, Shader::Info* translated = nullptr);
 
 } // namespace Vulkan::Prebuild

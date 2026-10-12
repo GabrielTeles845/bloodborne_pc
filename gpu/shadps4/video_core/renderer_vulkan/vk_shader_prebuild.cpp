@@ -68,8 +68,8 @@ bool Available() {
 
 std::vector<u32> Translate(const Shader::Info& stored,
                            const std::optional<Shader::Gcn::FetchShaderData>& fetch,
-                           const Shader::StageSpecialization& spec, const Shader::Profile& profile,
-                           Shader::Info* translated) {
+                           const Shader::StageSpecialization& spec, size_t perm_idx,
+                           const Shader::Profile& profile, Shader::Info* translated) {
     if (!Available() || (stored.hw_stage == Shader::HwStage::Hull && !spec.tess_constants)) {
         return {};
     }
@@ -97,6 +97,13 @@ std::vector<u32> Translate(const Shader::Info& stored,
     Shader::Info info(stored.hw_stage, stored.sw_stage, params);
 
     Shader::RuntimeInfo runtime_info = spec.runtime_info;
+    // A program's first permutation is specialised after its translation, which counts the
+    // emulated clip distances as one more fragment input (InjectClipDistanceAttributes): from
+    // the stored count, translating would add it again - an extra input in 33 of 1066 shaders.
+    if (perm_idx == 0 && stored.sw_stage == Shader::SwStage::Fragment &&
+        runtime_info.hw.fs.clip_distance_emulation && runtime_info.hw.fs.num_inputs != 0) {
+        --runtime_info.hw.fs.num_inputs;
+    }
     std::vector<u32> copy_code;
     if (stored.hw_stage == Shader::HwStage::Geometry) {
         copy_code = ReadCode(CodeFile(runtime_info.hw.gs.vs_copy_hash, true));

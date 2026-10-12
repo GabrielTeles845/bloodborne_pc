@@ -4,10 +4,12 @@
 // in the player's own game files, without the game, and compares the SPIR-V with the cache's.
 // The translation is the game's own (vk_shader_prebuild.h, used by the pipeline cache warm-up).
 //
-//   bb-shader-prebuild <cache dir> <code dir> [--write]
+//   bb-shader-prebuild <cache dir> <code dir> [--write | --rejects <file>]
 //
 // <code dir> is scripts/shader_code.py's output. With --write the translated SPIR-V replaces
-// the cache's where it differs.
+// the cache's where it differs. --rejects lists the .meta records whose translation differs
+// from the cache's SPIR-V or fails, one name a line: shader_catalog.py leaves them out of the
+// catalog, so they compile while playing as before instead of from a translation not proven.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -44,6 +46,10 @@ int main(int argc, char** argv) {
     }
     const fs::path cache = argv[1];
     const bool write = argc > 3 && std::strcmp(argv[3], "--write") == 0;
+    std::ofstream rejects;
+    if (argc > 4 && std::strcmp(argv[3], "--rejects") == 0) {
+        rejects.open(argv[4]);
+    }
 #ifdef _WIN32
     _putenv_s("BB_SHADER_CODE", argv[2]);
 #else
@@ -87,9 +93,13 @@ int main(int argc, char** argv) {
             }
             continue;
         }
-        const std::vector<u32> spv = Vulkan::Prebuild::Translate(stored, fetch, spec, profile);
+        const std::vector<u32> spv =
+            Vulkan::Prebuild::Translate(stored, fetch, spec, perm_idx, profile);
         if (spv.empty()) {
             ++failed;
+            if (rejects.is_open()) {
+                rejects << entry.path().filename().string() << '\n';
+            }
             continue;
         }
         char spv_name[64];
@@ -102,6 +112,9 @@ int main(int argc, char** argv) {
             ++identical;
         } else {
             ++different;
+            if (rejects.is_open()) {
+                rejects << entry.path().filename().string() << '\n';
+            }
             if (different <= 8) {
                 std::printf("differs: %s (%zu bytes cached, %zu translated)\n", spv_name,
                             cached.size(), spv.size() * 4);

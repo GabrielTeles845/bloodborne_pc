@@ -8,7 +8,9 @@ Only the records are kept - a permutation's specialization and resource layout (
 pipeline's state (.key) - in the current format. No SPIR-V and no game code: each install
 translates the shaders from its own game files.
 
-  shader_catalog.py <catalog folder> <cache folder> [<cache folder> ...]
+  shader_catalog.py <catalog folder> <cache folder> [<cache folder> ...] [--exclude <file>]
+      --exclude: .meta names to leave out (bb-shader-prebuild --rejects: translations that do
+      not match the game's own), so those shaders compile while playing as before
   shader_catalog.py --status <cache folder>     how much a play session has recorded
 """
 from pathlib import Path
@@ -28,13 +30,14 @@ def current(path):
     return len(head) == 4 and struct.unpack('<I', head)[0] == want
 
 
-def merge(catalog, caches):
+def merge(catalog, caches, exclude=()):
+    exclude = set(exclude)
     catalog = Path(catalog)
     catalog.mkdir(parents=True, exist_ok=True)
     added = 0
     for cache in caches:
         for record in sorted(Path(cache).iterdir()):
-            if record.suffix not in ('.meta', '.key') or not current(record):
+            if record.suffix not in ('.meta', '.key') or not current(record) or record.name in exclude:
                 continue
             target = catalog / record.name
             if not target.exists():
@@ -59,9 +62,15 @@ def main():
         shaders, pipelines = status(sys.argv[2])
         print(f'Recorded so far: {shaders} shader variants, {pipelines} pipelines.')
         return
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+    exclude = ()
+    if '--exclude' in args:
+        at = args.index('--exclude')
+        exclude = Path(args[at + 1]).read_text(encoding='utf-8').split()
+        del args[at:at + 2]
+    if len(args) < 2:
         sys.exit(__doc__)
-    added, total = merge(sys.argv[1], sys.argv[2:])
+    added, total = merge(args[0], args[1:], exclude)
     print(f'shader catalog: {added} records added, {total} in total')
 
 

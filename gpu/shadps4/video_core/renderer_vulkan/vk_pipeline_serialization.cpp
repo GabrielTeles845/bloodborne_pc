@@ -302,7 +302,8 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
         }
         if (spv.empty() && Prebuild::Available()) {
             Shader::Info translated{};
-            spv = Prebuild::Translate(program->info, sel.fetch_shader, spec, profile, &translated);
+            spv = Prebuild::Translate(program->info, sel.fetch_shader, spec, perm_idx, profile,
+                                      &translated);
             if (spv.empty()) {
                 ++prebuild_failed;
                 return vk::ShaderModule{};

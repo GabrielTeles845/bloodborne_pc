@@ -42,6 +42,14 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in catalog.iterdir()), ['a.meta', 'p.key'])
             self.assertEqual(shader_catalog.merge(catalog, [cache]), (0, 2))
 
+    def test_rejected_translations_are_left_out(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache, catalog = Path(folder) / 'cache', Path(folder) / 'catalog'
+            cache.mkdir()
+            for name in ('a.meta', 'b.meta'):
+                (cache / name).write_bytes(struct.pack('<I', shader_catalog.SHADER_META_VERSION))
+            self.assertEqual(shader_catalog.merge(catalog, [cache], exclude=['b.meta']), (1, 1))
+
 
 @unittest.skipUnless(GAME, 'BB_TEST_GAME_DIR not set')
 class RealGameTests(unittest.TestCase):
