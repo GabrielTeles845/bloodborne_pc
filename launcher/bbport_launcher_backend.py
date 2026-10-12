@@ -157,7 +157,6 @@ class LauncherBackend(QObject):
         self._patches = []
         # A newer release found earlier (a direct launch checks quietly): shown at once.
         self._update = core.remembered_update() if self.app.get('check_updates') else None
-        self._update = None
         self._settings_revision = 0
         self._gpu_status = 'Checking graphics card…'
         self._setup_running = False

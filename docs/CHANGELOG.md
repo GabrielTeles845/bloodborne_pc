@@ -4,7 +4,10 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## Unreleased
+## 1.6.13 preview
+
+A pre-release, like 1.6.12: the launcher's updater does not offer it until a full release
+follows. It includes everything in 1.6.12.
 
 - **Frame cap holds for every frame**, not only on average: no single frame comes faster than
   the cap any more, which made running slow down for a moment at 120 FPS

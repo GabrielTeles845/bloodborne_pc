@@ -76,24 +76,25 @@ recompiler or the pipeline cache.
 - Dark spots on Intel CPUs (Old Hunters areas): shadPS4 `235dcabf` (RCPPS / RSQRTPS answer
   slightly differently on Intel). It changes the game's CPU code, not shaders.
 
-## Ready on branches, waiting for testing in play
+## In the 1.6.13 preview, waiting for testing in play
 
-Pushed to the fork, not merged into `windows`:
+Merged into `windows` and released as a pre-release (each also on its branch):
 
 - `fix/frame-cap-28`: no single frame faster than the cap (Supermedo #28, DUDUYG).
   Test: sprinting at a 120 cap.
 - `fix/sprint-speed-33`: sprint no longer stuck at half speed above 90-120 FPS (Supermedo #33,
   Aljoscha-Ide; #31, DUDUYG). Test: sprinting at 120, and above with a higher cap.
 - `fix/null-descriptor-table`: map-load crash on an unbound descriptor table (parsifal295, from
-  Mrsuss60's port). Touches `shader_recompiler/info.h` only on the path that crashed; merge after
-  the capture to be safe.
+  Mrsuss60's port). Touches `shader_recompiler/info.h` only on the path that crashed.
+- `fix/mods-untrusted-mount`: mods work when Armoury Crate (ROG Ally) starts the game with
+  Windows' redirection trust policy (reported by Sjknight413). Test: an Armoury Crate shortcut.
 - `feature/launcher-update-check`: direct launches check for updates quietly; Install update on
   the Home banner. Test: a real update offer once a release is out.
 - `feature/graphics-presets`: Low, Balanced, High, Ultra and Custom, suggested from the GPU.
   Test: each preset after a restart.
 - `feature/ultrawide-12`: ultrawide, 16:10 and portrait outputs with a centred 16:9 HUD
   (Supermedo #12, FIocker, after bbhost). Test: 3440x1440 camera, HUD, enemy bars, title and
-  loading screens. Merge after the capture (it forces the startup resolution patch off 16:9).
+  loading screens.
 
 Older, still to confirm in play: the 1.6.12 preview fixes (character creation preview, area
 loads, video memory over a long session), Rebirth at the Altar of Despair, two invaders, and

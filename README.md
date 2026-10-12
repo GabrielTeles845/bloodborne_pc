@@ -156,8 +156,8 @@ page take precedence:
 
 ## Known issues
 
-- Character creation could show a blank or ghosted preview on the first visit; 1.6.12 preview
-  includes a fix that still needs confirming in play. Backing out and choosing New Game again
+- Character creation could show a blank or ghosted preview on the first visit; 1.6.12 and 1.6.13
+  previews include a fix that still needs confirming in play. Backing out and choosing New Game again
   restores it.
 - Rebirth and two invaders have not been tested in play yet.
 - Keep the frame cap at 120 FPS or lower. The sprint fix removes the known half-speed sprint
