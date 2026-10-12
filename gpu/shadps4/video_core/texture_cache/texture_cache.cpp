@@ -1033,6 +1033,19 @@ void TextureCache::GarbageCollectImages() {
                 pressure_gc_memory = budget / 100 * 85;
                 critical_gc_memory = budget / 100 * 95;
             }
+        } else {
+            // bbport: on a discrete GPU the startup marks put pressure at 40% of the budget
+            // (2.5 GB of an 8 GB laptop RTX 4060's 6.1 GB): usage, which counts every buffer and
+            // not only images, stayed above it in Yharnam, and images unused for ~80 submissions
+            // (a fraction of a second) were evicted and uploaded again - uneven frame times.
+            // Pressure at 80% and critical at 90% of the driver's budget; below them only the
+            // idle rule (images unused for BB_GC_IDLE_SECONDS) applies, which keeps the issue #32
+            // fix: the textures of areas left behind still go.
+            const u64 budget = instance.GetDeviceMemoryBudgetNow();
+            if (budget != 0) {
+                pressure_gc_memory = budget / 100 * 80;
+                critical_gc_memory = budget / 100 * 90;
+            }
         }
     }
     // bbport: gc_tick (one per guest submission, hundreds a second) at each of the last 64
