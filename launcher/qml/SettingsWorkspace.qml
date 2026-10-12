@@ -13,18 +13,18 @@ Item {
     property color quiet: "#a8b2bd"
     property color accent: "#d8a993"
     property var categories: [
-        {name:"Visuals", icon:"visuals", art:"../assets/ui/settings-observatory.png", detail:"Display, frame rate, upscaling and effects"},
-        {name:"Controls", icon:"controls", art:"../assets/ui/launcher-bridge.png", detail:"Button prompts and mouse"},
-        {name:"Game & Saves", icon:"game-and-saves", art:"../assets/ui/setup-workshop.png", detail:"Game files, saves and in-game choices"},
-        {name:"Online", icon:"online", art:"../art/hero.png", detail:"Account and connection"},
-        {name:"Mods & Patches", icon:"mods-and-patches", art:"../art/strip.png", detail:"Mods, enhancements and gameplay patches"},
-        {name:"System", icon:"system", art:"../assets/ui/settings-observatory.png", detail:"Launch, updates, tools and activity"}
+        {name:"Visuals", icon:"visuals", warm:true, detail:"Graphics, display & frame rate"},
+        {name:"Controls", icon:"controls", warm:false, detail:"Controller & mouse"},
+        {name:"Game & Saves", icon:"game-and-saves", warm:false, detail:"Files, language & save data"},
+        {name:"Online", icon:"online", warm:true, detail:"Account & connection"},
+        {name:"Mods & Patches", icon:"mods-and-patches", warm:true, detail:"Load order & gameplay tweaks"},
+        {name:"System", icon:"system", warm:false, detail:"Startup, updates & diagnostics"}
     ]
     function openAt(nextCategory, nextSection, nextKey) {
         category = nextCategory || ""
         section = nextSection || (category ? launcher.categorySections(category)[0] : "")
         targetKey = nextKey || ""
-        search.text = ""
+        hub.clearSearch()
         detailScroll.contentY = 0
         if (targetKey !== "") Qt.callLater(focusTarget)
     }
@@ -41,13 +41,15 @@ Item {
 
     Rectangle { anchors.fill: parent; color: "#0a1017" }
     Image {
+        visible: category !== ""
         x: 0; y: 0; width: parent.width; height: 232
-        source: Qt.resolvedUrl(category === "" ? "../art/strip.png" : "../art/hero.png")
+        source: Qt.resolvedUrl("../art/hero.png")
         fillMode: Image.PreserveAspectCrop; verticalAlignment: Image.AlignTop
-        horizontalAlignment: category === "" ? Image.AlignHCenter : Image.AlignRight
+        horizontalAlignment: Image.AlignRight
         smooth: true
     }
     Rectangle {
+        visible: category !== ""
         x: 0; y: 0; width: parent.width; height: 232
         gradient: Gradient { orientation: Gradient.Horizontal
             GradientStop { position: 0; color: "#ce080d13" }
@@ -57,6 +59,7 @@ Item {
         }
     }
     Rectangle {
+        visible: category !== ""
         x: 0; y: 0; width: parent.width; height: 248
         gradient: Gradient {
             GradientStop { position: 0; color: "#000a1017" }
@@ -65,86 +68,23 @@ Item {
         }
     }
     Row {
+        visible: category !== ""
         x: 30; y: 22; spacing: 18
         GlassButton { text: "←  Back to launcher"; width: 174; height: 36; onClicked: workspace.backToLauncher() }
         GlassButton { visible: category !== ""; text: "All settings"; width: 112; height: 36; onClicked: workspace.openAt("", "") }
     }
-    Text { x: 34; y: 76; text: category === "" ? "CONFIGURE YOUR HUNT" : "SETTINGS  /  " + category.toUpperCase(); color: "#e2b7a3"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 2.4 }
-    Text { x: 32; y: 91; text: category === "" ? "Settings" : category; color: cream; font.family: "Georgia"; font.pixelSize: 40 }
-    Text { x: 34; y: 145; text: category === "" ? "Choose a destination or search for a setting." : "Choose a section. Changes save as you make them."; color: "#e1e3e3"; font.pixelSize: 14 }
+    Text { visible: category !== ""; x: 34; y: 76; text: "SETTINGS  /  " + category.toUpperCase(); color: "#e2b7a3"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 2.4 }
+    Text { visible: category !== ""; x: 32; y: 91; text: category; color: cream; font.family: "Georgia"; font.pixelSize: 40 }
+    Text { visible: category !== ""; x: 34; y: 145; text: "Choose a section. Changes save as you make them."; color: "#e1e3e3"; font.pixelSize: 14 }
 
-    Item {
-        x: 30; y: 188; width: parent.width - 60; height: parent.height - 208
+    SettingsHub {
+        id: hub
+        anchors.fill: parent
         visible: category === ""
-        GlassTextField {
-            id: search
-            x: 0; y: 0; width: parent.width; height: 43
-            placeholderText: "Search settings — FPS, DLSS, save folder, button prompts…"
-        }
-        Flickable {
-            x: 0; y: 56; width: parent.width; height: parent.height - 56
-            contentHeight: search.text.trim() === "" ? categoryGrid.height : resultsColumn.height
-            clip: true; boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-            Grid {
-                id: categoryGrid
-                visible: search.text.trim() === ""
-                width: parent.width; columns: 3; spacing: 14
-                Repeater {
-                    model: workspace.categories
-                    delegate: Rectangle {
-                        id: categoryCard
-                        width: (categoryGrid.width - 28) / 3; height: Math.max(145, (workspace.height - 285) / 2)
-                        radius: 10; color: "#111a24"; clip: true
-                        border.color: cardMouse.containsMouse ? "#d0bd958b" : "#75828a8e"
-                        Image {
-                            x: 1; y: 1; width: parent.width - 2; height: parent.height - 2
-                            source: Qt.resolvedUrl(modelData.art)
-                            fillMode: Image.PreserveAspectCrop; smooth: true
-                            opacity: cardMouse.containsMouse ? 0.76 : 0.55
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                GradientStop { position: 0; color: "#4c0b121b" }
-                                GradientStop { position: 0.4; color: "#350b121b" }
-                                GradientStop { position: 0.7; color: "#d20b121b" }
-                                GradientStop { position: 1; color: "#f20b121b" }
-                            }
-                        }
-                        Rectangle { x: 0; y: parent.height - 3; width: parent.width; height: 3; color: cardMouse.containsMouse ? "#c87c70" : "#625f6267" }
-                        Image {
-                            x: 19; y: 17; width: 37; height: 37
-                            source: Qt.resolvedUrl("../assets/ui/" + modelData.icon + ".png")
-                            fillMode: Image.PreserveAspectFit; smooth: true
-                        }
-                        Text { anchors.right: parent.right; anchors.rightMargin: 18; y: 21; text: "0" + (index + 1); color: "#e3c3b1"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.4 }
-                        Text { x: 20; y: parent.height - 78; width: parent.width - 40; text: modelData.name; color: cream; font.family: "Georgia"; font.pixelSize: 21; elide: Text.ElideRight }
-                        Text { x: 20; y: parent.height - 47; width: parent.width - 40; text: modelData.detail; color: "#c2cbd0"; font.pixelSize: 12; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight }
-                        MouseArea { id: cardMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: workspace.openAt(modelData.name, "") }
-                    }
-                }
-            }
-            Column {
-                id: resultsColumn
-                visible: search.text.trim() !== ""
-                width: parent.width; spacing: 7
-                property var matches: launcher.searchSettings(search.text)
-                Text { visible: resultsColumn.matches.length === 0; text: "No settings found. Try a different term."; color: quiet; font.pixelSize: 14 }
-                Repeater {
-                    model: resultsColumn.matches
-                    delegate: Rectangle {
-                        width: resultsColumn.width; height: 50; radius: 7
-                        color: resultMouse.containsMouse ? "#b42c3440" : "#a0151e28"
-                        border.color: "#567b8790"
-                        Text { x: 17; anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: cream; font.pixelSize: 14 }
-                        Text { anchors.right: parent.right; anchors.rightMargin: 17; anchors.verticalCenter: parent.verticalCenter; text: modelData.category + "  /  " + modelData.section + "  →"; color: quiet; font.pixelSize: 12 }
-                        MouseArea { id: resultMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: workspace.openAt(modelData.category, modelData.section, modelData.key) }
-                    }
-                }
-            }
-        }
+        categories: workspace.categories
+        onBackToLauncher: workspace.backToLauncher()
+        onDestinationSelected: (nextCategory, nextSection, nextKey) =>
+            workspace.openAt(nextCategory, nextSection, nextKey)
     }
 
     Item {
