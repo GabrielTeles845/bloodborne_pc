@@ -356,7 +356,10 @@ constexpr NumberConversion MapNumberConversion(const NumberFormat num_fmt,
         case DataFormat::Format16_16_16_16:
             return NumberConversion::Sint16ToSnormNz;
         default:
-            UNREACHABLE_MSG("data_fmt = {}", u32(data_fmt));
+            // bbport: no such format exists, so this is a stale or unset descriptor (seen with
+            // data_fmt 6, 10_11_11, while playing): read it unconverted instead of stopping the
+            // game, as every other number format here does for data formats it has no rule for.
+            return NumberConversion::None;
         }
     }
     default:
