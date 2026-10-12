@@ -92,6 +92,31 @@ class ModTests(unittest.TestCase):
         self.assertEqual(sizes, {'a.dcx': len(b'replaced'), 'b.dcx': len(b'untouched')})
         self.assertFalse(any((folder / name).is_symlink() for name in sizes))
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows redirection trust policy')
+    def test_overlay_under_redirection_trust_policy(self):
+        # Armoury Crate (ROG Ally) starts games with the redirection trust policy: the process
+        # and its children may not follow junctions a non-administrator made (WinError 448).
+        (self.game / 'dvdroot_ps4' / 'map').mkdir()
+        (self.game / 'dvdroot_ps4' / 'map' / 'm.dcx').write_bytes(b'map')
+        a = self.mod('A', b'replaced')
+        script = (
+            "import ctypes, importlib.util, os, sys\n"
+            "from pathlib import Path\n"
+            "flag = ctypes.c_ulong(1)\n"
+            "assert ctypes.windll.kernel32.SetProcessMitigationPolicy(16, ctypes.byref(flag), 4)\n"
+            "spec = importlib.util.spec_from_file_location('m', sys.argv[1])\n"
+            "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+            "result = m.build_overlay(sys.argv[2], sys.argv[3], [('A', Path(sys.argv[4]))])\n"
+            "d = result / 'dvdroot_ps4'\n"
+            "print((d / 'chr' / 'a.dcx').read_bytes().decode(), (d / 'chr' / 'b.dcx').read_bytes().decode(),\n"
+            "      (d / 'map' / 'm.dcx').read_bytes().decode(), m.MIRROR_DIRECTORIES)\n")
+        done = subprocess.run([sys.executable, '-I', '-c', script, str(ROOT / 'scripts/mods.py'),
+                               str(self.game), str(self.root / 'out'), str(a)],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.split(), ['replaced', 'untouched', 'map', 'True'])
+        self.assertEqual((self.assets / 'a.dcx').read_bytes(), b'original')
+
     def test_executable_replacement_rejected(self):
         a = self.mod('A')
         (a / 'eboot.bin').write_bytes(b'unsupported')

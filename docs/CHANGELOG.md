@@ -19,6 +19,11 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
 - **A crash while a map loads** when a shader's descriptor table is unbound: the read now
   returns an empty descriptor, which the renderer already handles, instead of reading address
   zero (parsifal295's fix from [Mrsuss60's Windows port](https://github.com/Mrsuss60/bloodborne_pc_windows_port)).
+- **Mods when started from Armoury Crate** (ROG Ally) and other launchers that start games with
+  Windows' redirection trust policy: the game no longer stops with "the path cannot be traversed
+  because it contains an untrusted mount point". When folder links are refused, the mod overlay
+  uses real folders of hard-linked files instead (a few seconds longer at start, only then).
+  Reported by Sjknight413 on r/BloodbornePC.
 
 ## 1.6.12 preview
 
