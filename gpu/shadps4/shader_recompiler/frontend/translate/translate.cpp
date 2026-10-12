@@ -109,25 +109,24 @@ void Translator::EmitPrologue(IR::Block* first_block) {
                             ir.GetAttributeU32(IR::Attribute::BaseInstance));
         }
 
+        // shadPS4 #5260, #5345: in every indirect draw the vertex and instance IDs are unbiased
+        // (all uses of the instance ID), unless the fetch shader reads the base itself.
+        const bool is_indirect = runtime_info.sw.vs.is_indirect;
+
         IR::U32 vertex_id = ir.GetAttributeU32(IR::Attribute::VertexId);
-        if (base_vertex_sgpr != -1) {
-            if (!fetch_data || fetch_data->vertex_offset_sgpr == -1) {
-                vertex_id = ir.ISub(vertex_id, ir.GetAttributeU32(IR::Attribute::BaseVertex));
-            } else {
-                ASSERT_MSG(fetch_data->vertex_offset_sgpr == base_vertex_sgpr,
-                           "Fetch shader in indirect draw uses wrong base vertex");
-            }
+        if (is_indirect && (!fetch_data || fetch_data->vertex_offset_sgpr == -1)) {
+            vertex_id = ir.ISub(vertex_id, ir.GetAttributeU32(IR::Attribute::BaseVertex));
+        } else if (base_vertex_sgpr != -1) {
+            ASSERT_MSG(fetch_data && fetch_data->vertex_offset_sgpr == base_vertex_sgpr,
+                       "Fetch shader in indirect draw uses wrong base vertex");
         }
 
-        // shadPS4 #5260: every use of the instance ID is unbiased, not only v3's.
         IR::U32 instance_id = ir.GetAttributeU32(IR::Attribute::InstanceId);
-        if (base_instance_sgpr != -1) {
-            if (!fetch_data || fetch_data->instance_offset_sgpr == -1) {
-                instance_id = ir.ISub(instance_id, ir.GetAttributeU32(IR::Attribute::BaseInstance));
-            } else {
-                ASSERT_MSG(fetch_data->instance_offset_sgpr == base_instance_sgpr,
-                           "Fetch shader in indirect draw uses wrong base instance");
-            }
+        if (is_indirect && (!fetch_data || fetch_data->instance_offset_sgpr == -1)) {
+            instance_id = ir.ISub(instance_id, ir.GetAttributeU32(IR::Attribute::BaseInstance));
+        } else if (base_instance_sgpr != -1) {
+            ASSERT_MSG(fetch_data && fetch_data->instance_offset_sgpr == base_instance_sgpr,
+                       "Fetch shader in indirect draw uses wrong base instance");
         }
 
         // v0: vertex ID, always present
