@@ -4,7 +4,11 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## Unreleased
+## 1.7
+
+A full release: the launcher offers it as an update. It includes everything in the 1.6.12 and
+1.6.13 previews below. Shader pre-building and the shadPS4 catch-up come in 1.8; boss
+rematches stay a hidden experiment (`BB_PC_REMATCHES=1`) until tested.
 
 - **Redesigned launcher.** One minimal layout: an icon rail (Home, Settings), a Home page
   with a single status line and one primary button (Play, or the fix that blocks it), and four
@@ -29,6 +33,42 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   menus. Off with *Mouse pointer in the game's menus* on the Controller page (`mouse_menu=0`,
   `BB_MOUSE_MENU=0`). Ported from [droogie's bbhost](https://github.com/droogie/bbhost)
   (`menu_pointer.cpp`, GPL-3.0-or-later).
+- **The game no longer stops at start when DLSS cannot load** although the NVIDIA driver
+  advertised it: device creation is retried without DLSS and FSR 3.1 is used; your DLSS choice
+  is kept for the next start ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140),
+  Obrikash).
+- **A lost GPU device on a particle effect** whose indirect dispatch read garbage group
+  counts: implausible counts are now skipped and reported
+  ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41), parsifal295, from
+  bbport 0.5). `BB_INDIRECT_GUARD=0` restores the old behaviour.
+- **Clone pads that spin the camera or never run:** each pad's stick neutral is measured when
+  it connects, and an axis that only uses part of the range is scaled to full deflection, so
+  knock-off controllers (for example Switch Pro clones) read correctly. A genuine pad reads as
+  before. `BB_PAD_CENTER_CAL=0` turns it off; `BB_PAD_DEADZONE` sets an inner dead zone
+  ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71), Bainianzzz).
+- **Every retail release recognised:** external patch files, mods wrapped in a serial folder
+  and the save sound fix now accept all nine retail Bloodborne serials (Japanese and US Old
+  Hunters editions included), which run the same 1.09 game
+  ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47), parsifal295, from
+  bbport 0.51).
+- **Safer saves:** a save file is written to a copy and replaces the old one in a single step,
+  so a crash or a kill while the game saves can no longer leave a damaged save
+  ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), parsifal295, from
+  bbport 0.5). `BB_SAFE_SAVES=0` writes in place as before.
+- **Key items on Xbox pads:** Back + d-pad right clicks the right half of the touchpad (key
+  items, and the right-hand choice of some prompts), Back + d-pad left the left half; Back on
+  its own still opens gestures, now when released
+  ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39), parsifal295).
+  `BB_PAD_BACK_COMBO=0` restores the old Back.
+- **Less GPU work for nothing:** draws with no colour or depth target and no memory writes,
+  which on the PS4 only fed occlusion counters this port answers itself, are skipped
+  ([Supermedo #34](https://github.com/Supermedo/bloodborne_pc/pull/34), Aljoscha-Ide).
+  `BB_SKIP_EMPTY_DRAWS=0` draws them.
+- **Smoother frame times on 8 GB GPUs:** the texture cache starts evicting at 80% of a
+  discrete GPU's memory budget instead of 40%, so textures in use are no longer dropped and
+  uploaded again in Yharnam (issue #32).
+- **The log of a crashed run is kept:** the launcher keeps the last three game logs
+  (`last_run.log`, `last_run.1.log`, `last_run.2.log`) instead of overwriting one.
 - Developers: `overlay-preview` (an opt-in build target) renders the guide to an image
   without starting the game.
 
@@ -74,37 +114,6 @@ follows. It includes everything in 1.6.12.
   a restart. `BB_ASPECT=0` turns it off. From
   [Supermedo #12](https://github.com/Supermedo/bloodborne_pc/pull/12) by FIocker, adapting
   [bbhost](https://github.com/droogie/bbhost)'s camera and UI fixes (GPL-3.0-or-later).
-- **The game no longer stops at start when DLSS cannot load** although the NVIDIA driver
-  advertised it: device creation is retried without DLSS and FSR 3.1 is used; your DLSS choice
-  is kept for the next start ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140),
-  Obrikash).
-- **A lost GPU device on a particle effect** whose indirect dispatch read garbage group
-  counts: implausible counts are now skipped and reported
-  ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41), parsifal295, from
-  bbport 0.5). `BB_INDIRECT_GUARD=0` restores the old behaviour.
-- **Clone pads that spin the camera or never run:** each pad's stick neutral is measured when
-  it connects, and an axis that only uses part of the range is scaled to full deflection, so
-  knock-off controllers (for example Switch Pro clones) read correctly. A genuine pad reads as
-  before. `BB_PAD_CENTER_CAL=0` turns it off; `BB_PAD_DEADZONE` sets an inner dead zone
-  ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71), Bainianzzz).
-- **Every retail release recognised:** external patch files, mods wrapped in a serial folder
-  and the save sound fix now accept all nine retail Bloodborne serials (Japanese and US Old
-  Hunters editions included), which run the same 1.09 game
-  ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47), parsifal295, from
-  bbport 0.51).
-- **Safer saves:** a save file is written to a copy and replaces the old one in a single step,
-  so a crash or a kill while the game saves can no longer leave a damaged save
-  ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), parsifal295, from
-  bbport 0.5). `BB_SAFE_SAVES=0` writes in place as before.
-- **Key items on Xbox pads:** Back + d-pad right clicks the right half of the touchpad (key
-  items, and the right-hand choice of some prompts), Back + d-pad left the left half; Back on
-  its own still opens gestures, now when released
-  ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39), parsifal295).
-  `BB_PAD_BACK_COMBO=0` restores the old Back.
-- **Less GPU work for nothing:** draws with no colour or depth target and no memory writes,
-  which on the PS4 only fed occlusion counters this port answers itself, are skipped
-  ([Supermedo #34](https://github.com/Supermedo/bloodborne_pc/pull/34), Aljoscha-Ide).
-  `BB_SKIP_EMPTY_DRAWS=0` draws them.
 
 ## 1.6.12 preview
 

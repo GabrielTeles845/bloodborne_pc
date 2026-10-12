@@ -55,50 +55,55 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
 
 ## Small fixes, alongside the main work
 
-Independent, each with an off switch where it changes behaviour; none touches the shader
-recompiler or the pipeline cache.
+From Supermedo's own 1.7 commits and a few of deadinside28's (checked 12 October 2026; most of
+the other upstream commits are pull requests we already took or chose to skip). None touches
+the shader recompiler or the pipeline cache format unless noted.
 
-- Saves written to a copy and swapped in one rename
-  ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), from bbport 0.5).
-- Implausible indirect dispatch counts skipped instead of losing the device
-  ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41)).
-- Xbox pads: Back + d-pad left/right clicks the touchpad halves (key items)
-  ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39)); check against our bindings.
-- Every retail serial recognised ([Supermedo #47](https://github.com/Supermedo/bloodborne_pc/pull/47)).
-- The overlay menu kept within the screen ([Supermedo #46](https://github.com/Supermedo/bloodborne_pc/pull/46)).
-- Skip draws that cannot change anything ([Supermedo #34](https://github.com/Supermedo/bloodborne_pc/pull/34)).
-- DLSS falls back to FSR 3.1 when its device extensions fail at start
-  ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140)).
-- Stick neutral and dead zone per pad, for clone pads that drift or never reach full deflection
-  ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71)).
+- **Physics step of the FPS presets** (Supermedo `be1cde3`): since 1.6.10 (`fd35aa8`) we write
+  the presets' physics step to its real address, but with the patch file's values, which
+  Supermedo says are wrong: 60 FPS++ writes 1/15 (should be 1/30, the game's own), 90 FPS++
+  1/30 (1/90), Uncap FPS++ 1/240 (1/120). Test: ragdolls, cloth and falling at a 60 FPS preset.
+- Crash fixes that apply cleanly: `188c1f6` + `f33e761` (a broken pipeline-cache entry stops
+  every start with code 23, mainly AMD; touches the pipeline cache, so after the shader work),
+  `3a7cde8` (texture cache crash in FindDepthTarget when it grows), `acdfdf0` (another route to
+  the crash at 0x20000, besides PR #5), `136a72d` (no hashing of every texture upload, after
+  PR #36).
+- Need porting: `479f2f5` (code 23 during area loads; builds on PR #29, which we took
+  differently), `d9e505b` + `9b0d326` (1.09 patches only on the real 1.09 code; other builds
+  labelled 1.09 crash after start), `1dd8471` (an unsupported CPU named in a message, not a
+  crash), `a3baca3` (an eboot with the 60 FPS patch baked in crashes the gestures menu),
+  `d646b1d` (frame limiter, after `fix/frame-cap-28`), `331f6ae` (closing the launcher could cut
+  the game's log output; check ours).
+- Later: `e750af8` / `38e7588`, the game on Ivy Bridge and older CPUs (PR #10, about 2,300
+  lines; few players need it).
 - Swapchain recreated through `oldSwapchain` (optional;
   [deadinside28 #93](https://github.com/deadinside28/bloodborne_pc/pull/93)).
 - Dark spots on Intel CPUs (Old Hunters areas): shadPS4 `235dcabf` (RCPPS / RSQRTPS answer
   slightly differently on Intel). It changes the game's CPU code, not shaders.
+- The overlay menu kept within the screen ([Supermedo #46](https://github.com/Supermedo/bloodborne_pc/pull/46)).
 
-## In the 1.6.13 preview, waiting for testing in play
+## In 1.7, to confirm in play
 
-Merged into `windows` and released as a pre-release (each also on its branch):
+Released as 1.7 (merged into `windows`; each also on its branch):
 
-- `fix/frame-cap-28`: no single frame faster than the cap (Supermedo #28, DUDUYG).
-  Test: sprinting at a 120 cap.
-- `fix/sprint-speed-33`: sprint no longer stuck at half speed above 90-120 FPS (Supermedo #33,
-  Aljoscha-Ide; #31, DUDUYG). Test: sprinting at 120, and above with a higher cap.
-- `fix/null-descriptor-table`: map-load crash on an unbound descriptor table (parsifal295, from
-  Mrsuss60's port). Touches `shader_recompiler/info.h` only on the path that crashed.
-- `fix/mods-untrusted-mount`: mods work when Armoury Crate (ROG Ally) starts the game with
-  Windows' redirection trust policy (reported by Sjknight413). Test: an Armoury Crate shortcut.
-- `feature/launcher-update-check`: direct launches check for updates quietly; Install update on
-  the Home banner. Test: a real update offer once a release is out.
-- `feature/graphics-presets`: Low, Balanced, High, Ultra and Custom, suggested from the GPU.
-  Test: each preset after a restart.
-- `feature/ultrawide-12`: ultrawide, 16:10 and portrait outputs with a centred 16:9 HUD
-  (Supermedo #12, FIocker, after bbhost). Test: 3440x1440 camera, HUD, enemy bars, title and
-  loading screens.
+- The redesigned launcher and in-game guide (`feature/ui-redesign`): controller movement on the
+  guide's rail and pages, L3 + R3 to close, the mouse pointer.
+- Keyboard prompts shipped with the port (PCBButtons by JinkiJinn): choosing Keyboard in the
+  launcher and in the guide.
+- `feature/menu-pointer`: the mouse in the game's menus (after droogie's bbhost).
+- `fix/safe-saves-43`, `fix/indirect-guard-41`, `fix/xbox-touchpad-39`, `fix/retail-serials-47`,
+  `perf/skip-empty-draws-34`, `fix/dlss-device-fallback`, `fix/pad-calibration-71`,
+  `fix/vram-pressure`, `fix/keep-run-logs`.
+- From the 1.6.13 preview: frame cap per frame (sprinting at a 120 cap), sprint speed above
+  90-120 FPS, the map-load crash on an unbound descriptor table, mods from Armoury Crate (ROG
+  Ally), the quiet update check on direct launches, graphics presets, ultrawide outputs.
+- Older: the 1.6.12 preview fixes (character creation preview, area loads, video memory over a
+  long session), Rebirth at the Altar of Despair, two invaders, keyboard prompt text when keys
+  are rebound away from the PCBButtons layout.
 
-Older, still to confirm in play: the 1.6.12 preview fixes (character creation preview, area
-loads, video memory over a long session), Rebirth at the Altar of Despair, two invaders, and
-keyboard prompt text when keys are rebound away from the PCBButtons layout.
+Held back for 1.8, after the shader capture: `feature/shader-prebuild`, `feature/shadps4-catchup`,
+`feature/async-pipelines` and `fix/snormnz-format` (shader recompiler or pipeline cache), plus
+`feature/boss-rematches` and `feature/enhanced-lamps-foundation` (still in progress).
 
 ## Parked
 
