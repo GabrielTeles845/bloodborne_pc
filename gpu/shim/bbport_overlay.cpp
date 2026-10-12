@@ -390,7 +390,9 @@ void SettingsTab() {
     }
     ImGui::Text("Active scene resolution: %d x %d", s.active_render_width.load(),
                 s.active_render_height.load());
-    if (BbSettings::FixedRenderSession()) {
+    if (BbSettings::AspectNeedsRestart()) {
+        Hint("Changing aspect ratio requires a restart. HUD remains centered at 16:9.");
+    } else if (BbSettings::FixedRenderSession()) {
         ImGui::Text("Startup preset: %s", BbSettings::PresetName(s.startup_preset));
         if (const char* automatic = std::getenv("BB_AUTO_RENDER_RES");
             automatic && automatic[0] == '1') {
@@ -433,17 +435,22 @@ void SettingsTab() {
     ImGui::EndDisabled(); // upscaler off
 
     ImGui::SeparatorText("Output resolution");
-    static const char* outputs[] = {"1280 x 720", "1920 x 1080", "2560 x 1440", "3840 x 2160"};
+    auto output_label = [](int i) {
+        return std::to_string(BbSettings::OutputWidths[i]) + " x " +
+               std::to_string(BbSettings::OutputHeights[i]);
+    };
     int output = s.output_res;
-    if (ImGui::BeginCombo("Output resolution", outputs[output])) {
+    if (ImGui::BeginCombo("Output resolution", output_label(output).c_str())) {
         for (int i = 0; i < BbSettings::OutputCount; ++i) {
-            if (ImGui::Selectable(outputs[i], i == output)) {
+            if (ImGui::Selectable(output_label(i).c_str(), i == output)) {
                 Store(s.output_res, i, true);
             }
         }
         ImGui::EndCombo();
     }
-    if (BbSettings::FixedRenderSession()) {
+    if (BbSettings::AspectNeedsRestart()) {
+        Hint("Changing aspect ratio requires a restart. HUD remains centered at 16:9.");
+    } else if (BbSettings::FixedRenderSession()) {
         Hint("Final image and HUD resolution. The preset controls scene resolution relative to the output. 4K Performance is approximately 1920x1080. Changes require a restart.");
     } else {
         Hint("Output and HUD resolution changes at the next frame boundary. The preset controls scene resolution relative to the output. Resizing resets upscaler history and may pause briefly.");

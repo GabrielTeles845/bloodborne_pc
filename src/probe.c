@@ -613,6 +613,11 @@ int main(int argc, char **argv) {
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
 #ifdef _WIN32
     if (!cpu_only) {
+        /* Non-16:9 output (aspect_ratio.cpp, Supermedo #12): camera and floating UI. */
+        extern void aspect_ratio_bind_image(void *, uint64_t);
+        aspect_ratio_bind_image(image, size);
+    }
+    if (!cpu_only) {
         const char *respawn_fix = getenv("BB_RESPAWN_DELAY_FIX");
         if (respawn_fix && !strcmp(respawn_fix, "0")) {
             puts("Respawn loading: original minimum delay requested (BB_RESPAWN_DELAY_FIX=0)");
