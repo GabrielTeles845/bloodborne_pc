@@ -78,6 +78,10 @@ follows. It includes everything in 1.6.12.
   advertised it: device creation is retried without DLSS and FSR 3.1 is used; your DLSS choice
   is kept for the next start ([deadinside28 #140](https://github.com/deadinside28/bloodborne_pc/pull/140),
   Obrikash).
+- **A lost GPU device on a particle effect** whose indirect dispatch read garbage group
+  counts: implausible counts are now skipped and reported
+  ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41), parsifal295, from
+  bbport 0.5). `BB_INDIRECT_GUARD=0` restores the old behaviour.
 
 ## 1.6.12 preview
 

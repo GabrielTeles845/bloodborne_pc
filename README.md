@@ -153,6 +153,7 @@ page take precedence:
 | Strict frame cap (no single frame faster than the cap) | | `BB_STRICT_FRAME_CAP=0` |
 | High-FPS sprint fix | `sprint_fix=0` turns it off | `BB_SPRINT_FIX=0` |
 | Ultrawide camera and centered HUD (non-16:9 outputs) | `output_res=16:9 size` | `BB_ASPECT=0` |
+| Indirect dispatch guard (skips implausible GPU work counts) | | `BB_INDIRECT_GUARD=0` |
 | All engine hooks (in-game menus and features) | | `BB_ENGINE_HOOKS=0` |
 
 ## Known issues
