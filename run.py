@@ -250,6 +250,16 @@ def main():
         shader_prebuild(game, out, env)
         run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
+        # Legacy CPU profile (scripts/cpu_compat.py): the image no longer needs BMI1, LZCNT or
+        # MOVBE, and bb-probe's CPU check lets such a CPU start.
+        try:
+            compat = json.loads((out / 'link.json').read_text(encoding='utf-8')).get('cpu_compat', {})
+        except (OSError, ValueError):
+            compat = {}
+        if compat.get('enabled'):
+            env['BB_CPU_COMPAT'] = '1'
+        else:
+            env.pop('BB_CPU_COMPAT', None)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('BB_CONTENT_SKU', 'full'))
 
         # Patches exist for game version 01.09 only (patches.py applies none to others): other
