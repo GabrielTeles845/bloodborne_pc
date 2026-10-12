@@ -65,6 +65,7 @@ cp -r launcher/art "$dest/launcher/"
 cp -r launcher/qml "$dest/launcher/"
 mkdir -p "$dest/launcher/assets"
 cp launcher/assets/hunter-icon.ico launcher/assets/hunter-icon.png "$dest/launcher/assets/"
+cp -r launcher/assets/ui "$dest/launcher/assets/"
 # ShadPs4Plus PKG Extractor 1.1 handles the user's own base and update PKGs from the
 # launcher's Game page. Pin the upstream binary so release builds stay reproducible.
 pkg_archive=out/vendor/ShadPs4Plus-PkgExtractor-1.1-windows.zip

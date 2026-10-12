@@ -9,6 +9,7 @@ Rectangle {
     property var checks: launcher.readiness
     // A game folder with an older version is usable (amber); only a failed check blocks.
     property bool gameValid: checks[0].level !== "error"
+    property bool savesValid: checks[2].level !== "error" && launcher.savesWritable
     signal exitRequested(string page)
     onVisibleChanged: if (visible) step = startStep
     radius: 14
@@ -23,20 +24,25 @@ Rectangle {
         var levels = checks.slice(1).map(function(c) { return c.level })
         return levels.indexOf("error") >= 0 ? "error" : levels.every(function(l) { return l === "ready" }) ? "ready" : "warning"
     }
-    function stepValid(index) { return index !== 1 || gameValid }
+    function stepValid(index) { return index === 1 ? gameValid : index === 2 ? savesValid : true }
     function canReach(index) {
         for (var i = 0; i < index; i++)
             if (!stepValid(i)) return false
         return true
     }
     function skip() {
-        if (!gameValid && !launcher.confirm("Skip setup?",
-                "The game won't launch without game files. You can add them later on the Game page.\n\nSkip setup anyway?"))
+        if (!launcher.confirm("Skip setup?",
+                "Any missing game files or unwritable saves will still block Play. You can finish setup later in Game & Saves.\n\nSkip setup anyway?"))
             return
         launcher.skipSetup()
-        wizard.exitRequested("Game")
+        wizard.exitRequested("Home")
     }
     function finish(play) {
+        if (!gameValid || !savesValid) {
+            launcher.skipSetup()
+            wizard.exitRequested("Home")
+            return
+        }
         launcher.completeSetup()
         wizard.exitRequested("Home")
         if (play) launcher.play()
@@ -48,7 +54,7 @@ Rectangle {
     }
     Text {
         x: 30; y: 54; width: parent.width - 60
-        text: ["Welcome to Yharnam", "Add your game files", "Trophies and saves", "Ready to play"][wizard.step]
+        text: ["Welcome to Yharnam", "Add your game files", "Your data", "Ready to play"][wizard.step]
         color: "#f3f1ee"; font.family: "Georgia"; font.pixelSize: 30
     }
     Row {
@@ -169,11 +175,11 @@ Rectangle {
     }
 
     Column {
-        x: 30; y: 185; width: parent.width - 60; spacing: 12
+        x: 30; y: 175; width: parent.width - 60; spacing: 7
         visible: wizard.step === 2
         Text {
             width: parent.width; wrapMode: Text.WordWrap
-            text: "Both items are optional. Trophy names need your own keys.json. Your saves stay in this launcher's user folder unless you choose an existing save folder."
+            text: "A writable saves folder is required to play. Trophy keys are optional and add trophy names. Your saves stay in the launcher's user folder unless you choose another one."
             color: "#e5e8e8"; font.pixelSize: 15
         }
         Row {
@@ -184,7 +190,7 @@ Rectangle {
         Repeater {
             model: checks.slice(1)
             delegate: Rectangle {
-                width: wizard.width - 60; height: 75; radius: 8
+                width: wizard.width - 60; height: 67; radius: 8
                 color: "#60323c45"; border.color: "#58b8c6c8"
                 Rectangle {
                     x: 14; y: 17; width: 11; height: 11; radius: 6
@@ -197,7 +203,7 @@ Rectangle {
                     color: "#3328323d"; border.color: "#5a9daab1"
                     Text {
                         id: optionalText
-                        anchors.centerIn: parent; text: "Optional"
+                        anchors.centerIn: parent; text: modelData.label === "Trophies" ? "Optional" : "Required"
                         color: "#c3ccd1"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 0.6
                     }
                 }
@@ -215,8 +221,8 @@ Rectangle {
         visible: wizard.step === 3
         Text {
             width: parent.width; wrapMode: Text.WordWrap
-            text: gameValid ? "Your game files are ready. You can start playing or explore the launcher settings." :
-                   "The game folder still needs attention. Go back to Game files, or open the launcher and fix it on the Game page."
+            text: gameValid && savesValid ? "Your game files and saves are ready. You can start playing or open the launcher." :
+                   "A required check needs attention. Return to Game files or Your data to fix it."
             color: "#eef0ed"; font.pixelSize: 17
         }
         Repeater {
@@ -278,7 +284,7 @@ Rectangle {
         }
         Text {
             width: parent.width; wrapMode: Text.WordWrap
-            text: "In the game, press Insert or L3+R3 to open the guide. Setup can be run again from the Game or Advanced page."
+            text: "In the game, press Insert or L3+R3 to open the guide. You can re-run setup from Game & Saves or System."
             color: "#b7c1c5"; font.pixelSize: 13
         }
     }
@@ -295,7 +301,7 @@ Rectangle {
         GlassButton {
             visible: wizard.step === 0
             text: "Skip for now"; width: 132; height: 40
-            onClicked: { launcher.skipSetup(); wizard.exitRequested("Game") }
+            onClicked: { launcher.skipSetup(); wizard.exitRequested("Home") }
         }
         // Game and Your data
         GlassButton {
@@ -317,7 +323,7 @@ Rectangle {
         GlassButton {
             visible: wizard.step === 3
             text: "▶  Play now"; width: 156; height: 40; highlighted: true
-            enabled: gameValid && !launcher.running && !launcher.setupRunning
+            enabled: gameValid && savesValid && !launcher.running && !launcher.setupRunning
             onClicked: wizard.finish(true)
         }
         GlassButton {

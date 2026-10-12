@@ -121,6 +121,67 @@ FIELDS = {
     ],
 }
 
+# The Settings workspace groups the existing controls by player task. The legacy
+# field definitions remain the single source for control types and options.
+SETTINGS_SECTIONS = {
+    'Visuals': [
+        ('Display & frame rate', ['output_res', 'fullscreen', 'hdr', 'fps_mode', 'frame_cap',
+                                  'frames_ahead', 'present_mode']),
+        ('Upscaling', ['upscaler', 'preset', 'live_resolution', 'sharpen', 'sharpness',
+                       'object_motion']),
+        ('Image effects', ['model_lod'] + [key for key, _, _ in core.EFFECTS]),
+        ('Overlay', ['show_fps']),
+    ],
+    'Controls': [
+        ('Button prompts', []),
+        ('Mouse', ['mouse_camera', 'mouse_sensitivity', 'mouse_invert_y']),
+    ],
+    'Game & Saves': [
+        ('Game files', ['game_dir', 'dlc_dir']),
+        ('Your data', ['user_dir']),
+        ('In-game preferences', ['language', 'player_name'] + [key for key, _, _ in core.EXTRAS[:1]]),
+    ],
+    'Online': [
+        ('Play online', ['online', 'online_npid', 'online_password']),
+        ('Connection details', ['online_community', 'online_server', 'online_webapi', 'online_upnp']),
+    ],
+    'Mods & Patches': [
+        ('Installed mods', ['mods_enabled', 'mods_dir']),
+        ('Built-in enhancements', [key for key, _, _ in core.ENHANCEMENTS]),
+        ('External patches', ['patches_dir']),
+        ('Gameplay patches', [key for key, _, _ in core.CHEATS] + [key for key, _, _ in core.TWEAKS]),
+    ],
+    'System': [
+        ('Launch & integration', ['ui_language']),
+        ('Updates', []),
+        ('Engine', ['draw_pipe', 'readbacks', 'extra_env']),
+        ('Developer options', ['debug_camera', 'debug_menu', 'frame_stats', 'gpu_profile', 'vk_validation']),
+        ('Maintenance', []),
+        ('Activity & logs', []),
+    ],
+}
+SETTING_FIELDS = {field['key']: field for fields in FIELDS.values() for field in fields}
+SEARCH_TERMS = {
+    'output_res': 'screen resolution display', 'fps_mode': 'fps frame rate',
+    'frame_cap': 'fps limit unlocked', 'upscaler': 'dlss fsr taa',
+    'user_dir': 'save folder save path', 'game_dir': 'eboot install game files',
+    'online_npid': 'account id username', 'mouse_camera': 'camera controls',
+    'ui_language': 'launcher language', 'mods_enabled': 'load mods',
+}
+SEARCH_ACTIONS = [
+    ('Controls', 'Button prompts', 'Xbox and PlayStation prompts', 'button controller'),
+    ('Visuals', 'Upscaling', 'Download FSR 4 assets', 'fsr shader'),
+    ('Game & Saves', 'Game files', 'Install from ZIP / PKG', 'game files setup'),
+    ('Game & Saves', 'Your data', 'Import trophy keys', 'keys.json trophies'),
+    ('Game & Saves', 'Your data', 'Open saves folder', 'save path'),
+    ('Online', 'Play online', 'Test connection', 'server reachability'),
+    ('Mods & Patches', 'Installed mods', 'Refresh mods', 'load order'),
+    ('System', 'Launch & integration', 'Desktop shortcut', 'start menu'),
+    ('System', 'Launch & integration', 'Add to Steam', 'integration'),
+    ('System', 'Activity & logs', 'Copy log', 'activity diagnostics'),
+    ('System', 'Maintenance', 'Clear shader cache', 'shaders'),
+]
+
 LAUNCHER_ROUTE = {'mode': 'launcher', 'page': 'Home', 'step': 0, 'problem': ''}
 
 
@@ -281,6 +342,14 @@ class LauncherBackend(QObject):
     def saveStatus(self):
         return self.readiness[2]['detail']
 
+    @Property(bool, notify=changed)
+    def savesWritable(self):
+        return bbport_startup.writable(bbport_startup.saves_folder(self.app, core.DATA_DIR))
+
+    @Property(bool, notify=changed)
+    def onlineIdInvalid(self):
+        return bool(self.app.get('online') and '@' in str(self.app.get('online_npid', '')))
+
     @Property('QVariantList', notify=changed)
     def readiness(self):
         return check_readiness(self.app.get('game_dir'),
@@ -389,6 +458,46 @@ class LauncherBackend(QObject):
     def fields(self, page):
         # The revision makes the rows differ after a preset, so the page builds them anew.
         return [{**field, 'revision': self._settings_revision} for field in FIELDS.get(page, [])]
+
+    @Slot(str, result='QVariantList')
+    def categorySections(self, category):
+        return [name for name, _ in SETTINGS_SECTIONS.get(category, [])]
+
+    @Slot(str, str, result='QVariantList')
+    def sectionFields(self, category, section):
+        for name, keys in SETTINGS_SECTIONS.get(category, []):
+            if name == section:
+                return [SETTING_FIELDS[key] for key in keys]
+        return []
+
+    @Slot(str, result='QVariantList')
+    def searchSettings(self, query):
+        words = query.lower().split()
+        if not words:
+            return []
+        results = []
+
+        def add(category, section, label, key='', terms=''):
+            label_text = f'{label} {terms} {SEARCH_TERMS.get(key, "")}'.lower()
+            section_text = section.lower()
+            category_text = category.lower()
+            haystack = f'{label_text} {section_text} {category_text}'
+            if all(word in haystack for word in words):
+                score = sum(4 if word in label_text else 2 if word in section_text else 1
+                            for word in words)
+                results.append((score, {'category': category, 'section': section,
+                                        'label': label, 'key': key}))
+
+        for category, sections in SETTINGS_SECTIONS.items():
+            for section, keys in sections:
+                candidates = [(key, SETTING_FIELDS[key]['label']) for key in keys]
+                if not keys:
+                    candidates = [('', section)]
+                for key, label in candidates:
+                    add(category, section, label, key)
+        for category, section, label, terms in SEARCH_ACTIONS:
+            add(category, section, label, '', terms)
+        return [item for _, item in sorted(results, key=lambda result: -result[0])[:30]]
 
     @Slot(str, result='QVariant')
     def value(self, key):
@@ -566,7 +675,10 @@ class LauncherBackend(QObject):
         if not core.game_info(self.app.get('game_dir')):
             self._set_notice('Choose the game folder containing eboot.bin first.')
             return
-        if self.app.get('online') and '@' in str(self.app.get('online_npid', '')):
+        if not self.savesWritable:
+            self._set_notice('Choose a writable saves folder before playing.')
+            return
+        if self.onlineIdInvalid:
             self._set_notice('Online ID must be your account name, not an email address.')
             return
         self._write()
