@@ -82,6 +82,11 @@ follows. It includes everything in 1.6.12.
   counts: implausible counts are now skipped and reported
   ([Supermedo #41](https://github.com/Supermedo/bloodborne_pc/pull/41), parsifal295, from
   bbport 0.5). `BB_INDIRECT_GUARD=0` restores the old behaviour.
+- **Clone pads that spin the camera or never run:** each pad's stick neutral is measured when
+  it connects, and an axis that only uses part of the range is scaled to full deflection, so
+  knock-off controllers (for example Switch Pro clones) read correctly. A genuine pad reads as
+  before. `BB_PAD_CENTER_CAL=0` turns it off; `BB_PAD_DEADZONE` sets an inner dead zone
+  ([deadinside28 #71](https://github.com/deadinside28/bloodborne_pc/pull/71), Bainianzzz).
 
 ## 1.6.12 preview
 
