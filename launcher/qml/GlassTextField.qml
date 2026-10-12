@@ -3,15 +3,18 @@ import QtQuick.Controls
 
 TextField {
     id: control
-    color: "#f0f2f3"
-    selectedTextColor: "#fff"
-    selectionColor: "#9b4d6575"
-    font.pixelSize: 12
-    leftPadding: 10
+    color: Theme.text
+    placeholderTextColor: Theme.textFaint
+    selectedTextColor: "#ffffff"
+    selectionColor: "#8a2a33"
+    font.family: Theme.sans
+    font.pixelSize: 13
+    leftPadding: 12
+    hoverEnabled: true
     background: Rectangle {
-        radius: 5
-        color: "#9e18222b"
-        border.color: control.activeFocus ? "#c8b66a77" : "#6199a8b0"
+        radius: Theme.radius
+        color: Theme.surface
+        border.color: control.activeFocus ? Theme.accent : control.hovered ? Theme.lineStrong : Theme.line
         border.width: 1
     }
 }

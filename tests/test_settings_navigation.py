@@ -22,7 +22,7 @@ class SettingsNavigationTests(unittest.TestCase):
             'DLSS': ('Visuals', 'Upscaling', 'upscaler'),
             'save folder': ('Game & Saves', 'Your data', 'user_dir'),
             'button prompts': ('Controls', 'Button prompts', ''),
-            'Steam': ('System', 'Launch & integration', ''),
+            'Steam': ('System', 'Launch', ''),
         }
         for query, destination in expected.items():
             with self.subTest(query=query):

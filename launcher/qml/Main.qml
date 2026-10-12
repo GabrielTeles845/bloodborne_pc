@@ -7,7 +7,7 @@ ApplicationWindow {
     width: 1290; height: 830
     minimumWidth: 1050; minimumHeight: 650
     title: "Bloodborne — Windows"
-    color: "#090d12"
+    color: Theme.base
     property string page: "Home"
     property int wizardStep: 0
     property color cream: "#f1ece3"
@@ -31,7 +31,7 @@ ApplicationWindow {
     Component.onCompleted: {
         wizardStep = launcher.wizardStartStep
         if (launcher.startPage === "Setup") page = "Setup"
-        else if (launcher.startPage === "Log") openSettings("System", "Activity & logs")
+        else if (launcher.startPage === "Log") openSettings("System", "Logs")
         else if (launcher.startPage !== "Home" && launcher.startPage !== "Game") openSettings()
     }
 
@@ -45,25 +45,26 @@ ApplicationWindow {
         onOpenSettings: (category, section) => window.openSettings(category, section)
     }
 
+    // First-time setup: the wizard on a panel, the workshop art beside it.
     Item {
         anchors.fill: parent; visible: page === "Setup"; clip: true
-        Rectangle { anchors.fill: parent; color: "#0a0f15" }
+        Rectangle { anchors.fill: parent; color: Theme.base }
         Image {
-            x: parent.width * 0.59; width: parent.width * 0.41; height: parent.height
+            x: Theme.railWidth + parent.width * 0.42; width: parent.width - x; height: parent.height
             source: Qt.resolvedUrl("../assets/ui/setup-workshop.png")
-            fillMode: Image.PreserveAspectCrop; horizontalAlignment: Image.AlignRight; smooth: true
+            fillMode: Image.PreserveAspectCrop; horizontalAlignment: Image.AlignRight; smooth: true; asynchronous: true
         }
         Rectangle {
-            anchors.fill: parent
+            x: Theme.railWidth; width: parent.width * 0.62; height: parent.height
             gradient: Gradient { orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: "#080d13" }
-                GradientStop { position: 0.57; color: "#100d13" }
-                GradientStop { position: 0.73; color: "#610b1016" }
-                GradientStop { position: 1; color: "#200b1016" }
+                GradientStop { position: 0; color: "#f20b0d10" }
+                GradientStop { position: 0.78; color: "#f00b0d10" }
+                GradientStop { position: 1; color: "#000b0d10" }
             }
         }
         SetupWizard {
-            x: 28; y: 27; width: parent.width * 0.61 - 40; height: parent.height - 54
+            x: Theme.railWidth + 44; y: 34
+            width: Math.min(640, parent.width * 0.55 - Theme.railWidth); height: parent.height - 68
             startStep: wizardStep
             onExitRequested: (target) => { page = "Home" }
         }
@@ -74,6 +75,14 @@ ApplicationWindow {
         onBackToLauncher: page = "Home"
         onOpenSetup: (step) => openWizard(step)
     }
+
+    Rail {
+        height: parent.height
+        current: page
+        locked: page === "Setup"
+        onNavigate: (target) => { if (target === "Settings") openSettings("", ""); else page = target }
+    }
+    font.family: Theme.sans
     palette.windowText: cream
     palette.buttonText: cream
     palette.text: cream

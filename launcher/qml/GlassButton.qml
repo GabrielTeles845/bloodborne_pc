@@ -1,27 +1,30 @@
 import QtQuick
 import QtQuick.Controls
 
+// Buttons: `highlighted` is the one primary action on a surface (crimson), others are quiet
+// outlines; `serif` sets the label in the display face (Play).
 Button {
     id: button
     property bool primary: highlighted
-    font.pixelSize: 12
-    font.bold: primary
-    font.letterSpacing: primary ? 1.2 : 0.3
+    property bool serif: false
+    font.family: serif ? Theme.serif : Theme.sans
+    font.pixelSize: serif ? 20 : 13
+    font.letterSpacing: serif ? 0.5 : 0.2
+    hoverEnabled: true
     contentItem: Text {
         text: button.text
         font: button.font
-        color: button.enabled ? "#f5f1ef" : "#84919a"
+        color: !button.enabled ? Theme.textFaint : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
     background: Rectangle {
-        radius: 7
-        color: button.primary ? (button.down ? "#cf893e50" : button.hovered ? "#c4773041" : "#ad612432")
-                              : button.down ? "#9a38454d" : button.hovered ? "#78414b53" : "#85202832"
-        border.color: button.primary ? "#d89a5966" : "#6da9b5bc"
+        radius: Theme.radius
+        color: button.primary ? (!button.enabled ? Theme.accentSoft : button.down ? "#a92a35" : button.hovered ? Theme.accentHover : Theme.accent)
+                              : button.down ? Theme.surfaceHover : button.hovered ? Theme.surfaceHover : "transparent"
+        border.color: button.primary ? "transparent" : button.hovered ? Theme.lineStrong : Theme.line
         border.width: 1
-        Rectangle { x: 1; y: 1; width: parent.width - 2; height: 1; color: "#43ffffff" }
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on color { ColorAnimation { duration: 110 } }
     }
 }

@@ -153,12 +153,12 @@ SETTINGS_SECTIONS = {
         ('Gameplay patches', [key for key, _, _ in core.CHEATS] + [key for key, _, _ in core.TWEAKS]),
     ],
     'System': [
-        ('Launch & integration', ['ui_language']),
+        ('Launch', ['ui_language']),
         ('Updates', []),
         ('Engine', ['draw_pipe', 'readbacks', 'extra_env']),
-        ('Developer options', ['debug_camera', 'debug_menu', 'frame_stats', 'gpu_profile', 'vk_validation']),
+        ('Developer', ['debug_camera', 'debug_menu', 'frame_stats', 'gpu_profile', 'vk_validation']),
         ('Maintenance', []),
-        ('Activity & logs', []),
+        ('Logs', []),
     ],
 }
 SETTING_FIELDS = {field['key']: field for fields in FIELDS.values() for field in fields}
@@ -177,9 +177,9 @@ SEARCH_ACTIONS = [
     ('Game & Saves', 'Your data', 'Open saves folder', 'save path'),
     ('Online', 'Play online', 'Test connection', 'server reachability'),
     ('Mods & Patches', 'Installed mods', 'Refresh mods', 'load order'),
-    ('System', 'Launch & integration', 'Desktop shortcut', 'start menu'),
-    ('System', 'Launch & integration', 'Add to Steam', 'integration'),
-    ('System', 'Activity & logs', 'Copy log', 'activity diagnostics'),
+    ('System', 'Launch', 'Desktop shortcut', 'start menu'),
+    ('System', 'Launch', 'Add to Steam', 'integration'),
+    ('System', 'Logs', 'Copy log', 'activity diagnostics'),
     ('System', 'Maintenance', 'Clear shader cache', 'shaders'),
 ]
 
@@ -487,7 +487,8 @@ class LauncherBackend(QObject):
     def sectionFields(self, category, section):
         for name, keys in SETTINGS_SECTIONS.get(category, []):
             if name == section:
-                return [SETTING_FIELDS[key] for key in keys]
+                # The revision makes the rows differ after a preset, so the page builds them anew.
+                return [{**SETTING_FIELDS[key], 'revision': self._settings_revision} for key in keys]
         return []
 
     @Slot(str, result='QVariantList')
