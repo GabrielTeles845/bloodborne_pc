@@ -55,6 +55,7 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     object_motion = std::make_unique<ObjectMotion>(instance, scheduler);
     camera_motion = std::make_unique<CameraMotion>(instance, scheduler, texture_cache, runtime);
     camera_motion->SetObjectMotion(object_motion.get());
+    pipeline_cache.WarmUp(); // after object motion: see PipelineCache::PipelineCache
     upscaler = std::make_unique<TemporalUpscaler>(instance, scheduler, texture_cache, runtime,
                                                   *camera_motion, *scene_targets);
     if (!EmulatorSettings.IsNullGPU()) {

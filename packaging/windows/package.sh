@@ -106,6 +106,8 @@ cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 mkdir -p "$dest/docs"
 cp -r docs/images "$dest/docs/"
 if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
+# Shader pre-build catalog (scripts/shader_catalog.py): records only, no game code or SPIR-V.
+if [[ -d shader_catalog ]]; then cp -r shader_catalog "$dest/"; fi
 # DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to bb-probe.exe
 # (packaging/windows/build_dlss.sh). Without them the DLSS option stays unavailable.
 if [[ -f out/bbport_dlss.dll && -f out/nvngx_dlss.dll ]]; then

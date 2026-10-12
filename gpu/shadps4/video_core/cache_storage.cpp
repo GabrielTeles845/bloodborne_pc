@@ -284,6 +284,54 @@ void DataBase::Clear() {
     LOG_WARNING(Render, "Pipeline cache cleared ({} files): it is rebuilt for this build", removed);
 }
 
+void DataBase::ClearType(BlobType type) {
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return;
+    }
+    const auto ext = "." + GetBlobFileExtension(type);
+    std::error_code ec;
+    u64 removed = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(cache_path, ec)) {
+        if (entry.is_regular_file(ec) && entry.path().extension() == ext &&
+            std::filesystem::remove(entry.path(), ec)) {
+            ++removed;
+        }
+    }
+    LOG_WARNING(Render, "Pipeline cache: {} {} files removed", removed, ext);
+}
+
+bool DataBase::Has(BlobType type, const std::string& name) const {
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return opened;
+    }
+    auto path = cache_path / name;
+    path.replace_extension(GetBlobFileExtension(type));
+    std::error_code ec;
+    return std::filesystem::exists(path, ec);
+}
+
+u32 DataBase::Seed(const std::filesystem::path& catalog) {
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return 0;
+    }
+    const auto meta = "." + GetBlobFileExtension(BlobType::ShaderMeta);
+    const auto key = "." + GetBlobFileExtension(BlobType::PipelineKey);
+    std::error_code ec;
+    u32 added = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(catalog, ec)) {
+        const auto ext = entry.path().extension();
+        if (!entry.is_regular_file(ec) || (ext != meta && ext != key)) {
+            continue;
+        }
+        const auto target = cache_path / entry.path().filename();
+        if (!std::filesystem::exists(target, ec) &&
+            std::filesystem::copy_file(entry.path(), target, ec)) {
+            ++added;
+        }
+    }
+    return added;
+}
+
 void DataBase::FinishPreload() {
     if (EmulatorSettings.IsPipelineCacheArchived()) {
         mz_zip_writer_init_from_reader(&zip_ar, cache_path.string().c_str());

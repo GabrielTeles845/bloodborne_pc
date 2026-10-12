@@ -34,6 +34,14 @@ public:
     void FinishPreload();
     /// bbport: removes every cached blob (an incompatible cache is rebuilt, not ignored).
     void Clear();
+    /// bbport shader pre-build: removes the blobs of one type only (the SPIR-V, which the game
+    /// files can make again, keeping what the draws saw).
+    void ClearType(BlobType type);
+    /// bbport shader pre-build: adds a catalog's shader and pipeline records (.meta, .key) the
+    /// cache does not have yet; returns how many were added.
+    u32 Seed(const std::filesystem::path& catalog);
+    /// Whether a blob is stored (directory caches; archives answer true and are read as before).
+    bool Has(BlobType type, const std::string& name) const;
 
     bool Save(BlobType type, const std::string& name, std::vector<u8>&& data);
     bool Save(BlobType type, const std::string& name, std::vector<u32>&& data);

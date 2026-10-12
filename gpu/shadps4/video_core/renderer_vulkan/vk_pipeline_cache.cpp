@@ -349,8 +349,9 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
     ASSERT_MSG(cache_result == vk::Result::eSuccess, "Failed to create pipeline cache: {}",
                vk::to_string(cache_result));
     pipeline_cache = std::move(cache);
-    // Preloaded pipelines use the same driver cache as runtime pipelines.
-    WarmUp();
+    // Preloaded pipelines use the same driver cache as runtime pipelines. bbport: the rasterizer
+    // calls WarmUp() once object motion has fixed its buffer addresses (motion shader variants
+    // embed them, so the shader pre-build translates those for this session).
 }
 
 PipelineCache::~PipelineCache() = default;
@@ -916,6 +917,36 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         program->last_used = std::distance(program->modules.begin(), it);
     }
     if (it == program->modules.end()) {
+        // bbport BB_PERM_DEBUG=1: why none of the program's known permutations matched.
+        static const bool perm_debug = std::getenv("BB_PERM_DEBUG") != nullptr;
+        static u32 perm_reports = 0;
+        if (perm_debug && !program->modules.empty() && perm_reports++ < 200) {
+            std::string reasons;
+            for (const auto& known : program->modules) {
+                const char* why = spec.Mismatch(known.spec);
+                reasons += why ? why : "equal?";
+                reasons += ' ';
+            }
+            std::printf("Permutation miss: %s %#llx, %zu known: %s\n",
+                        magic_enum::enum_name(hw_stage).data(), (unsigned long long)params.hash,
+                        program->modules.size(), reasons.c_str());
+            const auto attribs = [](const Shader::StageSpecialization& s) {
+                std::string out = std::to_string(s.vs_attribs.size()) + ":";
+                for (const auto& a : s.vs_attribs) {
+                    out += fmt::format(" d{} c{} s{:x}", a.divisor, u32(a.num_class),
+                                       std::bit_cast<u32>(a.dst_select) & 0xfff);
+                }
+                return out;
+            };
+            if (hw_stage == Shader::HwStage::Vertex) {
+                std::printf("  draw   %s motion=%d\n", attribs(spec).c_str(),
+                            int(spec.runtime_info.hw.vs.motion_vectors));
+                for (const auto& known : program->modules) {
+                    std::printf("  known  %s motion=%d\n", attribs(known.spec).c_str(),
+                                int(known.spec.runtime_info.hw.vs.motion_vectors));
+                }
+            }
+        }
         auto new_info = Shader::Info(hw_stage, sw_stage, params);
         module = CompileModule(new_info, runtime_info, params.code, perm_idx, binding);
 

@@ -204,6 +204,56 @@ struct StageSpecialization {
         return info != nullptr;
     }
 
+    /// bbport (BB_PERM_DEBUG): the first check of operator== that fails, or null when equal.
+    [[nodiscard]] const char* Mismatch(const StageSpecialization& other) const {
+        if (!Valid()) return "invalid";
+        if (vs_attribs != other.vs_attribs) return "vs_attribs";
+        if (runtime_info != other.runtime_info) {
+            const auto& a = runtime_info;
+            const auto& b = other.runtime_info;
+            if (a.hw_stage != b.hw_stage || a.sw_stage != b.sw_stage) return "runtime_info.stage";
+            if (!(a.props == b.props)) return "runtime_info.props";
+            if (a.hw_stage == HwStage::Fragment) {
+                const auto& x = a.hw.fs;
+                const auto& y = b.hw.fs;
+                if (x.motion_vectors != y.motion_vectors) return "fs.motion_vectors";
+                if (x.color_buffers != y.color_buffers) return "fs.color_buffers";
+                if (x.num_inputs != y.num_inputs || x.inputs != y.inputs) return "fs.inputs";
+                if (x.num_samples != y.num_samples) return "fs.num_samples";
+                if (x.mrtz_mask != y.mrtz_mask) return "fs.mrtz_mask";
+                if (x.z_export_format != y.z_export_format) return "fs.z_export_format";
+                return "fs.other";
+            }
+            if (a.hw_stage == HwStage::Vertex) {
+                const auto& x = a.hw.vs;
+                const auto& y = b.hw.vs;
+                if (x.motion_vectors != y.motion_vectors) return "vs.motion_vectors";
+                if (x.num_outputs != y.num_outputs || x.outputs != y.outputs) return "vs.outputs";
+                if (x.clip_disable != y.clip_disable) return "vs.clip_disable";
+                if (x.user_clip_plane_mask != y.user_clip_plane_mask) return "vs.user_clip";
+                if (x.emulate_depth_negative_one_to_one != y.emulate_depth_negative_one_to_one)
+                    return "vs.depth";
+                return "vs.sw";
+            }
+            return "runtime_info";
+        }
+        if (fetch_shader_data != other.fetch_shader_data) return "fetch_shader_data";
+        if (fmasks != other.fmasks) return "fmasks";
+        if (bitset.none() && other.bitset.none()) return nullptr;
+        if (start != other.start) return "start";
+        u32 binding{};
+        for (u32 i = 0; i < buffers.size(); i++) {
+            if (other.bitset[binding++] && buffers[i] != other.buffers[i]) return "buffers";
+        }
+        for (u32 i = 0; i < images.size(); i++) {
+            if (other.bitset[binding++] && images[i] != other.images[i]) return "images";
+        }
+        for (u32 i = 0; i < samplers.size(); i++) {
+            if (samplers[i] != other.samplers[i]) return "samplers";
+        }
+        return nullptr;
+    }
+
     bool operator==(const StageSpecialization& other) const {
         if (!Valid()) {
             return false;
