@@ -96,6 +96,11 @@ follows. It includes everything in 1.6.12.
   so a crash or a kill while the game saves can no longer leave a damaged save
   ([Supermedo #43](https://github.com/Supermedo/bloodborne_pc/pull/43), parsifal295, from
   bbport 0.5). `BB_SAFE_SAVES=0` writes in place as before.
+- **Key items on Xbox pads:** Back + d-pad right clicks the right half of the touchpad (key
+  items, and the right-hand choice of some prompts), Back + d-pad left the left half; Back on
+  its own still opens gestures, now when released
+  ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39), parsifal295).
+  `BB_PAD_BACK_COMBO=0` restores the old Back.
 
 ## 1.6.12 preview
 

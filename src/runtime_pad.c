@@ -233,8 +233,7 @@ static void sample_host(PadData *d) {
             {SDL_GAMEPAD_BUTTON_WEST,BTN_SQUARE}, {SDL_GAMEPAD_BUTTON_NORTH,BTN_TRIANGLE},
             {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,BTN_L1}, {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,BTN_R1},
             {SDL_GAMEPAD_BUTTON_LEFT_STICK,BTN_L3}, {SDL_GAMEPAD_BUTTON_RIGHT_STICK,BTN_R3},
-            {SDL_GAMEPAD_BUTTON_START,BTN_OPTIONS}, {SDL_GAMEPAD_BUTTON_BACK,BTN_TOUCHPAD},
-            {SDL_GAMEPAD_BUTTON_TOUCHPAD,BTN_TOUCHPAD},
+            {SDL_GAMEPAD_BUTTON_START,BTN_OPTIONS}, {SDL_GAMEPAD_BUTTON_TOUCHPAD,BTN_TOUCHPAD},
             {SDL_GAMEPAD_BUTTON_DPAD_UP,BTN_UP}, {SDL_GAMEPAD_BUTTON_DPAD_DOWN,BTN_DOWN},
             {SDL_GAMEPAD_BUTTON_DPAD_LEFT,BTN_LEFT}, {SDL_GAMEPAD_BUTTON_DPAD_RIGHT,BTN_RIGHT},
         };
@@ -262,7 +261,33 @@ static void sample_host(PadData *d) {
                 }
             }
         }
-        // Back/Select on pads without a touch surface is a left-side click.
+        // Back/Select stands in for the touchpad on pads without one (Xbox): Back + d-pad left or
+        // right clicks that half (left: gestures, right: key items and the right-side choices of
+        // some prompts) while the d-pad is held; Back alone clicks the left half for 150 ms when
+        // it is released, so that a Back + right combo does not open the gestures first.
+        // (parsifal295, Supermedo/bloodborne_pc#39.) BB_PAD_BACK_COMBO=0: Back is the left half at once.
+        static int back_combo_on=-1;
+        if (back_combo_on<0) { const char *e=getenv("BB_PAD_BACK_COMBO"); back_combo_on=!(e && !strcmp(e,"0")); }
+        static bool back_was_down, back_combo;
+        static uint64_t back_click_until;
+        const bool back=SDL_GetGamepadButton(g,SDL_GAMEPAD_BUTTON_BACK);
+        int back_side=-1;
+        if (!back_combo_on) {
+            if (back) d->buttons|=BTN_TOUCHPAD;
+        } else if (back) {
+            if (!back_was_down) back_combo=false;
+            if (d->buttons & (BTN_LEFT|BTN_RIGHT)) {
+                back_side=(d->buttons & BTN_RIGHT) ? 1 : 0;
+                back_combo=true;
+            }
+            d->buttons&=~(uint32_t)(BTN_LEFT|BTN_RIGHT);
+        } else if (back_was_down && !back_combo) {
+            back_click_until=d->timestamp+150000;
+        }
+        back_was_down=back;
+        if (back_combo_on && back_side<0 && d->timestamp<back_click_until) back_side=0;
+        if (back_side>=0 && !d->touch_count) touch_click(d,back_side);
+        // The touchpad button of a pad whose touch surface SDL does not report: a left-side click.
         if ((d->buttons & BTN_TOUCHPAD) && !d->touch_count) touch_click(d,0);
     }
     /* Keyboard and mouse (input_bindings.h, bbport.ini key_*), on top of the gamepad: both
