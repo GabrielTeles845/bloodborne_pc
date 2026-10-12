@@ -101,6 +101,10 @@ follows. It includes everything in 1.6.12.
   its own still opens gestures, now when released
   ([Supermedo #39](https://github.com/Supermedo/bloodborne_pc/pull/39), parsifal295).
   `BB_PAD_BACK_COMBO=0` restores the old Back.
+- **Less GPU work for nothing:** draws with no colour or depth target and no memory writes,
+  which on the PS4 only fed occlusion counters this port answers itself, are skipped
+  ([Supermedo #34](https://github.com/Supermedo/bloodborne_pc/pull/34), Aljoscha-Ide).
+  `BB_SKIP_EMPTY_DRAWS=0` draws them.
 
 ## 1.6.12 preview
 
