@@ -13,6 +13,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include "respawn_patch.h"
+#include "menu_heap_patch.h"
 #include "engine_hooks.h"
 #include "engine_features.h"
 #else
@@ -629,6 +630,15 @@ int main(int argc, char **argv) {
             else
                 puts("Respawn loading: unsupported or modified instructions; minimum-delay fix skipped");
         }
+        /* BB_MENU_HEAP_EXTRA_MB=0: the menus' original 34 MiB (see menu_heap_patch.h). */
+        const char *menu_heap = getenv("BB_MENU_HEAP_EXTRA_MB");
+        const unsigned menu_extra = menu_heap ? (unsigned)atoi(menu_heap) : 8;
+        if (menu_extra == 0)
+            puts("Menu heap: original 34 MiB (BB_MENU_HEAP_EXTRA_MB=0)");
+        else if (bb_patch_menu_heap(image, (size_t)size, menu_extra) == BB_MENU_HEAP_APPLIED)
+            printf("Menu heap: 34 + %u MiB\n", menu_extra);
+        else
+            puts("Menu heap: unsupported or modified instructions; size left as it is");
         /* PC features hooked into the engine (engine_features.c): each checks its own bytes. */
         if (!bb_hooks_enabled())
             puts("Engine hooks: off (BB_ENGINE_HOOKS=0)");

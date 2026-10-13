@@ -200,8 +200,8 @@ static const Option LODS[] = {{-2, 125120}, {0, 125121}, {1, 125122}, {2, 125123
 
 /* Pick lists last in every section (their drop-down covers what is below them). Growing PC
  * Settings or PC Gameplay past these rows (for the mouse settings) crashed the menu movie
- * (guest 0xdcf79/0xd67bb) even with the engine hooks off: the mouse settings stay in the
- * launcher and bbport.ini until that is understood. */
+ * (guest 0xdcf79/0xd67bb): the menus' Scaleform heap ran out (menu_heap_patch.h). The mouse settings stay in the
+ * launcher and bbport.ini. */
 static Row g_graphics[] = {
     TOGGLE_ROW("sharpen", 117000), TOGGLE_ROW("jitter", 117001), TOGGLE_ROW("object_motion", 117002),
     PICK_ROW("upscaler", 117003, UPSCALERS), PICK_ROW("preset", 117004, PRESETS),
