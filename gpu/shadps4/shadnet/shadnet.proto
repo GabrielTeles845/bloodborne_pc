@@ -25,6 +25,18 @@ message LoginRequest {
 }
 
 // Mid-session Appear-Offline toggle.
+// Reported right after signing in (shadNet clientversions.cfg).
+message SetClientVersionRequest {
+    string version = 1;
+}
+
+// Notification 19: the server is signing this client out (reason 1: client version not accepted).
+message NotifyClientRejected {
+    uint32 reason  = 1;
+    string message = 2;
+    string version = 3;
+}
+
 message SetAppearOfflineRequest {
     bool appear_offline = 1;
 }

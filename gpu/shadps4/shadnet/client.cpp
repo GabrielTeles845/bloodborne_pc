@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <chrono>
 #include <thread>
 
@@ -720,7 +722,28 @@ void ShadNetClient::HandleServerFeaturesReply(const std::vector<u8>& payload) {
     m_server_features_received.store(parsed);
     LOG_INFO(ShadNet, "Server features: matching2_enabled={}{}",
              matching2_enabled ? "true" : "false", parsed ? "" : " (defaulted)");
+    ReportClientVersion();
     m_sem_authenticated.release();
+}
+
+// bbport: the port's own name and version (the launcher's, BB_PORT_VERSION), in the form of
+// shadPS4's fork builds ("shadPS4 <owner>/...") so a server's rules can tell it apart.
+u64 ShadNetClient::ReportClientVersion() {
+    const char* port_version = std::getenv("BB_PORT_VERSION");
+    shadnet::SetClientVersionRequest req;
+    req.set_version(std::string("shadPS4 Jgamrot/bloodborne_pc v") +
+                    (port_version && *port_version ? port_version : "unknown"));
+    const std::string blob = req.SerializeAsString();
+    std::vector<u8> payload;
+    payload.reserve(4 + blob.size());
+    const u32 sz = static_cast<u32>(blob.size());
+    payload.push_back(static_cast<u8>(sz));
+    payload.push_back(static_cast<u8>(sz >> 8));
+    payload.push_back(static_cast<u8>(sz >> 16));
+    payload.push_back(static_cast<u8>(sz >> 24));
+    payload.insert(payload.end(), blob.begin(), blob.end());
+    LOG_INFO(ShadNet, "Client version reported: '{}'", req.version());
+    return SubmitRequest(CommandType::SetClientVersion, payload);
 }
 
 // Notifications
@@ -737,6 +760,16 @@ void ShadNetClient::HandleNotification(u16 cmd_raw, const std::vector<u8>& paylo
     }
 
     switch (static_cast<NotificationType>(cmd_raw)) {
+    case NotificationType::ClientRejected: {
+        shadnet::NotifyClientRejected pb;
+        if (pb.ParseFromString(blob)) {
+            LOG_ERROR(ShadNet, "Server rejected this client (reason={}, version='{}'): {}",
+                      pb.reason(), pb.version(), pb.message());
+            std::fprintf(stderr, "Online: the server signed this client out: %s\n",
+                         pb.message().c_str());
+        }
+        break;
+    }
     case NotificationType::FriendQuery: {
         shadnet::NotifyFriendQuery pb;
         if (!pb.ParseFromString(blob)) {

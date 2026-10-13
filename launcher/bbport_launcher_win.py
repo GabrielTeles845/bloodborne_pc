@@ -465,6 +465,7 @@ def install_keyboard_prompts(mods_dir):
 
 def game_environment(s):
     env = dict(os.environ)
+    env['BB_PORT_VERSION'] = VERSION  # reported to shadNet after signing in
     env['BB_GAME_DIR'] = s['game_dir']
     if s['user_dir']:
         env['BB_USER_DIR'] = s['user_dir']

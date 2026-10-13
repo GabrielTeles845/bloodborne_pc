@@ -67,6 +67,7 @@ enum class CommandType : u16 {
     AddBlock = 10,
     RemoveBlock = 11,
     GetServerFeatures = 12,
+    SetClientVersion = 13,
     GetBoardInfos = 30,
     RecordScore = 31,
     RecordScoreData = 32,
@@ -105,6 +106,7 @@ enum class NotificationType : u16 {
     RoomEvent = 10,
     RoomMessage = 11,
     WebApiPushEvent = 17, // Generic NP WebApi push event
+    ClientRejected = 19,  // Server is signing this client out (e.g. version not accepted)
 };
 
 enum class ErrorType : uint8_t {
@@ -304,6 +306,10 @@ public:
     // Allocates a packet id, builds the packet, pushes it to the writer queue.
     // Returns the packet id so callers can correlate the eventual reply.
     u64 SubmitRequest(CommandType cmd, const std::vector<u8>& payload);
+    /// bbport: tells the server which client this is, right after signing in. shadNet 0.0.34
+    /// (12 Oct 2026, clientversions.cfg) signs out clients that report nothing and then
+    /// refuses their logins for a while (LoginError) - every login of the port failed.
+    u64 ReportClientVersion();
 
     // Friend / block commands.
     u64 AddFriend(const std::string& npid);
