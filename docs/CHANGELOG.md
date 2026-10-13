@@ -4,6 +4,22 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9 experimental
+
+A pre-release for testing seamless co-op: the launcher does not offer it as an update. It is
+1.8.1 plus:
+
+- **Seamless co-op (experimental):** Settings > Co-op sets up and runs
+  [BBSC](https://github.com/Classmg22/BBSC) (Bloodborne Seamless Co-op by CLS_AMG; servers from
+  Wozzardman's shadnet-p2p): one co-op session through deaths, lamps, areas and bosses, each hunter
+  keeping their own character. One player hosts the server on their own PC; both use
+  [Tailscale](https://tailscale.com). *Set up co-op* downloads BBSC's official packages and checks
+  them against its published checksums; *Start hosting* opens the firewall for Tailscale and the
+  home network only (one Windows prompt, the first time), starts the servers and gives an invite
+  code; the guest pastes it; *Play co-op* backs up the saves and starts the game with BBSC, pointed
+  at the host for that session only. BBSC 0.0.1 has not been played on BBport before - this is the
+  first test. Normal play and online are unchanged.
+
 ## 1.8.1
 
 - **Online works again.** Since 12 October the shadNet server signs out clients that do not
