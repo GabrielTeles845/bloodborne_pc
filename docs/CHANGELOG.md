@@ -4,10 +4,9 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## 1.8 preview
+## 1.8
 
-A pre-release: the launcher does not offer it as an update; download it from the releases page.
-It is 1.7 plus the following.
+A full release: the launcher offers it as an update. It is 1.7 plus the following.
 
 - **Shader pre-build.** Shaders the game has been seen to use are built while the game starts
   ("Preparing shaders: N%" in the window title), not the first time an area or effect appears.
