@@ -14,7 +14,7 @@ Item {
     property string query: ""
     property var categories: [
         {name: "Visuals", icon: "visuals", tile: "tile-visuals", detail: "Graphics, display & frame rate"},
-        {name: "Controls", icon: "controls", tile: "tile-controls", detail: "Button prompts & mouse"},
+        {name: "Controls", icon: "controls", tile: "tile-controls", detail: "Prompts, mouse & keyboard"},
         {name: "Game & Saves", icon: "folder", tile: "tile-game-and-saves", detail: "Game files, saves & language"},
         {name: "Online", icon: "online", tile: "tile-online", detail: "Account & connection"},
         {name: "Mods & Patches", icon: "puzzle", tile: "tile-mods-and-patches", detail: "Mods, enhancements & tweaks"},

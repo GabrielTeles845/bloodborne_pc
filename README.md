@@ -33,6 +33,12 @@ of upcoming features are marked *Pre-release* on the
 - Output from 720p to 4K, fullscreen switchable while playing, 30/60/90 FPS or unlocked with a cap.
 - The game's effects on or off: chromatic aberration, depth of field, motion blur, SSAO, the
   game's AA, dynamic shadows, screen-space reflections, model detail.
+- Shader pre-build: shaders the game is known to use are built while it starts (*Preparing
+  shaders* in the window title) instead of stuttering the first time an area or effect appears.
+  The included catalog covers the game up to the Blood-starved Beast so far; it lists shaders,
+  not game code, and each install builds them from its own files. Off with `BB_SHADER_PREBUILD=0`.
+
+![Settings: Visuals](docs/images/settings.jpg)
 
 **In the game**
 - PC settings in the game's own System menu: PC Graphics, Display, Effects, Settings and
@@ -44,7 +50,9 @@ of upcoming features are marked *Pre-release* on the
 - Controller, and keyboard and mouse at the same time, with rebindable keys
   (`key_<action>=` lines in `bbport.ini`).
 - Mouse camera: click the game window and the mouse turns the camera 1:1. Sensitivity and
-  invert Y are on the launcher's Controller page.
+  invert Y are in **Settings > Controls > Mouse**.
+- Keyboard movement smoothing: changing direction with WASD swings smoothly instead of
+  stopping for a moment (**Settings > Controls > Keyboard**, *Off* to disable).
 - Button prompts: PlayStation, Xbox (included) or keyboard keys (see below), switchable in the
   launcher and the guide.
 
@@ -84,8 +92,8 @@ What changed in each release: [docs/CHANGELOG.md](docs/CHANGELOG.md).
 4. On **Your data**, optionally import your own `keys.json` (for achievement names) or choose an
    existing saves folder. The checks turn green when the game folder has version 1.09; amber is
    normal for a new install without saves.
-5. Click **Play now**. The first launch prepares files and may take a while, and new areas may
-   stutter briefly while shaders are built.
+5. Click **Play now**. The first launch prepares files and builds the known shaders
+   (*Preparing shaders: N%* in the window title), so it takes a while; later starts are quick.
 
 ![The setup wizard](docs/images/first-run-wizard.jpg)
 
@@ -121,6 +129,8 @@ keys to the ones the images show: E interact, Left Shift dodge, R blood vial, Q 
 F transform, left / right / middle mouse for attack / firearm / lock-on, Left Ctrl + left mouse
 for strong attack, Space for L3, G and H for gestures and personal effects. Switch back to
 PlayStation or Xbox in the launcher or the guide's **Mods** tab at any time.
+
+![Settings: Controls > Keyboard](docs/images/settings-keyboard.jpg)
 
 ## Already have another launcher or game installation?
 
@@ -168,8 +178,12 @@ page take precedence:
 - Rebirth and two invaders have not been tested in play yet.
 - Keep the frame cap at 120 FPS or lower. The sprint fix removes the known half-speed sprint
   above it, but higher caps are not tested yet.
-- New areas stutter briefly the first time while shaders compile. On a black screen, try
+- Areas and effects beyond the shader catalog (so far, after the Blood-starved Beast) still
+  stutter briefly the first time while their shaders compile; later releases extend the catalog.
+  On AMD and Intel GPUs most fragment shaders still compile in play. On a black screen, try
   **Advanced → Clear shader cache**.
+- Occasional "exploded" character faces: set **GPU readbacks** to **Precise** (Settings > System > Engine);
+  it costs some speed.
 
 ## Requirements
 
