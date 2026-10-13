@@ -71,8 +71,22 @@ enum : std::uint64_t {
     SceneMipBias = 1ull << 57, ///< negative LOD bias of G-buffer samplers at reduced scene sizes
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
+/// Off whatever the toggle file says. Precise readbacks (BB_READBACKS=2) read-protect GPU-written
+/// pages, and a fault waits for the GPU command thread: the draw recording and copy threads,
+/// which that thread itself waits for, then deadlocked on the first frame (a black screen,
+/// Jgamrot/bloodborne_pc#2). With them off their work runs on the GPU thread, as in shadPS4.
+inline std::uint64_t ForcedOff() {
+    static const std::uint64_t mask = [] {
+        const char* readbacks = std::getenv("BB_READBACKS");
+        return readbacks && std::atoi(readbacks) == 2
+                   ? std::uint64_t(ThreadedRecording | ParallelCopies | PoolSmallCopies)
+                   : std::uint64_t(0);
+    }();
+    return mask;
+}
 inline bool Disabled(std::uint64_t bit) {
-    return (__atomic_load_n(&runtime_disabled_optimizations, __ATOMIC_RELAXED) & bit) != 0;
+    return ((__atomic_load_n(&runtime_disabled_optimizations, __ATOMIC_RELAXED) | ForcedOff()) &
+            bit) != 0;
 }
 } // namespace BbToggle
 
