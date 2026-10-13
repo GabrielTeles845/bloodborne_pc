@@ -91,22 +91,25 @@ def no_console():
     return 0 if ctypes.windll.kernel32.GetConsoleWindow() else subprocess.CREATE_NO_WINDOW
 
 
-def run_script(name, *args, capture=False):
+def run_script(name, *args, capture=False, optional=False):
+    """Its output when captured ('' otherwise). A failure stops the start, unless the script is
+    `optional` (it only adds to the game): that is logged, and the result is None."""
     # Inside the packaged Bloodborne.exe (PyInstaller) the executable runs scripts itself.
     script = ['--script'] if getattr(sys, 'frozen', False) else []
     command = [sys.executable, *script, str(PORT / 'scripts' / name), *map(str, args)]
     if capture:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True,
                                 creationflags=no_console())
-        if result.returncode:
-            sys.exit(result.returncode)
-        return result.stdout
-    # stdin given: the output handles are passed explicitly (a windowed Bloodborne.exe child would
-    # get none otherwise).
-    result = subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+    else:
+        # stdin given: the output handles are passed explicitly (a windowed Bloodborne.exe child
+        # would get none otherwise).
+        result = subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console())
     if result.returncode:
-        sys.exit(result.returncode)
-    return None
+        if not optional:
+            sys.exit(result.returncode)
+        print(f'{name} failed (exit code {result.returncode}); starting without it', file=sys.stderr)
+        return None
+    return result.stdout if capture else ''
 
 
 def ini_value(path, key):
@@ -146,7 +149,9 @@ def shader_prebuild(game, out, env):
         current = False
     if not current:
         shutil.rmtree(code, ignore_errors=True)
-        run_script('shader_code.py', game, out / 'eboot.elf', code)
+        if run_script('shader_code.py', game, out / 'eboot.elf', code, optional=True) is None:
+            shutil.rmtree(code, ignore_errors=True)  # shaders are then translated in game
+            return
         (code / 'stamp.txt').write_text(stamp, encoding='utf-8')
     env['BB_SHADER_CODE'] = str(code)
     catalog = PORT / 'shader_catalog'
@@ -184,8 +189,9 @@ def main():
         fail(f'No eboot.bin in {game} (set BB_GAME_DIR).')
     original_game = game.resolve()
     # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
-    generated = run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
-                           '--settings', config, capture=True).splitlines()
+    # Optional: should they fail, the game starts as without them.
+    generated = (run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
+                            '--settings', config, capture=True, optional=True) or '').splitlines()
     # The in-game PC menu adds its rows only when its sections and strings were made, and the
     # title's Quit Game only when both title movies have its line.
     menu = next((Path(folder) for folder in generated if Path(folder).name == 'pc-menu'), None)
