@@ -286,6 +286,15 @@ public:
     /// Runs the garbage collector.
     void RunGarbageCollector();
 
+    /// bbport: the device memory use the last collection read, and its pressure and critical
+    /// marks (for BufferCache::RunGarbageCollector).
+    struct MemoryUse {
+        u64 used, pressure, critical;
+    };
+    [[nodiscard]] MemoryUse GetMemoryUse() const noexcept {
+        return {total_used_memory, pressure_gc_memory, critical_gc_memory};
+    }
+
     template <typename Func>
     void ForEachImageInRegion(VAddr cpu_addr, size_t size, Func&& func) {
         using FuncReturn = typename std::invoke_result<Func, ImageId, Image&>::type;

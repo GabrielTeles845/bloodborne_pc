@@ -5,7 +5,11 @@
 
 #include "bbport_copy.h"
 
+#include <atomic>
+#include <chrono>
 #include <deque>
+#include <unordered_map>
+#include <vector>
 #include <boost/container/small_vector.hpp>
 
 #include "common/interval_set.h"
@@ -112,6 +116,11 @@ public:
     /// Commits pending sparse buffer memory binds. Must be called before every scheduler submit.
     void SubmitPendingArenaBinds(Vulkan::SubmitInfo& info);
 
+    /// bbport: gives back the VRAM of arena chunks no binding has used for a while, once the
+    /// device's memory use (`used_memory`, from the driver) reaches `pressure_memory`.
+    /// Call where no draw is being prepared (Rasterizer::OnSubmit).
+    void RunGarbageCollector(u64 used_memory, u64 pressure_memory, u64 critical_memory);
+
 private:
     struct ArenaBinds {
         const Buffer* arena;
@@ -186,6 +195,22 @@ private:
         }
     };
     IntervalList<Backing> resident_ranges;
+
+    /// bbport: arena memory is made resident in aligned chunks of 2 MiB (or the sparse block
+    /// size if larger), each its own allocation, so that RunGarbageCollector can free them.
+    /// Before, residency was never released: every buffer the game had ever bound kept its VRAM,
+    /// up to the size of the guest's GPU memory (3+ GB), and 4 GB cards ran out after an hour or
+    /// two however many textures were evicted (Jgamrot/bloodborne_pc#3).
+    static constexpr u32 CHUNK_BITS = 21;
+    u32 chunk_shift{};
+    u32 blocks_per_chunk_shift{};
+    /// Second (RunGarbageCollector's clock) each chunk was last bound, by chunk index.
+    std::vector<u32> chunk_last_use;
+    std::unordered_map<u64, vk::DeviceMemory> chunk_memory;
+    std::atomic<u32> gc_second{0};
+    u32 gc_run_second{};
+    u64 gc_released{};
+    std::chrono::steady_clock::time_point gc_report_time{};
 
     u32 arena_memory_type_index{};
     u32 block_size{};

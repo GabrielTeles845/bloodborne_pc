@@ -1428,6 +1428,8 @@ void Rasterizer::OnSubmit() {
     }
     texture_cache.ProcessDownloadImages();
     texture_cache.RunGarbageCollector();
+    const auto memory_use = texture_cache.GetMemoryUse();
+    buffer_cache.RunGarbageCollector(memory_use.used, memory_use.pressure, memory_use.critical);
     runtime.TickFrame();
 }
 
