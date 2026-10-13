@@ -15,7 +15,7 @@ import struct
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fromsoft import Bnd4, dcx_decompress  # noqa: E402
+from fromsoft import Bnd4, FormatError, dcx_decompress  # noqa: E402
 
 FOOTER = b'OrbShdr'
 
@@ -46,7 +46,13 @@ def programs(data):
 def collect(game, eboot):
     found = {}
     for archive in sorted((Path(game) / 'dvdroot_ps4' / 'shader').glob('*.shaderbnd*.dcx')):
-        for data in Bnd4(dcx_decompress(archive.read_bytes())).files:
+        # A damaged archive only leaves its shaders to be translated in game, as without this.
+        try:
+            files = Bnd4(dcx_decompress(archive.read_bytes())).files
+        except (OSError, FormatError, IndexError, struct.error) as error:
+            print(f'shader code: skipped {archive.name}: {error}', file=sys.stderr)
+            continue
+        for data in files:
             for shader_hash, kind, code in programs(data):
                 found.setdefault((shader_hash, kind == COPY_SHADER), code)
     if eboot:

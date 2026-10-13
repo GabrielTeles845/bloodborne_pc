@@ -4,6 +4,17 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **Missing walls and floors you could walk through** ([#6](https://github.com/Jgamrot/bloodborne_pc/issues/6)).
+  Now and then a piece of a map loaded without its model or collision, and it stayed broken
+  until the game was closed. The game reads its archives two ways at once: one thread moves to a
+  position and reads, another reads at a given position. On Windows the second kind moved the
+  file's position and put it back, so a read from the first thread could land in the wrong place
+  and load garbage. Those reads now take turns on each open file (Windows already ran them one
+  at a time). A stress test that failed every run before now passes; confirming it in play
+  needs time, since the bug was rare.
+
 ## 1.8.1
 
 - **Online works again.** Since 12 October the shadNet server signs out clients that do not

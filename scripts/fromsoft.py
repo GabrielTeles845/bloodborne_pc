@@ -22,8 +22,19 @@ def dcx_decompress(data):
     if data[0x28:0x2c] != b'DFLT':
         raise FormatError(f'unsupported DCX compression {data[0x28:0x2c]!r}')
     size, packed = struct.unpack_from('>II', data, 0x1c)
-    start = data.index(b'DCA\0', 0x2c) + 8
-    out = zlib.decompress(data[start:start + packed])
+    try:
+        start = data.index(b'DCA\0', 0x2c) + 8
+    except ValueError:
+        raise FormatError('DCX header has no DCA block') from None
+    # A damaged file (a cut-short copy, a repack with a wrong header) is a format error, so the
+    # feature reading it turns itself off rather than stopping the game.
+    if len(data) - start < packed:
+        raise FormatError(f'DCX file is truncated: its header says {packed} bytes of data, '
+                          f'the file has {len(data) - start}')
+    try:
+        out = zlib.decompress(data[start:start + packed])
+    except zlib.error as error:
+        raise FormatError(f'DCX data is damaged ({error})') from None
     if len(out) != size:
         raise FormatError('DCX size does not match its header')
     return out

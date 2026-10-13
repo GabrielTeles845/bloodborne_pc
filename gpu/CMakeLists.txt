@@ -291,6 +291,11 @@ if (WIN32)
     add_executable(engine-hooks-test EXCLUDE_FROM_ALL ../tests/test_engine_hooks.c ../src/engine_hooks.c)
     target_include_directories(engine-hooks-test PRIVATE ../src)
     target_compile_options(engine-hooks-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+    # Issue #6: pread from one thread, lseek + read from another, on one descriptor.
+    add_executable(file-offsets-test EXCLUDE_FROM_ALL ../tests/test_file_offsets.c ../src/compat_win.c)
+    target_include_directories(file-offsets-test PRIVATE ../src)
+    target_compile_options(file-offsets-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+    target_link_libraries(file-offsets-test PRIVATE -pthread bcrypt)
 endif()
 
 add_executable(shader-user-data-test EXCLUDE_FROM_ALL ../tests/test_shader_user_data.cpp)

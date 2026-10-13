@@ -22,8 +22,15 @@ class PackageSetupError(RuntimeError):
     pass
 
 
+def _is_variant(name):
+    """The 720p/1080p 60fps update PKGs shipped beside the plain one in common dumps."""
+    name = name.casefold().replace(' ', '')
+    return any(word in name for word in ('720p', '1080p', '60fps'))
+
+
 def _package_members(archive):
     matches = {}
+    others = []
     for member in archive.infolist():
         if member.is_dir():
             continue
@@ -32,8 +39,15 @@ def _package_members(archive):
             if name in matches:
                 raise PackageSetupError(f'The ZIP has more than one {name}.')
             matches[name] = member
+        elif name.endswith('.pkg') and not _is_variant(name):
+            others.append(member)
+    # A renamed plain update (a browser's "(1)", a store-style name) is fine when it is the only
+    # other PKG; the extractor confirms it is an update before anything is extracted.
+    if UPDATE_NAME.casefold() not in matches and len(others) == 1:
+        matches[UPDATE_NAME.casefold()] = others[0]
     if BASE_NAME.casefold() not in matches or UPDATE_NAME.casefold() not in matches:
-        raise PackageSetupError('The ZIP must contain CUSA03173.pkg and the plain CUSA03173 Update v1.09.pkg.')
+        raise PackageSetupError('The ZIP must contain CUSA03173.pkg and the plain 1.09 update PKG '
+                                '(not the 720p or 1080p 60fps one).')
     return matches[BASE_NAME.casefold()], matches[UPDATE_NAME.casefold()]
 
 
@@ -47,6 +61,14 @@ def _check_type(extractor, package, expected):
     if result.returncode != expected:
         kind = 'base game' if expected == 101 else '1.09 update'
         raise PackageSetupError(f'{package.name} is not a valid {kind} PKG. Check that you selected the right file.')
+
+
+def _is_type(extractor, package, expected):
+    try:
+        _check_type(extractor, package, expected)
+        return True
+    except PackageSetupError:
+        return False
 
 
 def _extract(extractor, package, output, expected_folder, status):
@@ -93,9 +115,16 @@ def install_game(source, destination_parent, extractor, update=None, status=lamb
         raise PackageSetupError('Choose cusa-03173.zip or CUSA03173.pkg.')
     update_path = Path(update).resolve() if update else None
     if source.suffix.casefold() == '.pkg' and (not update_path or not update_path.is_file()):
-        raise PackageSetupError('Choose the plain CUSA03173 Update v1.09.pkg too.')
-    if source.suffix.casefold() == '.pkg' and update_path.name.casefold() != UPDATE_NAME.casefold():
-        raise PackageSetupError('Choose the plain CUSA03173 Update v1.09.pkg, not a 720p or 1080p variant.')
+        raise PackageSetupError('Choose the plain 1.09 update PKG too.')
+    if source.suffix.casefold() == '.pkg' and update_path == source:
+        raise PackageSetupError(f'{source.name} was chosen in both steps. Choose the base game PKG '
+                                'first, then the plain 1.09 update PKG.')
+    # Only the name can tell the 60fps variants from the plain update (both are 1.09 update PKGs);
+    # any other name is accepted, and the extractor checks the type.
+    for chosen in (source, update_path) if source.suffix.casefold() == '.pkg' else ():
+        if _is_variant(chosen.name):
+            raise PackageSetupError(f'{chosen.name} looks like the 720p or 1080p 60fps update. '
+                                    'Choose the plain 1.09 update PKG instead.')
 
     archive = None
     try:
@@ -124,8 +153,24 @@ def install_game(source, destination_parent, extractor, update=None, status=lamb
             else:
                 base, patch = source, update_path
             status('Checking the base game and 1.09 update…')
-            _check_type(extractor, base, 101)
-            _check_type(extractor, patch, 102)
+            try:
+                _check_type(extractor, base, 101)
+            except PackageSetupError:
+                # The two PKGs chosen the other way round: swap them.
+                if archive:
+                    raise
+                if not (_is_type(extractor, base, 102) and _is_type(extractor, patch, 101)):
+                    raise PackageSetupError(f'{base.name} is not a valid base game PKG. You chose {base.name} '
+                                            f'as the base game and {patch.name} as the update; the base game '
+                                            'is the large CUSA03173.pkg.') from None
+                base, patch = patch, base
+            try:
+                _check_type(extractor, patch, 102)
+            except PackageSetupError as error:
+                if archive:
+                    raise
+                raise PackageSetupError(f'{error} You chose {source.name} as the base game and '
+                                        f'{update_path.name} as the update.') from error
             extracted = staging / 'extracted'
             extracted.mkdir()
             game = extracted / TITLE_ID

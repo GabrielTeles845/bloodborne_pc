@@ -62,8 +62,71 @@ class PackageSetupTests(unittest.TestCase):
         other = self.root / 'CUSA03173 Update v1.09 720p 60fps.pkg'
         base.write_bytes(b'base')
         other.write_bytes(b'wrong')
-        with self.assertRaisesRegex(setup.PackageSetupError, 'plain'):
+        with self.assertRaisesRegex(setup.PackageSetupError, '720p or 1080p'):
             setup.install_game(base, self.root, self.extractor, other)
+
+    def _install(self, base, update=None, kinds=None):
+        """install_game with a fake extractor; kinds maps PKG contents to their --check-type code."""
+        kinds = kinds or {b'base': 101, b'patch': 102}
+
+        def check(_, package, expected):
+            if kinds.get(Path(package).read_bytes()) != expected:
+                raise setup.PackageSetupError(f'{Path(package).name} is not a valid 1.09 update PKG.')
+
+        def extract(_, package, output, folder, status):
+            folder.mkdir()
+            (folder / 'eboot.bin').write_bytes(Path(package).read_bytes())
+
+        with patch.object(setup, '_check_type', side_effect=check), patch.object(setup, '_extract', side_effect=extract):
+            return setup.install_game(base, self.root, self.extractor, update)
+
+    def test_direct_pkg_accepts_a_renamed_plain_update(self):
+        base = self.root / 'CUSA03173.pkg'
+        update = self.root / 'UP9000-CUSA03173_00-BLOODBORNE0000NA-A0109-V0100 (1).pkg'
+        base.write_bytes(b'base')
+        update.write_bytes(b'patch')
+        game = self._install(base, update)
+        self.assertEqual((game / 'eboot.bin').read_bytes(), b'patch')
+
+    def test_direct_pkgs_chosen_the_other_way_round(self):
+        first = self.root / 'CUSA03173 Update v1.09.pkg'
+        second = self.root / 'CUSA03173.pkg'
+        first.write_bytes(b'patch')
+        second.write_bytes(b'base')
+        game = self._install(first, second)
+        self.assertEqual((game / 'eboot.bin').read_bytes(), b'patch')
+
+    def test_direct_pkg_that_is_not_an_update_is_rejected(self):
+        base = self.root / 'CUSA03173.pkg'
+        other = self.root / 'something.pkg'
+        base.write_bytes(b'base')
+        other.write_bytes(b'junk')
+        with self.assertRaisesRegex(setup.PackageSetupError, 'not a valid 1.09 update'):
+            self._install(base, other)
+        self.assertFalse((self.root / 'CUSA03173').exists())
+
+    def test_same_pkg_in_both_steps_is_rejected(self):
+        base = self.root / 'CUSA03173.pkg'
+        base.write_bytes(b'base')
+        with self.assertRaisesRegex(setup.PackageSetupError, 'both steps'):
+            self._install(base, base)
+
+    def test_wrong_files_name_what_was_chosen(self):
+        base = self.root / 'CUSA03173.pkg'
+        other = self.root / 'notes.pkg'
+        base.write_bytes(b'junk')
+        other.write_bytes(b'patch')
+        with self.assertRaisesRegex(setup.PackageSetupError, 'You chose CUSA03173.pkg as the base game and notes.pkg'):
+            self._install(base, other)
+
+    def test_zip_with_a_renamed_plain_update(self):
+        archive = self.root / 'dump.zip'
+        with zipfile.ZipFile(archive, 'w') as out:
+            out.writestr('CUSA03173.pkg', b'base')
+            out.writestr('CUSA03173 Update v1.09 (1).pkg', b'patch')
+            out.writestr('CUSA03173 Update v1.09 720p 60fps.pkg', b'wrong')
+        game = self._install(archive)
+        self.assertEqual((game / 'eboot.bin').read_bytes(), b'patch')
 
 
 if __name__ == '__main__':

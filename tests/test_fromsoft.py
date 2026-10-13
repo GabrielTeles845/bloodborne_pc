@@ -48,6 +48,22 @@ class DcxTests(unittest.TestCase):
         with self.assertRaises(fromsoft.FormatError):
             fromsoft.dcx_decompress(b'BND4' + b'\0' * 100)
 
+    def test_damaged_files_are_format_errors(self):
+        # Issue #8: a cut-short menu.msgbnd.dcx stopped the game with zlib.error.
+        packed = fromsoft.dcx_compress(bytes(range(256)) * 50)
+        with self.assertRaisesRegex(fromsoft.FormatError, 'truncated'):
+            fromsoft.dcx_decompress(packed[:-10])
+        # The header's packed size too small: zlib sees a stream that stops early.
+        short = bytearray(packed)
+        short[0x20:0x24] = (len(packed) - 0x4c - 10).to_bytes(4, 'big')
+        with self.assertRaisesRegex(fromsoft.FormatError, 'damaged'):
+            fromsoft.dcx_decompress(bytes(short))
+        garbled = packed[:0x4c] + b'\xff' * (len(packed) - 0x4c)
+        with self.assertRaisesRegex(fromsoft.FormatError, 'damaged'):
+            fromsoft.dcx_decompress(garbled)
+        with self.assertRaises(fromsoft.FormatError):
+            fromsoft.dcx_decompress(packed[:0x30])
+
     @unittest.skipUnless(GAME, 'BB_TEST_GAME_DIR not set')
     def test_real_header_matches_a_fresh_one(self):
         real = (GAME / 'map/MapStudio/m21_00_00_00.msb.dcx').read_bytes()
