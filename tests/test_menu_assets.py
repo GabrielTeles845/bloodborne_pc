@@ -1,7 +1,9 @@
 from paths import ROOT
 import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -146,6 +148,20 @@ class RealGameTests(unittest.TestCase):
             for group in (m.DIALOG_TEXT, m.SCREEN_DIALOG_TEXT):
                 dialog = m.fmg_read(after.files[after.ids.index(group)])
                 self.assertEqual(dialog[920001].decode('utf-16-le'), rows[920001][0])
+
+    def test_a_damaged_message_bundle_turns_the_menu_off(self):
+        # Issue #8: a cut-short menu.msgbnd.dcx stopped the game instead.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / m.MOVIE).parent.mkdir(parents=True)
+            shutil.copyfile(GAME / m.MOVIE, root / m.MOVIE)
+            relative = Path('msg') / 'engus' / m.MESSAGE_FILE
+            (root / relative).parent.mkdir(parents=True)
+            (root / relative).write_bytes((GAME / relative).read_bytes()[:-100])
+            lines = []
+            self.assertEqual(m.make(root, log=lines.append), {})
+            self.assertEqual(len(lines), 1)
+            self.assertIn('PC menu: off - msg/engus/menu.msgbnd.dcx: DCX file is truncated', lines[0])
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from fromsoft import dcx_compress
 import shader_catalog
 import shader_code
 
@@ -27,6 +28,13 @@ class ExtractionTests(unittest.TestCase):
         blob += copy + footer(0x1234, len(copy), shader_code.COPY_SHADER)
         found = list(shader_code.programs(blob))
         self.assertEqual(found, [(0x1234, 5, code), (0x1234, shader_code.COPY_SHADER, copy)])
+
+    def test_a_damaged_archive_is_skipped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            shaders = Path(folder) / 'dvdroot_ps4' / 'shader'
+            shaders.mkdir(parents=True)
+            (shaders / 'broken.shaderbnd.dcx').write_bytes(dcx_compress(b'x' * 1000)[:-5])
+            self.assertEqual(shader_code.collect(folder, None), {})
 
 
 class CatalogTests(unittest.TestCase):
