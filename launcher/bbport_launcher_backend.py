@@ -20,6 +20,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+import bbport_coop as coop
 import bbport_launcher_win as core
 import bbport_startup
 from bbport_pkg_setup import PackageSetupError, install_game
@@ -102,6 +103,13 @@ FIELDS = {
         row('online_password', 'Online password', 'password'),
         row('online_upnp', 'UPnP', 'toggle'),
     ],
+    'Co-op': [
+        row('coop_name', 'Co-op name', hint='Your name in co-op, 3-16 letters, numbers, - or _.'),
+        row('coop_password', 'Co-op password', 'password',
+            hint="For your co-op account on the host's server. Use one you use nowhere else."),
+        row('coop_invite', 'Host invite code',
+            hint='Paste the BBCOOP- code your host sent you. Leave empty when you host.'),
+    ],
     'Mods': [
         row('mods_enabled', 'Enable mods', 'toggle'),
         row('mods_dir', 'Mods folder', 'folder'),
@@ -149,6 +157,11 @@ SETTINGS_SECTIONS = {
     'Online': [
         ('Play online', ['online', 'online_npid', 'online_password']),
         ('Connection details', ['online_community', 'online_server', 'online_webapi', 'online_upnp']),
+    ],
+    'Co-op': [
+        ('Seamless co-op', ['coop_name', 'coop_password']),
+        ('Host a session', []),
+        ('Join a host', ['coop_invite']),
     ],
     'Mods & Patches': [
         ('Installed mods', ['mods_enabled', 'mods_dir']),
@@ -203,6 +216,9 @@ class LauncherBackend(QObject):
     setupRunningChanged = Signal()
     setupCompleted = Signal(str)
     setupFailed = Signal(str)
+    coopChanged = Signal()
+    _coopDone = Signal(str)
+    _coopProgress = Signal(str)
     gameStarted = Signal()
     gameFinished = Signal(int, bool)  # exit code, whether the game got as far as running
     presetApplied = Signal()
@@ -232,6 +248,14 @@ class LauncherBackend(QObject):
         self.connectionResult.connect(self._show_connection_result)
         self.setupCompleted.connect(self._complete_game_setup)
         self.setupFailed.connect(self._fail_game_setup)
+        # Seamless co-op (bbport_coop): the servers this launcher hosts, and the last message.
+        self._coop_host = coop.Host()
+        self._coop_busy = False
+        self._coop_status = ''
+        self._coop_invite = ''
+        self._coop_launch_env = None
+        self._coopDone.connect(self._coop_finished)
+        self._coopProgress.connect(self._coop_show_progress)
         self.refresh_addons()
         if self._route['mode'] != 'direct':
             self.start_background_checks()
@@ -709,7 +733,7 @@ class LauncherBackend(QObject):
         self.logChanged.emit()
 
     @Slot()
-    def play(self):
+    def play(self, env=None):
         if self._setup_running:
             self._set_notice('Wait for the game files to finish installing.')
             return
@@ -730,7 +754,7 @@ class LauncherBackend(QObject):
         self._game_started = False
         try:
             self.process = subprocess.Popen(core.run_command(), cwd=core.PORT_DIR,
-                                            env=core.game_environment(self.app), stdin=subprocess.DEVNULL,
+                                            env=env or core.game_environment(self.app), stdin=subprocess.DEVNULL,
                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                             creationflags=core.NO_WINDOW)
         except OSError as error:
@@ -1062,6 +1086,169 @@ class LauncherBackend(QObject):
         if restart:
             os.startfile('steam://open/games')
         self._set_notice('Bloodborne was added to your Steam library.')
+
+
+    # --- Seamless co-op (experimental): BBSC, hosted on one player's PC over Tailscale -------------
+
+    @Property(str, notify=coopChanged)
+    def coopStatus(self):
+        if self._coop_status:
+            return self._coop_status
+        if not (coop.installed('client') and coop.installed('server')):
+            return 'Not set up yet: Set up co-op downloads BBSC (about 40 MB) from its GitHub release.'
+        if self._coop_host.running:
+            return f'Hosting on {self._coop_host.address}. Send your friend the invite code.'
+        return "Ready. Host a session, or paste a host's invite code and play."
+
+    @Property(str, notify=coopChanged)
+    def coopInvite(self):
+        return self._coop_invite
+
+    @Property(bool, notify=coopChanged)
+    def coopHosting(self):
+        return self._coop_host.running
+
+    @Property(bool, notify=coopChanged)
+    def coopBusy(self):
+        return self._coop_busy
+
+    def _coop_run(self, message, work):
+        if self._coop_busy:
+            return
+        self._coop_busy = True
+        self._coop_status = message
+        self.coopChanged.emit()
+
+        def run():
+            try:
+                result = work()
+            except (coop.CoopError, OSError, ValueError) as error:
+                result = f'Co-op: {error}'
+            except Exception as error:  # download and process errors: report, never crash the UI
+                result = f'Co-op: {type(error).__name__}: {error}'
+            self._coopDone.emit(result or '')
+
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str)
+    def _coop_finished(self, message):
+        self._coop_busy = False
+        self._coop_status = message
+        self.coopChanged.emit()
+        env, self._coop_launch_env = self._coop_launch_env, None
+        if env:
+            self.play(env)
+
+    def _coop_progress(self, text):
+        self._coopProgress.emit(text)  # from the worker thread: queued to the UI thread
+
+    @Slot(str)
+    def _coop_show_progress(self, text):
+        self._coop_status = text
+        self.coopChanged.emit()
+
+    def _coop_ensure_packages(self):
+        for kind in ('client', 'server'):
+            if not coop.installed(kind):
+                coop.download(kind, progress=self._coop_progress)
+
+    def _coop_game_exe(self):
+        for candidate in (core.PORT_DIR / 'bin' / 'bb-probe.exe', core.PORT_DIR / 'out' / 'bb-probe.exe'):
+            if candidate.is_file():
+                return candidate
+        raise coop.CoopError('bb-probe.exe is missing from this install.')
+
+    def _coop_account(self):
+        return self.app.get('coop_name', '').strip(), self.app.get('coop_password', '')
+
+    @Slot()
+    def openCoopHelp(self):
+        webbrowser.open(coop.RELEASES)
+
+    @Slot()
+    def coopSetup(self):
+        def work():
+            for kind in ('client', 'server'):
+                coop.download(kind, progress=self._coop_progress)
+            return 'Co-op is set up. Host a session, or paste an invite code and play.'
+        self._coop_run('Downloading BBSC…', work)
+
+    @Slot()
+    def coopStartHosting(self):
+        name, password = self._coop_account()
+        if not name or not password:
+            self._coop_status = 'Fill in your co-op name and password first; they make your account on your server.'
+            self.coopChanged.emit()
+            return
+
+        def work():
+            self._coop_ensure_packages()
+            address, network = coop.host_address()
+            if not address:
+                raise coop.CoopError('No network found. Connect Tailscale, then try again.')
+            game = self._coop_game_exe()
+            if not coop.setup_done(game):
+                self._coop_progress('First time: say Yes to the Windows prompt (firewall and C++ runtime)…')
+                coop.run_setup(game)
+            key = coop.registration_key()
+            self._coop_host.start(address)
+            how = coop.create_account(address, key, name, password)
+            self._coop_invite = coop.make_invite(address, key)
+            return (f'Hosting on {network} ({address}); your account is {how}. Copy the invite code '
+                    'for your friend, then press Play co-op. Keep this launcher open while you play.')
+        self._coop_run('Starting the co-op servers…', work)
+
+    @Slot()
+    def coopStopHosting(self):
+        self._coop_host.stop()
+        self._coop_invite = ''
+        self._coop_status = 'Stopped hosting.'
+        self.coopChanged.emit()
+
+    @Slot()
+    def coopCopyInvite(self):
+        if self._coop_invite:
+            QGuiApplication.clipboard().setText(self._coop_invite)
+            self._coop_status = 'Invite code copied. Send it to your friend in a private message.'
+            self.coopChanged.emit()
+
+    @Slot()
+    def coopPlay(self):
+        if self.process or self._coop_busy:
+            return
+        name, password = self._coop_account()
+        if not name or not password:
+            self._coop_status = 'Fill in your co-op name and password first.'
+            self.coopChanged.emit()
+            return
+        if self._coop_host.running:
+            address, key = self._coop_host.address, coop.registration_key()
+        else:
+            try:
+                address, key = coop.read_invite(self.app.get('coop_invite', ''))
+            except coop.CoopError as error:
+                self._coop_status = f'{error}. Or host a session yourself.'
+                self.coopChanged.emit()
+                return
+        self._write()
+
+        def work():
+            self._coop_ensure_packages()
+            game = self._coop_game_exe()
+            if not coop.setup_done(game):
+                self._coop_progress('First time: say Yes to the Windows prompt (firewall)…')
+                coop.run_setup(game)
+            coop.create_account(address, key, name, password)
+            backup = coop.backup_saves(self.app.get('user_dir') or core.DATA_DIR / 'user')
+            self._coop_launch_env = coop.co_op_environment(core.game_environment(self.app), address,
+                                                           name, password, game)
+            where = f' Saves backed up to {backup}.' if backup else ''
+            return f'Starting co-op with {address}. Host: ring the Hunt Bell. Guest: ring the Kin Bell.{where}'
+        self._coop_run('Getting co-op ready…', work)
+
+    def shutdown_coop(self):
+        """The launcher is closing: hosted servers stop with it."""
+        self._coop_host.stop()
 
     @Slot()
     def openShadNetRegistration(self):

@@ -17,6 +17,7 @@ Item {
         {name: "Controls", icon: "controls", tile: "tile-controls", detail: "Prompts, mouse & keyboard"},
         {name: "Game & Saves", icon: "folder", tile: "tile-game-and-saves", detail: "Game files, saves & language"},
         {name: "Online", icon: "online", tile: "tile-online", detail: "Account & connection"},
+        {name: "Co-op", icon: "online", tile: "tile-online", detail: "Seamless co-op (experimental)"},
         {name: "Mods & Patches", icon: "puzzle", tile: "tile-mods-and-patches", detail: "Mods, enhancements & tweaks"},
         {name: "System", icon: "system", tile: "tile-system", detail: "Startup, updates & diagnostics"}
     ]
@@ -264,6 +265,20 @@ Item {
                         GlassButton { text: "Test connection"; width: 148; height: 38; onClicked: launcher.testConnection() }
                     }
                     Note { visible: is("Online", "Play online"); text: "Enter an account ID, not an email address. Test connection checks that the servers answer, not your sign-in." }
+                    Note { visible: is("Co-op", "Seamless co-op"); text: "Experimental. Seamless co-op is BBSC by CLS_AMG (Bloodborne Seamless Co-op 0.0.1): one session through deaths, lamps, areas and bosses, each hunter keeping their own character. One of you hosts the server on their PC; both need Tailscale (tailscale.com) signed in to the same tailnet. Your saves are backed up before every session. Normal play and online are unchanged." }
+                    Note { visible: is("Co-op", "Seamless co-op") || is("Co-op", "Host a session") || is("Co-op", "Join a host"); text: launcher.coopStatus }
+                    Row { visible: is("Co-op", "Seamless co-op"); spacing: 10
+                        GlassButton { text: "Set up co-op"; width: 150; height: 38; enabled: !launcher.coopBusy; onClicked: launcher.coopSetup() }
+                        GlassButton { text: "Play co-op"; width: 140; height: 38; enabled: !launcher.coopBusy && !launcher.running; onClicked: launcher.coopPlay() }
+                        GlassButton { text: "About BBSC"; width: 130; height: 38; onClicked: launcher.openCoopHelp() }
+                    }
+                    Note { visible: is("Co-op", "Host a session"); text: "Starts BBSC's two servers on this PC (the first time, Windows asks once to open the firewall for Tailscale and your home network only). Keep this launcher open while you play; closing it stops the servers." }
+                    Row { visible: is("Co-op", "Host a session"); spacing: 10
+                        GlassButton { text: launcher.coopHosting ? "Restart hosting" : "Start hosting"; width: 160; height: 38; enabled: !launcher.coopBusy; onClicked: launcher.coopStartHosting() }
+                        GlassButton { text: "Copy invite code"; width: 160; height: 38; enabled: launcher.coopInvite !== ""; onClicked: launcher.coopCopyInvite() }
+                        GlassButton { text: "Stop hosting"; width: 140; height: 38; enabled: launcher.coopHosting; onClicked: launcher.coopStopHosting() }
+                    }
+                    Note { visible: is("Co-op", "Join a host"); text: "Paste the invite code from your host, then Play co-op. The host rings the Hunt Bell; you ring the Kin Bell." }
                     Note { visible: is("Mods & Patches", "Gameplay patches"); text: "Optional gameplay changes. All are off by default and apply the next time the game starts." }
                     Repeater {
                         model: is("Mods & Patches", "Installed mods") ? launcher.contentMods : []
