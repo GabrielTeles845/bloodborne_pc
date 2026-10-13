@@ -105,6 +105,20 @@ class PackageSetupTests(unittest.TestCase):
             self._install(base, other)
         self.assertFalse((self.root / 'CUSA03173').exists())
 
+    def test_same_pkg_in_both_steps_is_rejected(self):
+        base = self.root / 'CUSA03173.pkg'
+        base.write_bytes(b'base')
+        with self.assertRaisesRegex(setup.PackageSetupError, 'both steps'):
+            self._install(base, base)
+
+    def test_wrong_files_name_what_was_chosen(self):
+        base = self.root / 'CUSA03173.pkg'
+        other = self.root / 'notes.pkg'
+        base.write_bytes(b'junk')
+        other.write_bytes(b'patch')
+        with self.assertRaisesRegex(setup.PackageSetupError, 'You chose CUSA03173.pkg as the base game and notes.pkg'):
+            self._install(base, other)
+
     def test_zip_with_a_renamed_plain_update(self):
         archive = self.root / 'dump.zip'
         with zipfile.ZipFile(archive, 'w') as out:

@@ -116,6 +116,9 @@ def install_game(source, destination_parent, extractor, update=None, status=lamb
     update_path = Path(update).resolve() if update else None
     if source.suffix.casefold() == '.pkg' and (not update_path or not update_path.is_file()):
         raise PackageSetupError('Choose the plain 1.09 update PKG too.')
+    if source.suffix.casefold() == '.pkg' and update_path == source:
+        raise PackageSetupError(f'{source.name} was chosen in both steps. Choose the base game PKG '
+                                'first, then the plain 1.09 update PKG.')
     # Only the name can tell the 60fps variants from the plain update (both are 1.09 update PKGs);
     # any other name is accepted, and the extractor checks the type.
     for chosen in (source, update_path) if source.suffix.casefold() == '.pkg' else ():
@@ -154,10 +157,20 @@ def install_game(source, destination_parent, extractor, update=None, status=lamb
                 _check_type(extractor, base, 101)
             except PackageSetupError:
                 # The two PKGs chosen the other way round: swap them.
-                if archive or not (_is_type(extractor, base, 102) and _is_type(extractor, patch, 101)):
+                if archive:
                     raise
+                if not (_is_type(extractor, base, 102) and _is_type(extractor, patch, 101)):
+                    raise PackageSetupError(f'{base.name} is not a valid base game PKG. You chose {base.name} '
+                                            f'as the base game and {patch.name} as the update; the base game '
+                                            'is the large CUSA03173.pkg.') from None
                 base, patch = patch, base
-            _check_type(extractor, patch, 102)
+            try:
+                _check_type(extractor, patch, 102)
+            except PackageSetupError as error:
+                if archive:
+                    raise
+                raise PackageSetupError(f'{error} You chose {source.name} as the base game and '
+                                        f'{update_path.name} as the update.') from error
             extracted = staging / 'extracted'
             extracted.mkdir()
             game = extracted / TITLE_ID

@@ -541,18 +541,18 @@ class LauncherBackend(QObject):
             self._set_notice('Close the game or wait for the current setup to finish.')
             return
         source, _ = QFileDialog.getOpenFileName(
-            None, 'Choose cusa-03173.zip or CUSA03173.pkg', str(Path.home() / 'Downloads'),
+            None, 'Step 1: choose the game ZIP or the BASE game PKG (CUSA03173.pkg, not the update)', str(Path.home() / 'Downloads'),
             'Game archive or base PKG (*.zip *.pkg)')
         if not source:
             return
         update = None
         if Path(source).suffix.casefold() == '.pkg':
             update, _ = QFileDialog.getOpenFileName(
-                None, 'Choose the plain 1.09 update PKG (not 720p or 1080p)', str(Path(source).parent), 'Update PKG (*.pkg)')
+                None, 'Step 2: choose the plain 1.09 UPDATE PKG (not 720p or 1080p)', str(Path(source).parent), 'Update PKG (*.pkg)')
             if not update:
                 return
         parent = QFileDialog.getExistingDirectory(
-            None, 'Choose where to create the CUSA03173 game folder', str(Path.home()))
+            None, 'Last step: choose where to create the CUSA03173 game folder', str(Path.home()))
         if not parent:
             return
         target = Path(parent) / 'CUSA03173'
