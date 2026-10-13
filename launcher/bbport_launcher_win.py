@@ -186,7 +186,7 @@ INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_inve
 INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'model_lod': '0',
                 'live_resolution': 'auto', 'mouse_camera': '1', 'mouse_sensitivity': '10', 'mouse_menu': '1',
-                'mouse_invert_y': '0',
+                'mouse_invert_y': '0', 'move_smoothing': '60',
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
@@ -239,6 +239,10 @@ FRAME_CAPS = [('', ('Auto: display refresh, max 120 (recommended)', 'Авто: �
               ('240', ('240  ⚠',)), ('0', ('No limit  ⚠', 'Без ограничения  ⚠'))]
 # Mouse camera sensitivity in tenths (bbport.ini mouse_sensitivity; 10 = 900 counts per radian).
 MOUSE_SPEEDS = [(str(v), (f'{v / 10:.1f}x',)) for v in (5, 7, 10, 13, 16, 20, 30)]
+# Keyboard movement smoothing (bbport.ini move_smoothing, issue #4): how far the stick swings
+# towards a new WASD direction per 1/60 s, in percent of a full push; 100 is off.
+MOVE_SMOOTHING = [('100', ('Off', 'Выкл.')), ('80', ('Light', 'Слабое')),
+                  ('60', ('Medium (default)', 'Среднее (по умолчанию)')), ('35', ('Strong', 'Сильное'))]
 FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
 
 # Graphics presets, after Lantern Launcher's idea (Low to Ultra, recommended from the GPU) but

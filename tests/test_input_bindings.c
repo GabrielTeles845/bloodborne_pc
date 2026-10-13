@@ -32,13 +32,29 @@ int main(void) {
     o = press(NULL, 1u << 1);
     assert(o.buttons == 0x100);                     /* right mouse: L2 (firearm) */
     o = press("W", 0);
-    assert(o.ly == 1 && o.lx < 0);                  /* forward: a full push up */
+    assert(o.ly == 1 && o.lx == 128);               /* forward: a full push up */
+    press(NULL, 0);                                 /* stopped: the next move starts at once */
     memset(keys, 0, sizeof(keys));
     keys[SDL_GetScancodeFromName("W")] = keys[SDL_GetScancodeFromName("D")] = keys[SDL_GetScancodeFromName("Left Alt")] = true;
     bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
     assert(o.lx > 128 && o.lx < 170 && o.ly < 128 && o.ly > 86);  /* a walk, diagonally */
     o = press("G", 0);
     assert(o.buttons == 0x100000 && o.touch_side == 0);  /* gestures: the touchpad's left */
+
+    /* Movement smoothing (issue #4): W, then W+A swings the stick over a few frames. */
+    press(NULL, 0);
+    o = press("W", 0);
+    assert(o.ly == 1 && o.lx == 128);               /* starting to move: at once */
+    memset(keys, 0, sizeof(keys));
+    keys[SDL_GetScancodeFromName("W")] = keys[SDL_GetScancodeFromName("A")] = true;
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
+    assert(o.lx > 100);                             /* no time passed: still almost straight */
+    SDL_Delay(20);
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
+    assert(o.lx > 1 && o.lx < 100);                 /* on its way */
+    SDL_Delay(50);
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
+    assert(o.lx == 1 && o.ly == 1);                 /* there */
 
     /* key_firearm=X, WheelUp: the wheel's notch fires; right mouse is free then. */
     assert(bb_bindings_parse("firearm", "X, WheelUp"));
@@ -56,13 +72,19 @@ int main(void) {
     /* An ini file: only key_ lines are read. */
     const char *path = "test_input_bindings.ini";
     FILE *f = fopen(path, "w");
-    fputs("upscaler=dlss\nkey_roll = Left Ctrl\n# key_attack=Mouse2\n", f);
+    fputs("upscaler=dlss\nkey_roll = Left Ctrl\n# key_attack=Mouse2\nmove_smoothing=100\n", f);
     fclose(f);
     bb_bindings_load(path);
     remove(path);
     o = press("Left Ctrl", 0);
     assert(o.buttons == 0x2000);                    /* roll moved to Left Ctrl, L3 gave it up */
     assert(bb_binding_mouse(BIND_ATTACK) == 1);     /* the commented line changed nothing */
+    press(NULL, 0);
+    press("W", 0);
+    memset(keys, 0, sizeof(keys));
+    keys[SDL_GetScancodeFromName("W")] = keys[SDL_GetScancodeFromName("A")] = true;
+    bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
+    assert(o.lx == 1);                              /* move_smoothing=100: off, at once */
     puts("input bindings: ok");
     return 0;
 }

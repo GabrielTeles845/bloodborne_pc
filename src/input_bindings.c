@@ -55,6 +55,11 @@ static const BindInfo INFO[BIND_COUNT] = {
 };
 
 static int g_key[BIND_COUNT], g_mouse[BIND_COUNT];
+/* Movement smoothing: travel per 1/60 s as a share of a full push (1: off), and the stick. */
+#define MOVE_SMOOTHING_DEFAULT 0.6f
+static float g_move_step = MOVE_SMOOTHING_DEFAULT, g_move_x, g_move_y;
+static bool g_move_active;
+static uint64_t g_move_time;
 
 const BindInfo *bb_bind_info(int action) { return action >= 0 && action < BIND_COUNT ? &INFO[action] : NULL; }
 int bb_binding_key(int action) { return action >= 0 && action < BIND_COUNT ? g_key[action] : 0; }
@@ -109,11 +114,17 @@ bool bb_bindings_parse(const char *action, const char *value) {
 
 void bb_bindings_load(const char *ini_path) {
     defaults();
+    g_move_step = MOVE_SMOOTHING_DEFAULT;
     FILE *file = ini_path ? fopen(ini_path, "r") : NULL;
     if (!file) return;
     char line[256];
     while (fgets(line, sizeof(line), file)) {
         char *eq = strchr(line, '=');
+        if (eq && !strncmp(line, "move_smoothing", 14)) {
+            const int percent = atoi(eq + 1);
+            g_move_step = percent > 0 && percent < 100 ? (float)percent / 100.0f : 1.0f;
+            continue;
+        }
         if (line[0] == '#' || !eq || strncmp(line, "key_", 4)) continue;
         *eq = 0;
         char *name = line + 4, *value = eq + 1;
@@ -155,10 +166,40 @@ void bb_bindings_apply(const bool *keys, int nkeys, uint32_t mouse, BindOutput *
      * a gentle push, a diagonal's two axes shortened so its reach is the same. Opposite keys
      * cancel. */
     const int x = held[BIND_MOVE_R] - held[BIND_MOVE_L], y = held[BIND_MOVE_B] - held[BIND_MOVE_F];
-    if (x || y) {
-        int reach = STICK_HIGH - STICK_REST;
-        if (held[BIND_WALK]) reach = (int)lroundf((float)reach * WALK_PUSH / (x && y ? sqrtf(2.0f) : 1.0f));
-        if (x) out->lx = STICK_REST + x * reach;
-        if (y) out->ly = STICK_REST + y * reach;
+    if (!x && !y) {
+        g_move_active = false;
+        return;
     }
+    float reach = (float)(STICK_HIGH - STICK_REST);
+    if (held[BIND_WALK]) reach = reach * WALK_PUSH / (x && y ? sqrtf(2.0f) : 1.0f);
+    const float tx = (float)x * reach, ty = (float)y * reach;
+    /* Movement smoothing (Jgamrot/bloodborne_pc#4, after MKB2Controller's setting): a key
+     * pressed or released while moving swings the stick to its new direction over a few frames
+     * instead of at once - holding W, then A, otherwise snapped the stick 45 degrees in a frame
+     * and the character stopped to turn. Starting to move and letting go stay immediate.
+     * bbport.ini move_smoothing: the share of a full push the stick travels per 1/60 s. */
+    const uint64_t now = SDL_GetTicksNS();
+    if (!g_move_active || g_move_step >= 1.0f) {
+        g_move_x = tx;
+        g_move_y = ty;
+    } else {
+        float dt = (float)(now - g_move_time) / 1e9f;
+        dt = dt < 0.0f ? 0.0f : dt > 0.1f ? 0.1f : dt;
+        const float most = g_move_step * (float)(STICK_HIGH - STICK_REST) * dt * 60.0f;
+        const float dx = tx - g_move_x, dy = ty - g_move_y, dist = sqrtf(dx * dx + dy * dy);
+        if (dist <= most) {
+            g_move_x = tx;
+            g_move_y = ty;
+        } else {
+            g_move_x += dx * most / dist;
+            g_move_y += dy * most / dist;
+        }
+    }
+    g_move_active = true;
+    g_move_time = now;
+    out->any = true;
+    out->lx = STICK_REST + (int)lroundf(g_move_x);
+    out->ly = STICK_REST + (int)lroundf(g_move_y);
+    if (out->lx > STICK_HIGH) out->lx = STICK_HIGH;
+    if (out->ly > STICK_HIGH) out->ly = STICK_HIGH;
 }

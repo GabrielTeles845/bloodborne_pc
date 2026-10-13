@@ -84,6 +84,8 @@ FIELDS = {
         row('mouse_menu', "Mouse pointer in the game's menus (hover, click, right-click back)", 'toggle'),
         row('mouse_sensitivity', 'Mouse sensitivity', 'choice', core.MOUSE_SPEEDS),
         row('mouse_invert_y', 'Invert mouse Y', 'toggle'),
+        row('move_smoothing', 'Keyboard movement smoothing (WASD direction changes)', 'choice',
+            core.MOVE_SMOOTHING),
         row('debug_camera', 'Free camera', 'toggle'),
         row('debug_menu', 'Debug menu', 'toggle'),
     ],
@@ -137,6 +139,7 @@ SETTINGS_SECTIONS = {
     'Controls': [
         ('Button prompts', []),
         ('Mouse', ['mouse_camera', 'mouse_menu', 'mouse_sensitivity', 'mouse_invert_y']),
+        ('Keyboard', ['move_smoothing']),
     ],
     'Game & Saves': [
         ('Game files', ['game_dir', 'dlc_dir']),
