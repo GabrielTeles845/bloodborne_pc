@@ -555,6 +555,12 @@ void ShadNetClient::DispatchPacket(PacketType type, u16 cmd_raw, u64 pkt_id,
         case CommandType::GetServerFeatures:
             HandleServerFeaturesReply(payload);
             break;
+        case CommandType::SetClientVersion:
+            // bbport: the acknowledgement of ReportClientVersion; a rejection comes as
+            // notification 19 instead.
+            LOG_DEBUG(ShadNet, "Client version acknowledged (error={})",
+                      payload.empty() ? -1 : int(payload[0]));
+            break;
         default:
             if (onAsyncReply) {
                 // Every reply body starts with an ErrorType byte.
