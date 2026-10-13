@@ -548,7 +548,7 @@ class LauncherBackend(QObject):
         update = None
         if Path(source).suffix.casefold() == '.pkg':
             update, _ = QFileDialog.getOpenFileName(
-                None, 'Choose CUSA03173 Update v1.09.pkg', str(Path(source).parent), 'Update PKG (*.pkg)')
+                None, 'Choose the plain 1.09 update PKG (not 720p or 1080p)', str(Path(source).parent), 'Update PKG (*.pkg)')
             if not update:
                 return
         parent = QFileDialog.getExistingDirectory(
