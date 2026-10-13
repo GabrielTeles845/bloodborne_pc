@@ -454,9 +454,19 @@ static int host_fd_written(int fd) {
 /* The CRT reads and writes at most INT_MAX bytes per call. */
 static ssize_t host_read(int h,void *buffer,uint64_t size) { return read(h,buffer,(unsigned)(size>0x7ffff000 ? 0x7ffff000 : size)); }
 static ssize_t host_write(int h,const void *buffer,uint64_t size) { return write(h,buffer,(unsigned)(size>0x7ffff000 ? 0x7ffff000 : size)); }
+/* pread/pwrite move the descriptor's offset and put it back (compat_win.c). A read, write or
+ * lseek from another thread in between used or lost the wrong offset: the game reads its
+ * archives both ways, and map pieces and their collision were loaded from the wrong place
+ * (issue #6). Everything that uses the offset holds the descriptor's lock; Windows runs I/O on
+ * a synchronous handle one call at a time anyway. */
+static SRWLOCK offset_locks[MAX_FILES];
+static void offset_lock(int fd) { if (fd>=3 && fd<MAX_FILES) AcquireSRWLockExclusive(&offset_locks[fd]); }
+static void offset_unlock(int fd) { if (fd>=3 && fd<MAX_FILES) ReleaseSRWLockExclusive(&offset_locks[fd]); }
 #else
 #define host_read read
 #define host_write write
+static void offset_lock(int fd) { (void)fd; }
+static void offset_unlock(int fd) { (void)fd; }
 #endif
 /* Pages of the destination may be write-protected for GPU tracking: the kernel's copy then
  * fails with EFAULT instead of faulting to our handler. A user-mode write to each page first
@@ -473,8 +483,11 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
+    offset_lock(fd);
     ssize_t n=host_read(h,buffer,size);
-    if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
+    int e=errno;
+    offset_unlock(fd);
+    if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,e); return -e; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
 }
@@ -482,24 +495,33 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
+    offset_lock(fd);
     ssize_t n=pread(h,buffer,size,offset);
-    if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
+    int e=errno;
+    offset_unlock(fd);
+    if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,e); return -e; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
 }
 static int64_t do_write(int fd,const void *buffer,uint64_t size) {
     int h=host_fd_written(fd);
     if (h<0) return -EBADF;
+    offset_lock(fd);
     ssize_t n=host_write(h,buffer,size);
-    if (n<0) return -errno;
+    int e=errno;
+    offset_unlock(fd);
+    if (n<0) return -e;
     __atomic_add_fetch(&writes,1,__ATOMIC_RELAXED);
     return n;
 }
 static int64_t do_pwrite(int fd,const void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd_written(fd);
     if (h<0) return -EBADF;
+    offset_lock(fd);
     ssize_t n=pwrite(h,buffer,size,offset);
-    return n<0 ? -errno : n;
+    int e=errno;
+    offset_unlock(fd);
+    return n<0 ? -e : n;
 }
 static int64_t do_lseek(int fd,int64_t offset,int whence) {
     File *f=get(fd);
@@ -510,8 +532,11 @@ static int64_t do_lseek(int fd,int64_t offset,int whence) {
         if (whence==0 && offset>=0) { f->position=(size_t)offset; return offset; }
         return -EINVAL;
     }
+    offset_lock(fd);
     int64_t r=host_lseek(f->host,offset,whence);
-    return r<0 ? -errno : r;
+    int e=errno;
+    offset_unlock(fd);
+    return r<0 ? -e : r;
 }
 static int64_t do_fstat(int fd,GuestStat *out) {
     int h=host_fd(fd);
