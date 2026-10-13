@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <chrono>
+#include <cstdio>
 #include <stdexcept>
 #include "common/serdes.h"
 #include "core/emulator_settings.h"
@@ -9,16 +11,25 @@
 #include "video_core/cache_storage.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
+#include "video_core/renderer_vulkan/vk_shader_prebuild.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "common/hash.h"
+
+void SetWindowStatus(const std::string& status); // gpu/shim/window.cpp: the title status
 
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 7u; // bbport: interpolated integer fix (Pascal)
-static constexpr u32 ShaderMetaVersion = 7u; // bbport: ImageResource::needs_native
+static constexpr u32 ShaderMetaVersion = 8u; // bbport: pre-build (attribute V#s, tess constants)
 static constexpr u32 PipelineKeyVersion = 5u; // bbport: Info layout (ImageResource::needs_native)
 } // namespace Serialization
 
 namespace Vulkan {
+
+
+// bbport shader pre-build: permutations the warm-up translated from the game files this start,
+// and those it could not (their pipelines compile when first drawn, as before).
+static u32 prebuild_translated = 0, prebuild_failed = 0, prebuild_relaid = 0;
 
 void RegisterPipelineData(const ComputePipelineKey& key,
                           ComputePipeline::SerializationSupport& sdata) {
@@ -94,7 +105,7 @@ void RegisterShaderBinary(std::vector<u32>&& spv, u64 pgm_hash, size_t perm_idx)
 
 bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
                     std::optional<Shader::Gcn::FetchShaderData>& fetch_shader_data,
-                    Shader::StageSpecialization& spec, size_t& perm_idx) {
+                    Shader::StageSpecialization& spec, size_t& perm_idx, bool* spirv_current) {
     Serialization::Reader meta{ar};
 
     u32 meta_version{};
@@ -105,7 +116,9 @@ bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
 
     u32 binary_version{};
     meta.Read(binary_version);
-    if (binary_version != Serialization::ShaderBinaryVersion) {
+    if (spirv_current) {
+        *spirv_current = binary_version == Serialization::ShaderBinaryVersion;
+    } else if (binary_version != Serialization::ShaderBinaryVersion) {
         return false;
     }
 
@@ -117,9 +130,14 @@ bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
     info.Deserialize(ar);
 
     // Motion vertex shaders embed session-local buffer device addresses. They must be
-    // recompiled for the current allocation, never loaded from a previous process.
+    // recompiled for the current allocation, never loaded from a previous process. bbport
+    // shader pre-build: with the game files' code they are translated for this session instead
+    // (spirv_current false: their stored SPIR-V is never read, nor their translation stored).
     if (info.hw_stage == Shader::HwStage::Vertex && spec.runtime_info.hw.vs.motion_vectors) {
-        return false;
+        if (!spirv_current || Shader::MotionVectors::positions_address == 0) {
+            return false;
+        }
+        *spirv_current = false;
     }
 
     fetch_shader_data = spec.fetch_shader_data;
@@ -260,7 +278,11 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     Shader::StageSpecialization spec{};
     spec.info = &program->info;
     size_t perm_idx{};
-    if (!LoadShaderMeta(ar, program->info, sel.fetch_shader, spec, perm_idx)) {
+    // bbport shader pre-build: with the game files' code available, a permutation whose SPIR-V
+    // is missing or from another translator version is translated again instead of dropped.
+    bool spirv_current = true;
+    if (!LoadShaderMeta(ar, program->info, sel.fetch_shader, spec, perm_idx,
+                        Prebuild::Available() ? &spirv_current : nullptr)) {
         return false;
     }
 
@@ -272,10 +294,46 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     // opening and allocating its SPIR-V binary again for every repeated stage.
     const auto compile = [&] {
         std::vector<u32> spv;
-        Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary,
-                                           fmt::format("{:#018x}_{}", program->info.pgm_hash,
-                                                       perm_idx),
-                                           spv);
+        const auto spv_name = fmt::format("{:#018x}_{}", program->info.pgm_hash, perm_idx);
+        if (spirv_current &&
+            (!Prebuild::Available() ||
+             Storage::DataBase::Instance().Has(Storage::BlobType::ShaderBinary, spv_name))) {
+            Storage::DataBase::Instance().Load(Storage::BlobType::ShaderBinary, spv_name, spv);
+        }
+        if (spv.empty() && Prebuild::Available()) {
+            Shader::Info translated{};
+            spv = Prebuild::Translate(program->info, sel.fetch_shader, spec, perm_idx, profile,
+                                      &translated);
+            if (spv.empty()) {
+                ++prebuild_failed;
+                return vk::ShaderModule{};
+            }
+            ++prebuild_translated;
+            // A record from another system (the shipped catalog) may lay the resources out
+            // differently from this GPU's translation: then the pipeline binds them as
+            // translated here. Otherwise the stored layout stays - replacing it with an equal
+            // one made the game's permutation lookup miss (45 recompiles at world load).
+            const auto& stored = program->info;
+            const bool same_layout = translated.buffers.size() == stored.buffers.size() &&
+                                     translated.images.size() == stored.images.size() &&
+                                     translated.samplers.size() == stored.samplers.size() &&
+                                     translated.fmasks.size() == stored.fmasks.size() &&
+                                     translated.ud_mask.mask == stored.ud_mask.mask;
+            if (!same_layout) {
+                ++prebuild_relaid;
+                translated.user_data = program->info.user_data;
+                program->info = std::move(translated);
+            }
+            const bool session_local = program->info.hw_stage == Shader::HwStage::Vertex &&
+                                       spec.runtime_info.hw.vs.motion_vectors;
+            if (!session_local) {
+                RegisterShaderBinary(std::vector<u32>(spv), program->info.pgm_hash, perm_idx);
+            }
+            if (!session_local && (!spirv_current || !same_layout)) { // layout, SPIR-V version
+                RegisterShaderMeta(program->info, sel.fetch_shader, spec,
+                                   HashCombine(program->info.pgm_hash, perm_idx), perm_idx);
+            }
+        }
         if (spv.size() < 5 || spv[0] != 0x07230203u) {
             if (!spv.empty())
                 throw std::runtime_error{"damaged SPIR-V in the shader cache"};
@@ -329,6 +387,17 @@ void PipelineCache::WarmUp() {
     }
 
     Storage::DataBase::Instance().Open();
+    const auto warmup_start = std::chrono::steady_clock::now();
+    // bbport shader pre-build: with the game files' code (BB_SHADER_CODE), the cache's records of
+    // what the draws saw (and a shipped catalog run.py adds to them) are enough: their SPIR-V is
+    // translated here, before the game needs it.
+    const bool prebuild = Prebuild::Available();
+    if (const char* catalog = std::getenv("BB_SHADER_CATALOG"); prebuild && catalog && *catalog) {
+        if (const u32 added = Storage::DataBase::Instance().Seed(catalog)) {
+            std::printf("Shader pre-build: %u shader and pipeline records added from the catalog\n",
+                        added);
+        }
+    }
 
     // Check if cache is compatible
     std::vector<u8> profile_data{};
@@ -340,7 +409,9 @@ void PipelineCache::WarmUp() {
         std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
                                            std::move(profile_data));
-        return;
+        if (!prebuild) {
+            return;
+        }
     }
     if (profile_data.size() != sizeof(Shader::Profile)) {
         LOG_WARNING(Render, "Pipeline cache profile has unexpected size ({} != {})",
@@ -350,7 +421,20 @@ void PipelineCache::WarmUp() {
     if (profile_data.size() == sizeof(Shader::Profile)) {
         std::memcpy(&cached_profile, profile_data.data(), sizeof(cached_profile));
     }
-    if (profile_data.size() != sizeof(Shader::Profile) || cached_profile != profile) {
+    if (!profile_data.empty() && prebuild &&
+        (profile_data.size() != sizeof(Shader::Profile) || cached_profile != profile)) {
+        // bbport shader pre-build: another GPU, driver features or build: only the SPIR-V is
+        // stale. Keep what the draws saw and translate it again for this system below.
+        std::printf("Shader pre-build: the cache was made for another system; its shaders are "
+                    "translated again from the game files\n");
+        Storage::DataBase::Instance().ClearType(Storage::BlobType::ShaderBinary);
+        Storage::DataBase::Instance().FinishPreload();
+        profile_data.resize(sizeof(profile));
+        std::memcpy(profile_data.data(), &profile, sizeof(profile));
+        Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
+                                           std::move(profile_data));
+    } else if (!profile_data.empty() &&
+               (profile_data.size() != sizeof(Shader::Profile) || cached_profile != profile)) {
         // bbport: upstream closed the cache for the session here, so it was never rewritten
         // and every later session compiled every shader again (stutters on each new area).
         // Start a fresh cache for this build and GPU instead.
@@ -366,10 +450,25 @@ void PipelineCache::WarmUp() {
 
     u32 num_pipelines{};
     u32 num_total_pipelines{};
+    // Progress in the window title while the game waits (a first start with a full catalog
+    // builds thousands of pipelines).
+    const u32 work = Storage::DataBase::Instance().Count(Storage::BlobType::PipelineKey) +
+                     Storage::DataBase::Instance().Count(Storage::BlobType::ShaderMeta);
+    u32 done = 0;
+    auto shown = std::chrono::steady_clock::now();
+    const auto progress = [&] {
+        ++done;
+        const auto now = std::chrono::steady_clock::now();
+        if (work > 200 && now - shown > std::chrono::milliseconds(200)) {
+            shown = now;
+            SetWindowStatus(fmt::format("Preparing shaders: {}%", std::min(99u, done * 100 / work)));
+        }
+    };
 
     Storage::DataBase::Instance().ForEachBlob(
         Storage::BlobType::PipelineKey, [&](std::vector<u8>&& data) {
             ++num_total_pipelines;
+            progress();
 
             Serialization::Archive ar{std::move(data)};
             Serialization::Reader pldata{ar};
@@ -396,6 +495,35 @@ void PipelineCache::WarmUp() {
         });
 
     LOG_INFO(Render, "Preloaded {} pipelines", num_pipelines);
+
+    // bbport: shader permutations no stored pipeline uses. A draw that may write object motion
+    // first compiles its plain permutation, then the motion one its pipeline actually uses:
+    // the plain one is stored but never referenced by a pipeline key, so it was compiled again
+    // every session the first time each animated model appeared. Load every stored
+    // permutation (modules only; pipelines still come from keys).
+    u32 variants = 0;
+    Storage::DataBase::Instance().ForEachBlob(
+        Storage::BlobType::ShaderMeta, [&](std::vector<u8>&& data) {
+            progress();
+            Serialization::Archive ar{std::move(data)};
+            try {
+                variants += LoadPipelineStage(ar, 0);
+            } catch (const std::exception&) {
+            }
+            sel.infos.fill(nullptr);
+            sel.modules.fill(nullptr);
+            sel.fetch_shader.reset();
+        });
+    SetWindowStatus({});
+    if (prebuild) {
+        std::printf("Shader pre-build: %u stored shader variants ready, pipelines or not\n",
+                    variants);
+        std::printf("Shader pre-build: %u pipelines ready (%u shaders translated from the game "
+                    "files, %u could not be, %u laid out anew for this GPU) in %.1f s\n",
+                    num_pipelines, prebuild_translated, prebuild_failed, prebuild_relaid,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - warmup_start)
+                        .count());
+    }
     if (num_total_pipelines > num_pipelines) {
         LOG_WARNING(Render, "{} stale pipelines were found. Consider re-generating the cache",
                     num_total_pipelines - num_pipelines);
@@ -492,6 +620,11 @@ void StageSpecialization::Serialize(Serialization::Archive& ar) const {
     spec.Write(images);
     spec.Write(fmasks);
     spec.Write(samplers);
+    spec.Write(vs_attrib_sharps);
+    spec.Write(u8(tess_constants.has_value()));
+    if (tess_constants) {
+        spec.Write(&*tess_constants, sizeof(*tess_constants));
+    }
 }
 
 bool StageSpecialization::Deserialize(Serialization::Archive& ar) {
@@ -518,6 +651,14 @@ bool StageSpecialization::Deserialize(Serialization::Archive& ar) {
     spec.Read(images);
     spec.Read(fmasks);
     spec.Read(samplers);
+    spec.Read(vs_attrib_sharps);
+    u8 has_tess{};
+    spec.Read(has_tess);
+    if (has_tess) {
+        TessellationDataConstantBuffer constants{};
+        spec.Read(&constants, sizeof(constants));
+        tess_constants = constants;
+    }
 
     return true;
 }

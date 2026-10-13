@@ -128,6 +128,32 @@ def find_executable(name):
     return None
 
 
+def shader_prebuild(game, out, env):
+    """Shader pre-build (vk_shader_prebuild.h): the game's shader code, extracted from the
+    player's own files into out/shader_code once (again only when those files or the
+    extractor change), lets the game translate the shaders its cache and the shipped catalog
+    know before they are first drawn. BB_SHADER_PREBUILD=0 turns it off."""
+    if env.get('BB_SHADER_PREBUILD') == '0':
+        return
+    code = out / 'shader_code'
+    sources = sorted((Path(game) / 'dvdroot_ps4' / 'shader').glob('*.shaderbnd*.dcx'))
+    sources.append(out / 'eboot.elf')
+    sources.append(PORT / 'scripts' / 'shader_code.py')
+    stamp = '\n'.join(f'{p.name} {p.stat().st_size} {int(p.stat().st_mtime)}' for p in sources if p.is_file())
+    try:
+        current = (code / 'stamp.txt').read_text(encoding='utf-8') == stamp
+    except OSError:
+        current = False
+    if not current:
+        shutil.rmtree(code, ignore_errors=True)
+        run_script('shader_code.py', game, out / 'eboot.elf', code)
+        (code / 'stamp.txt').write_text(stamp, encoding='utf-8')
+    env['BB_SHADER_CODE'] = str(code)
+    catalog = PORT / 'shader_catalog'
+    if catalog.is_dir():
+        env['BB_SHADER_CATALOG'] = str(catalog)
+
+
 def main():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
@@ -202,6 +228,7 @@ def main():
         sys.path.insert(0, str(PORT / 'scripts'))
         from aspect_ratio import segment_fingerprint
         env['BB_ASPECT_EBOOT_SEGMENTS'] = segment_fingerprint((out / 'eboot.elf').read_bytes())
+        shader_prebuild(game, out, env)
         run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('BB_CONTENT_SKU', 'full'))

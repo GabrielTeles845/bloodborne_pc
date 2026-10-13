@@ -1162,7 +1162,8 @@ void Translator::EmitFetch(const GcnInst& inst) {
     fetch_data = ParseFetchShader(info);
     ASSERT(fetch_data.has_value());
 
-    if (EmulatorSettings.IsDumpShaders()) {
+    // bbport: a shader pre-build translates without the game: no fetch shader code to dump.
+    if (EmulatorSettings.IsDumpShaders() && !offline_fetch_shader) {
         using namespace Common::FS;
         const auto dump_dir = GetUserPath(PathType::ShaderDir) / "dumps";
         if (!std::filesystem::exists(dump_dir)) {

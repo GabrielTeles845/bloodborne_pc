@@ -241,7 +241,16 @@ struct Info : InfoPersistent {
         bnd.user_data += ud_mask.NumRegs();
     }
 
+    /// bbport shader pre-build: outside the game the resource tables cannot be walked; the
+    /// pre-build thread sets the flattened user data the cache stored with the permutation.
+    static inline thread_local const std::vector<u32>* offline_flat_ud = nullptr;
+
     void RefreshFlatBuf() {
+        if (offline_flat_ud) {
+            flattened_ud_buf = *offline_flat_ud;
+            flattened_ud_buf.resize(srt_info.flattened_bufsize_dw);
+            return;
+        }
         flattened_ud_buf.resize(srt_info.flattened_bufsize_dw);
         ASSERT(user_data.size() <= NUM_USER_DATA_REGS);
         std::memcpy(flattened_ud_buf.data(), user_data.data(), user_data.size_bytes());
@@ -250,7 +259,15 @@ struct Info : InfoPersistent {
         }
     }
 
+    /// bbport shader pre-build: the tessellation constants the cache stored, outside the game.
+    static inline thread_local const TessellationDataConstantBuffer* offline_tess_constants =
+        nullptr;
+
     void ReadTessConstantBuffer(TessellationDataConstantBuffer& tess_constants) const {
+        if (offline_tess_constants) {
+            tess_constants = *offline_tess_constants;
+            return;
+        }
         ASSERT(tess_consts_dword_offset >= 0); // We've already tracked the V# UD
         auto buf = ReadUdReg<AmdGpu::Buffer>(static_cast<u32>(tess_consts_ptr_base),
                                              static_cast<u32>(tess_consts_dword_offset));

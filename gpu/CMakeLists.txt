@@ -368,3 +368,9 @@ if (WIN32)
     target_compile_options(aspect-thunk-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
     target_include_directories(aspect-thunk-test PRIVATE ..)
 endif()
+
+# bbport shader pre-build, offline check: translates the shader permutations of a pipeline cache
+# from the program code in the player's own game files (scripts/shader_code.py) and compares.
+add_executable(bb-shader-prebuild EXCLUDE_FROM_ALL tools/shader_prebuild.cpp ../tests/test_gpu_runtime_stubs.cpp)
+target_include_directories(bb-shader-prebuild PRIVATE shim shadps4 third_party/gcn/include)
+target_link_libraries(bb-shader-prebuild PRIVATE bbgpu $<$<BOOL:${WIN32}>:onecore>)

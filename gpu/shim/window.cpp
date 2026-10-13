@@ -16,6 +16,7 @@
 
 void NoteMouseWheel(float y); // below: wheel notches for the pad read
 void NoteMouseMotion(float x, float y); // below: motion for the mouse camera
+bool TakeWindowStatus(std::string& status); // below: a status for the title (shader pre-build)
 void SetMouseCaptured(bool captured);
 static std::atomic<bool> g_menu_pointer{false}; // below: a menu shows the pointer
 static std::atomic<bool> g_window_focused{false};
@@ -106,6 +107,11 @@ bool WindowSDL::PollEvents() {
     }
     if (!text_active) {
         BbOverlay::UpdateTextInput(window);
+    }
+    // A status the renderer shows while the game cannot draw yet (shader pre-build progress).
+    if (std::string status; !text_active && TakeWindowStatus(status)) {
+        const std::string title = status.empty() ? base_title : base_title + " — " + status;
+        SDL_SetWindowTitle(window, title.c_str());
     }
     // Fullscreen follows the setting (the in-game PC menu changes it while playing). The size
     // change arrives as a window event below and resizes the swapchain as a drag would.
@@ -294,6 +300,27 @@ extern "C" int bbgpu_mouse_motion_take(float* dx, float* dy) {
     *dx = stale ? 0.0f : float(x) / 16.0f;
     *dy = stale ? 0.0f : float(y) / 16.0f;
     return (*dx != 0.0f || *dy != 0.0f) ? 1 : 0;
+}
+
+// The window title's status (SetWindowStatus, any thread; empty: the plain title).
+static std::mutex g_status_mutex;
+static std::string g_status;
+static bool g_status_changed = false;
+void SetWindowStatus(const std::string& status) {
+    std::scoped_lock lock{g_status_mutex};
+    if (status != g_status) {
+        g_status = status;
+        g_status_changed = true;
+    }
+}
+bool TakeWindowStatus(std::string& status) {
+    std::scoped_lock lock{g_status_mutex};
+    if (!g_status_changed) {
+        return false;
+    }
+    g_status_changed = false;
+    status = g_status;
+    return true;
 }
 
 // The in-game PC menu's Quit Game: the same as closing the window (SDL_PushEvent is safe from

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <vector>
 #include "common/types.h"
@@ -36,8 +37,11 @@ struct VertexAttribute {
         return static_cast<InstanceIdType>(instance_data);
     }
 
-    constexpr AmdGpu::Buffer GetSharp(const Shader::Info& info) const noexcept {
-        auto buffer = info.ReadUdReg<AmdGpu::Buffer>(sgpr_base, dword_offset);
+    /// The descriptor as the game's memory holds it (bbport: or the pre-build's stored copy).
+    AmdGpu::Buffer ReadRawSharp(const Shader::Info& info) const noexcept;
+
+    AmdGpu::Buffer GetSharp(const Shader::Info& info) const noexcept {
+        auto buffer = ReadRawSharp(info);
         buffer.base_address += inst_offset;
         if (data_format) {
             buffer.data_format = data_format;
@@ -71,5 +75,21 @@ struct FetchShaderData {
 const u32* GetFetchShaderCode(const Info& info, u32 sgpr_base);
 
 std::optional<FetchShaderData> ParseFetchShader(const Shader::Info& info);
+
+/// bbport shader pre-build: translating a cached permutation outside the game, there is no
+/// guest memory to read the fetch shader from; the pre-build thread sets the parse the cache
+/// stored with the permutation, and ParseFetchShader returns it.
+inline thread_local const std::optional<FetchShaderData>* offline_fetch_shader = nullptr;
+/// ... and each attribute's vertex buffer descriptor, by semantic (null: none stored).
+inline thread_local const std::array<std::optional<AmdGpu::Buffer>, 32>* offline_attrib_sharps =
+    nullptr;
+
+inline AmdGpu::Buffer VertexAttribute::ReadRawSharp(const Shader::Info& info) const noexcept {
+    if (offline_attrib_sharps && semantic < offline_attrib_sharps->size() &&
+        (*offline_attrib_sharps)[semantic]) {
+        return *(*offline_attrib_sharps)[semantic];
+    }
+    return info.ReadUdReg<AmdGpu::Buffer>(sgpr_base, dword_offset);
+}
 
 } // namespace Shader::Gcn
