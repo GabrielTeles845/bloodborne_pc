@@ -210,6 +210,13 @@ def main():
     if not (game / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set BB_GAME_DIR).')
     original_game = game.resolve()
+    # A broken extraction (stale compressed sectors): the game would hang loading its shaders,
+    # with no error. (parsifal295, Supermedo PR #64; bbport 0.5-pre4.) BB_SKIP_GAME_CHECK=1 skips it.
+    if env.get('BB_SKIP_GAME_CHECK') != '1':
+        sys.path.insert(0, str(PORT / 'scripts'))
+        import game_check
+        if broken := game_check.broken_files(game):
+            fail(game_check.explain(broken))
     # PC enhancements (bbport.ini pc_*, BB_PC_*): files made from the game, under the mods.
     # Optional: should they fail, the game starts as without them.
     generated = (run_script('enhancements.py', '--game', game, '--out', Path(out) / 'enhancements',
