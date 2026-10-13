@@ -4,6 +4,38 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.8 preview
+
+A pre-release: the launcher does not offer it as an update; download it from the releases page.
+It is 1.7 plus the following.
+
+- **Shader pre-build.** Shaders the game has been seen to use are built while the game starts
+  ("Preparing shaders: N%" in the window title), not the first time an area or effect appears.
+  The shipped catalog (`shader_catalog/`) lists which shaders and pipelines the game uses, never
+  game code: each install builds them from its own game files, for its own GPU and driver, and
+  keeps them, so later starts take a second or two. Every catalog entry was checked to build
+  byte for byte like the game's own. This first catalog covers the game up to the
+  Blood-starved Beast; later releases extend it. On a fresh install loading into Central
+  Yharnam it cut the shaders compiled during play from 479 to 2 and the worst frame from 639 to
+  181 ms (RTX 4060 Laptop). On AMD and Intel GPUs most fragment shaders do not match yet and
+  still compile in play as before. Off with `BB_SHADER_PREBUILD=0`.
+- **Keyboard movement smoothing.** Holding W and then pressing A or D no longer stops the
+  character for a moment: the stick swings to the new direction over a few frames
+  ([#4](https://github.com/Jgamrot/bloodborne_pc/issues/4), after MKB2Controller's setting,
+  suggested by tmntanno). Settings > Controls > Keyboard, *Off* to switch it off
+  (`move_smoothing=100`).
+- **GPU readbacks: Precise no longer stays on a black screen at start**
+  ([#2](https://github.com/Jgamrot/bloodborne_pc/issues/2), reported by HerOisPerO). Precise
+  waits for the GPU whenever the game reads memory the GPU wrote; the port's draw recording and
+  copy threads deadlocked against it. They are off under Precise, so it costs some speed; it
+  should catch the stale face vertices (FaceGen, the "vertex explosions") that Relaxed can miss.
+- **No crash out of bounds.** A texture descriptor with an impossible format (seen after
+  falling out of the map) no longer stops the game.
+- **Video memory:** the texture cache starts evicting at 80% of a discrete GPU's budget, not
+  40%, which removed constant evictions and uneven frame times in Yharnam on 8 GB cards.
+- **The last three game logs are kept** (`last_run.log`, `last_run.1.log`, `last_run.2.log`),
+  so starting again after a crash keeps the log of the run that crashed.
+
 ## 1.7
 
 A full release: the launcher offers it as an update. It includes everything in the 1.6.12 and

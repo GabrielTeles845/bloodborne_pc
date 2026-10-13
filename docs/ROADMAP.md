@@ -16,8 +16,11 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
    to confirm, right-click to go back, wheel to scroll; only while a menu is open, out of the
    mouse camera's way, with its own off switch. After bbhost's `menu_pointer.cpp`, whose list
    hooks the PC menu already uses. Start with System and the PC sections, then the other menus.
-2. **Shader pre-build.** Finish the capture playthrough, then the `feature/shader-prebuild`
-   branch: translate known shaders from the player's own files before play.
+2. **Shader pre-build.** In the 1.8 preview with a catalog up to the Blood-starved Beast.
+   Next: extend the catalog through the rest of the capture playthrough (the Old Hunters and
+   chalice dungeons too), make NVIDIA-recorded fragment shaders match on AMD and Intel (the
+   clip-distance emulation input), and the two compute shaders whose thread-ID addressing the
+   records do not carry.
 3. **Boss Rematches** (Bloodborne Enhanced features, independently implemented). A Cleric
    Beast prototype runs as an experiment with `BB_PC_REMATCHES=1`. Next: a copied-save test with
    the Cleric Beast defeated (the entry, the arena, Insight, the reward, death and leaving), then
