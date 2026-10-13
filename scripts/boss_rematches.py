@@ -31,6 +31,10 @@ START_EVENT = 12411980
 VICTORY_EVENT = 12411981
 DEATH_EVENT = 12411982
 LEAVE_MAP_EVENT = 10009980
+# 復活イベント02_ボス部屋_教区長 in m24_01_00_00.msb: the Cleric Beast lamp's respawn point, which
+# the game's own scripts pass to Warp Player to Respawn Point. Bloodborne Enhanced warps to a
+# point (2411759) that only its edited map has.
+LAMP_RESPAWN = 2412952
 
 
 class UnsupportedRematch(ValueError):
@@ -167,7 +171,8 @@ def _map_events(script: Emevd) -> None:
         instruction(1000, 1, 'BBb', 1, 0, 1),
         instruction(2004, 8, 'iiB', 10000, 4681, 0),  # one Insight, only if positive
         instruction(1001, 0, 'f', 1.0),
-        instruction(2002, 8, 'iBB', 2411759, 24, 1),  # Cleric Beast entrance
+        # Reload the map at the boss lamp, so the constructor sees ACTIVE and wakes the arena.
+        instruction(2003, 49, 'i', LAMP_RESPAWN),
         instruction(1000, 4, 'B', 1),
     ])
     script.append_initialized_event(VICTORY_EVENT, [
@@ -201,6 +206,9 @@ def _common_events(script: Emevd) -> None:
 def make(dvdroot: Path) -> dict[Path, bytes]:
     """Return event, talk, and text assets; fail closed on any unknown game version."""
     _assert_global_ids_available(dvdroot)
+    layout = dcx_decompress((dvdroot / 'map' / 'MapStudio' / 'm24_01_00_00.msb.dcx').read_bytes())
+    if struct.pack('<i', LAMP_RESPAWN) not in layout:
+        raise UnsupportedRematch('Cleric Beast lamp respawn point is missing from the map')
     files = {}
     for name, edit in (('m24_01_00_00', _map_events), ('common', _common_events)):
         relative = Path('event') / f'{name}.emevd.dcx'

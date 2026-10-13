@@ -75,6 +75,12 @@ class BossRematchTests(unittest.TestCase):
                     boss_rematches.ARENA_DEFEATED, True))
                 self.assertEqual(boss[17], boss_rematches.instruction(
                     1003, 1, 'BBBi', 2, 0, 0, boss_rematches.ACTIVE))
+                # The start warps with the game's own instruction to a respawn point the
+                # vanilla map has, never to a point only an edited map would add.
+                start = modified.event_instructions(boss_rematches.START_EVENT)
+                self.assertEqual(start[-2], boss_rematches.instruction(
+                    2003, 49, 'i', boss_rematches.LAMP_RESPAWN))
+                self.assertNotIn((2002, 8), [(bank, code) for bank, code, _ in start])
                 entry = modified.event_instructions(boss_rematches.FIRST_ENTRY)
                 self.assertEqual(entry[1], boss_rematches.instruction(
                     1003, 101, 'BBBi', 0, 0, 0, boss_rematches.ARENA_ENTRY))
