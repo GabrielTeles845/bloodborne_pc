@@ -13,7 +13,7 @@ BBSC's own `HOW-TO-PLAY.txt` says that its DLL loads in native BBport but that *
 
 The preview copies `user/savedata` to `user/bbsc-preview-backups/<timestamp>/savedata` before launch. It temporarily supplies BBSC with this build's `Bloodborne.exe` and game folder. When BBSC's wrapper exits, it restores the exact previous `user/host_overrides.custom.json` and the package's previous `tools/bbport-paths.json` (or removes those files if they did not exist). Keep the launcher process running until the BBSC session has ended so it can report the result. BBSC's account data stays in its extracted package.
 
-BBSC 0.0.1 reports that Chalice Dungeon co-op is unsupported and a full party wipe can respawn the host in the Hunter's Dream. Send gameplay bugs with both the BBSC log and `user/last_run.log` to [BBSC's issue/community channels](https://github.com/Classmg22/BBSC).
+BBSC 0.0.1 reports that Chalice Dungeon co-op is unsupported and a full party wipe can respawn the host in the Hunter's Dream. Send gameplay bugs with both the BBSC log and `user/bbsc-run.log` from the BBport folder to [BBSC's issue/community channels](https://github.com/Classmg22/BBSC).
 
 ## Technical boundary
 
