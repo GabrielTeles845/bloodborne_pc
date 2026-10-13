@@ -196,6 +196,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': True, 'online': False, 'online_server': 'srv.shadps4.net:31313',
                 'online_webapi': '', 'online_npid': '', 'online_password': '', 'online_upnp': True,
+                'coop_name': '', 'coop_password': '', 'coop_invite': '',
                 'online_community': COMMUNITY_SERVER,
                 # First-run setup (bbport_startup): setupVersion is the wizard version last
                 # finished or skipped; launchDirectly starts the game without the launcher.

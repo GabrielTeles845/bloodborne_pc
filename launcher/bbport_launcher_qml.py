@@ -50,6 +50,7 @@ def run_ui(route=None):
         window = load('Main.qml')
         launcher_window.append(window)
         backend.closeRequested.connect(window.close)
+        app.aboutToQuit.connect(backend.shutdown_coop)
         app.setQuitOnLastWindowClosed(True)
 
     if not route or route['mode'] != 'direct':

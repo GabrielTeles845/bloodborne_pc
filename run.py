@@ -49,8 +49,10 @@ def summon_service(webapi):
 
 def online_overrides(env, user_dir):
     """Writes user/host_overrides.json for this launch. A player who needs other addresses
-    puts them in user/host_overrides.custom.json, which is then used as it is."""
-    custom = user_dir / 'host_overrides.custom.json'
+    puts them in user/host_overrides.custom.json, which is then used as it is. A launch that
+    brings its own (BB_HOST_OVERRIDES: seamless co-op, pointed at the host's servers) uses that
+    file for this launch only."""
+    custom = Path(env['BB_HOST_OVERRIDES']) if env.get('BB_HOST_OVERRIDES') else         user_dir / 'host_overrides.custom.json'
     path = custom if custom.exists() else user_dir / 'host_overrides.json'
     if path != custom:
         community = (env.get('BB_COMMUNITY_SERVER') or COMMUNITY_SERVER).rstrip('/')
