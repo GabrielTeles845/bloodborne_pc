@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <boost/container/small_vector.hpp>
 #include "bbport_toggles.h"
 #include "common/assert.h"
@@ -120,7 +123,38 @@ struct PageManager::Impl {
         } else {
             BbStats::read_faults.fetch_add(1, std::memory_order_relaxed);
             BbStats::Timer timer{BbStats::t_read_faults};
-            return rasterizer->ReadMemory(addr, 8, is_gpu_thread);
+            // bbport: BB_READBACK_DEBUG=1 prints the first read faults (Precise readbacks).
+            static const bool debug = std::getenv("BB_READBACK_DEBUG") != nullptr;
+            static std::atomic<u32> shown{0};
+            const bool show = debug && shown.fetch_add(1) < 64;
+#ifdef _WIN32
+            const u64 rip = static_cast<EXCEPTION_POINTERS*>(context)->ContextRecord->Rip;
+            const u64 tid = GetCurrentThreadId();
+            char name[64] = "";
+            if (show) {
+                PWSTR wide = nullptr;
+                if (SUCCEEDED(GetThreadDescription(GetCurrentThread(), &wide)) && wide) {
+                    WideCharToMultiByte(CP_UTF8, 0, wide, -1, name, sizeof(name), nullptr,
+                                        nullptr);
+                    LocalFree(wide);
+                }
+            }
+#else
+            const u64 rip = 0, tid = 0;
+            const char name[] = "";
+#endif
+            if (show) {
+                std::fprintf(stderr,
+                             "Readback: read fault at %#llx (rip %#llx, thread %llu '%s'%s)\n",
+                             (unsigned long long)addr, (unsigned long long)rip,
+                             (unsigned long long)tid, name, is_gpu_thread ? ", GPU side" : "");
+            }
+            const bool handled = rasterizer->ReadMemory(addr, 8, is_gpu_thread);
+            if (show) {
+                std::fprintf(stderr, "Readback: thread %llu resumed (%s)\n",
+                             (unsigned long long)tid, handled ? "handled" : "not GPU memory");
+            }
+            return handled;
         }
         return false;
     }
