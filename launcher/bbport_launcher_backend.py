@@ -668,9 +668,27 @@ class LauncherBackend(QObject):
             return
         folder = QFileDialog.getExistingDirectory(None, f'Choose {key.replace("_", " ")}', str(self.value(key) or core.DATA_DIR))
         if folder:
+            old_user = Path(self.value('user_dir') or core.DATA_DIR / 'user')
             self.setValue(key, folder)
+            if key == 'user_dir':
+                self._carry_trophy_keys(old_user, Path(folder))
             if key in ('mods_dir', 'patches_dir'):
                 self.refresh_addons()
+
+    def _carry_trophy_keys(self, old_user, new_user):
+        """The game reads keys.json from the saves folder: one imported before the saves folder
+        was changed (the setup wizard asks for it first) stayed behind, and trophy names were
+        missing. It moves along unless the new folder has its own."""
+        source, target = old_user / 'keys.json', new_user / 'keys.json'
+        if source.is_file() and not target.exists() and source.resolve() != target.resolve():
+            try:
+                new_user.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+            except OSError as error:
+                self._set_notice(f'Copy keys.json to the new saves folder yourself: {error}')
+                return
+            self._set_notice('Trophy keys copied to the new saves folder.')
+            self.changed.emit()
 
     @Slot(str)
     def openFolder(self, key):
