@@ -4,6 +4,17 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.8.1
+
+- **Online works again.** Since 12 October the shadNet server signs out clients that do not
+  report their version straight after signing in, then refuses their logins for two minutes:
+  every login of the port failed and the game showed it could not connect. The game now reports
+  itself (`shadPS4 Jgamrot/bloodborne_pc v1.8.1`), as shadPS4 does; if a server ever turns it
+  away, the log shows the server's message.
+- **Trophy names after choosing a saves folder.** The setup wizard offers *Import trophy keys*
+  before *Choose a saves folder*; the key stayed in the old folder and trophy names were missing.
+  Choosing a saves folder now copies `keys.json` over when the new folder has none.
+
 ## 1.8
 
 A full release: the launcher offers it as an update. It is 1.7 plus the following.
