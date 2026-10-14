@@ -12,18 +12,19 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
 
 ## Main work, in order
 
-1. **Mouse pointer in the game's menus.** Hover a row to move the game's cursor there, click
-   to confirm, right-click to go back, wheel to scroll; only while a menu is open, out of the
-   mouse camera's way, with its own off switch. After bbhost's `menu_pointer.cpp`, whose list
-   hooks the PC menu already uses. Start with System and the PC sections, then the other menus.
-2. **Shader pre-build.** In the 1.8 preview with a catalog up to the Blood-starved Beast.
-   Next: extend the catalog through the rest of the capture playthrough (the Old Hunters and
-   chalice dungeons too), make NVIDIA-recorded fragment shaders match on AMD and Intel (the
-   clip-distance emulation input), and the two compute shaders whose thread-ID addressing the
-   records do not carry.
-3. **Boss Rematches** (Bloodborne Enhanced features, independently implemented). A Cleric
-   Beast prototype runs as an experiment with `BB_PC_REMATCHES=1`. Next: a copied-save test with
-   the Cleric Beast defeated (the entry, the arena, Insight, the reward, death and leaving), then
+1. **Seamless co-op on our own servers** (the main focus since 14 October 2026). The public
+   shadPS4 server (srv.shadps4.net) signs the port out since its 14 October update, whatever
+   version the port reports, and catching up with shadPS4 would not change that: a fork's build
+   still reports itself as a fork. So playing together goes through servers the players run.
+   1.9.1 runs [BBSC](https://github.com/Classmg22/BBSC) 0.0.1 (CLS_AMG; Wozzardman's
+   shadnet-p2p) from Settings > Co-op, hosted on one player's PC over Tailscale. Next: a two-PC
+   test (joining, deaths, lamps, area changes, a boss, leaving), fix what breaks, then make
+   hosting simpler (same-network play without Tailscale, clearer invite and error messages).
+   Keep an eye on deadinside28 [#130](https://github.com/deadinside28/bloodborne_pc/pull/130)
+   for ideas. Ask the srv.shadps4.net admins to allow `shadPS4 Jgamrot/` for ordinary online.
+2. **Boss Rematches** (Bloodborne Enhanced features, independently implemented). A Cleric
+   Beast prototype is in 1.9.1 as an experimental launcher toggle (off; `BB_PC_REMATCHES=1`).
+   Next: a copied-save test with the Cleric Beast defeated (the entry, the arena, Insight, the reward, death and leaving), then
    one boss at a time. Requirements:
    - Rematch bosses already defeated on the current character, without NG+, from their lamps;
      also through the Broken Lamp in the Hunter's Dream (raised garden near the tree, back and
@@ -37,7 +38,22 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
    [Bloodborne Enhanced](https://www.nexusmods.com/bloodborne/mods/19)'s files may not be
    redistributed or modified, so everything is made from the player's own game files. Notes:
    [ENHANCED_LAMPS_RESEARCH.md](ENHANCED_LAMPS_RESEARCH.md).
-4. **Catch up with shadPS4**, only after the shader capture is finished. Port, in order, the
+3. **Mouse pointer in the game's menus.** Hover a row to move the game's cursor there, click
+   to confirm, right-click to go back, wheel to scroll; only while a menu is open, out of the
+   mouse camera's way, with its own off switch. After bbhost's `menu_pointer.cpp`, whose list
+   hooks the PC menu already uses. Start with System and the PC sections, then the other menus.
+4. **Shader pre-build.** In the 1.8 preview with a catalog up to the Blood-starved Beast.
+   Next: extend the catalog through the rest of the capture playthrough (the Old Hunters and
+   chalice dungeons too), make NVIDIA-recorded fragment shaders match on AMD and Intel (the
+   clip-distance emulation input), and the two compute shaders whose thread-ID addressing the
+   records do not carry.
+5. **Frame generation and AMD Anti-Lag:** FSR 3.1 frame generation on any GPU, DLSS frame
+   generation on RTX 40 and later, from AwesomeObserver via Supermedo
+   [#48](https://github.com/Supermedo/bloodborne_pc/pull/48) and
+   [#49](https://github.com/Supermedo/bloodborne_pc/pull/49). They build on the bbport 0.4 merge
+   (#37), which this fork does not take, so they are ported, not merged.
+6. **Catch up with shadPS4**, after seamless co-op (it does not bring back
+   the public server) and only after the shader capture is finished. Port, in order, the
    renderer and shader commits since `d1cb90db`: shader correctness (`945dbc3c`, `c4952908`,
    `1c2b8f97`), texture layout (`7e778987`, `e7929178`, `c679ce60`, `69b6041d`, `14ada48a`,
    `995e37e4`, and small-mip detiling, shadPS4 #5196 / Supermedo
@@ -47,14 +63,6 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
    (`.meta` v8, `.key` v5), keep them compatible or convert the capture's catalog. Then merge
    background shader compiling (`feature/async-pipelines`, `BB_ASYNC_PIPELINES=0` off) after
    measuring new areas. Test in the Research Hall and shadowed areas.
-5. **Frame generation and AMD Anti-Lag:** FSR 3.1 frame generation on any GPU, DLSS frame
-   generation on RTX 40 and later, from AwesomeObserver via Supermedo
-   [#48](https://github.com/Supermedo/bloodborne_pc/pull/48) and
-   [#49](https://github.com/Supermedo/bloodborne_pc/pull/49). They build on the bbport 0.4 merge
-   (#37), which this fork does not take, so they are ported, not merged.
-6. **Seamless co-op** (wanted, after the above): two players, Elden Ring style, own LAN server,
-   no PSN: deadinside28 [#130](https://github.com/deadinside28/bloodborne_pc/pull/130), a work in
-   progress not yet tested in game. Check its progress at every upstream review.
 
 ## Small fixes, alongside the main work
 

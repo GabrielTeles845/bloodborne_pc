@@ -4,12 +4,40 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9.1 experimental
+
+A pre-release: the launcher does not offer it as an update. It is 1.8.3 (with everything in
+1.8.2) plus the seamless co-op of 1.9 and the first boss rematch.
+
+- **Seamless co-op is how to play together for now.** The public shadPS4 server
+  (srv.shadps4.net) signs this port out since its 14 October update, whatever version the port
+  reports (1.8.3's `shadPS4 Jgamrot/v0.20.0` too); shadNet's stock rules would accept it, so this
+  is that server's own setting. Co-op doesn't use it: one player hosts the servers on their own
+  PC. The Online page now says this.
+- **Seamless co-op (experimental):** Settings > Co-op sets up and runs
+  [BBSC](https://github.com/Classmg22/BBSC) (Bloodborne Seamless Co-op by CLS_AMG; servers from
+  Wozzardman's shadnet-p2p): one co-op session through deaths, lamps, areas and bosses, each hunter
+  keeping their own character. One player hosts the server on their own PC; both use
+  [Tailscale](https://tailscale.com). *Set up co-op* downloads BBSC's official packages and checks
+  them against its published checksums; *Start hosting* opens the firewall for Tailscale and the
+  home network only (one Windows prompt, the first time), starts the servers and gives an invite
+  code; the guest pastes it; *Play co-op* backs up the saves and starts the game with BBSC, pointed
+  at the host for that session only. The game runs on this release's engine, so 1.8.2's video
+  memory and menu fixes apply in co-op too. Not yet played through on BBport: please report
+  problems with `user\last_run.log` and BBSC's logs.
+- **Boss rematches (experimental, off):** *PC gameplay enhancements* has a toggle for the Cleric
+  Beast rematch at its lamp once the boss is defeated. The rematch now warps to the lamp's own
+  respawn point (2412952, as the game's scripts do), which every 1.09 map has; before, it used a
+  point only Bloodborne Enhanced's edited map has and could not start. The defeat flag and
+  first-kill rewards are left alone. Not yet tested on a real save: back up your saves first.
+
 ## 1.8.3
 
-- **Online works again.** Since 14 October the shadNet server only accepts version reports in
-  shadPS4's own format and signed 1.8.2 out ("This shadNet server doesn't accept your shadPS4
-  build"). The port now reports itself the way shadPS4's own fork releases do,
-  `shadPS4 Jgamrot/v0.20.0`, as the server's admins asked. The port's version stays in the log.
+- **Version report changed; online still refused.** Since 14 October the shadNet server checks
+  the version a client reports and signed 1.8.2 out ("This shadNet server doesn't accept your
+  shadPS4 build"). 1.8.3 reports itself the way shadPS4's own fork releases do,
+  `shadPS4 Jgamrot/v0.20.0`, and keeps the port's version in the log. The public server refuses
+  that too (see 1.9.1).
 
 ## 1.8.2
 
