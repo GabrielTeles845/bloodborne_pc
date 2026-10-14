@@ -25,11 +25,20 @@ A pre-release: the launcher does not offer it as an update. It is 1.8.3 (with ev
   at the host for that session only. The game runs on this release's engine, so 1.8.2's video
   memory and menu fixes apply in co-op too. Not yet played through on BBport: please report
   problems with `user\last_run.log` and BBSC's logs.
-- **Boss rematches (experimental, off):** *PC gameplay enhancements* has a toggle for the Cleric
-  Beast rematch at its lamp once the boss is defeated. The rematch now warps to the lamp's own
-  respawn point (2412952, as the game's scripts do), which every 1.09 map has; before, it used a
-  point only Bloodborne Enhanced's edited map has and could not start. The defeat flag and
-  first-kill rewards are left alone. Not yet tested on a real save: back up your saves first.
+- **Boss rematches (experimental, off):** *PC gameplay enhancements* has a toggle for rematches
+  at the bosses' own lamps: once a boss is defeated, the lamp its defeat lit offers "Rematch ..."
+  next to Level Up and Storage, for one Insight when you have any. All 19 bosses with a lamp of
+  their own: Cleric Beast, Father Gascoigne, Blood-starved Beast, Vicar Amelia, the Witch of
+  Hemwick, Darkbeast Paarl, Shadow of Yharnam, Rom, the One Reborn, Martyr Logarius, Amygdala,
+  Celestial Emissary, Ebrietas, Mergo's Wet Nurse, Ludwig, Living Failures, Lady Maria, Laurence
+  and Orphan of Kos (not Gehrman, the Moon Presence or Micolash, who have no lamp). The fight is
+  staged as the first meeting; winning, dying or leaving puts the arena back. The save's
+  defeated-boss flags are never cleared and a rematch kill gives no first-kill items, trophy or
+  progression again. Played through on the Cleric Beast; the other 18 are made the same way and
+  checked against the game's scripts, but not yet played: back up your saves first. Boss data
+  after droogie's bbhost (boss rush plugin).
+- **Fixed with it:** with rematches on, Central Yharnam's other lamps lost Level Up and Storage;
+  with the two invaders on as well, the rematch layer undid their change in five late maps.
 
 ## 1.8.3
 

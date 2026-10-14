@@ -23,9 +23,11 @@ Sources checked for ideas (last on 12 October 2026): shadPS4 (our renderer match
    Keep an eye on deadinside28 [#130](https://github.com/deadinside28/bloodborne_pc/pull/130)
    for ideas. Ask the srv.shadps4.net admins to allow `shadPS4 Jgamrot/` for ordinary online.
 2. **Boss Rematches** (Bloodborne Enhanced features, independently implemented). A Cleric
-   Beast prototype is in 1.9.1 as an experimental launcher toggle (off; `BB_PC_REMATCHES=1`).
-   Next: a copied-save test with the Cleric Beast defeated (the entry, the arena, Insight, the reward, death and leaving), then
-   one boss at a time. Requirements:
+   Beast rematch was played through on a copied save (14 October 2026); 1.9.1 extends it to all
+   19 bosses with a lamp of their own, as an experimental launcher toggle (off;
+   `BB_PC_REMATCHES=1`). Next: play each of the other 18 (the entry, the arena, Insight, the
+   reward, death and leaving), then the Broken Lamp, chalice bosses and Distorted Memories.
+   Requirements:
    - Rematch bosses already defeated on the current character, without NG+, from their lamps;
      also through the Broken Lamp in the Hunter's Dream (raised garden near the tree, back and
      to the right of the spawn point). Chalice dungeon bosses only from their own lamps.
