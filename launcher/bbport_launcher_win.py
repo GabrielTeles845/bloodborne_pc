@@ -2051,9 +2051,17 @@ class Launcher:
             log = open_run_log(self.app.get('user_dir') or DATA_DIR / 'user')
         except OSError:
             pass
+        warned = False
         for raw in iter(process.stdout.readline, b''):
             text = raw.decode('utf-8', errors='replace')
             self.output.put(text)
+            if not warned and 'eboot.bin is not the 01.09 build' in text:
+                warned = True
+                self.ui_calls.put(lambda: self.messagebox.showwarning('Bloodborne', _(
+                    "Your eboot.bin is not the clean 1.09 one (modified, or from another dump). The port "
+                    "cannot patch it: the game runs at 30 FPS, the Game & effects options do nothing, and "
+                    "some scenes (like the cutscene after Rom) can freeze.\n\nReplace eboot.bin with the one "
+                    "from an unmodified 1.09 update.")))
             if log:
                 log.write(text.replace('\r\n', '\n'))
         if log:
