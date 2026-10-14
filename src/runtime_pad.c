@@ -200,6 +200,32 @@ static void touch_click(PadData *d, int right) {
     d->touches[0]=(PadTouch){.x=right ? 1440 : 480,.y=471,.id=0};
 }
 
+/* The byte used while sampling is the SDL finger slot (synthetic clicks use slot 0).
+ * A DualShock assigns a new nonzero ID to each contact and reports how long a
+ * contact has been held. Keep those fields across pad reads instead of returning
+ * an ID and hold time of zero for every sample. */
+static void finish_touch(PadData *d) {
+    static uint8_t active[2], ids[2], next_id=1;
+    static uint64_t down_since;
+    uint8_t seen[2]={0,0};
+    for (int i=0;i<d->touch_count;++i) {
+        const uint8_t slot=d->touches[i].id;
+        if (slot>=2) continue;
+        seen[slot]=1;
+        if (!active[slot]) {
+            ids[slot]=next_id;
+            next_id=next_id==127 ? 1 : next_id+1;
+        }
+        d->touches[i].id=ids[slot];
+    }
+    if (d->touch_count) {
+        if (!active[0] && !active[1]) down_since=d->timestamp;
+        const uint64_t held=d->timestamp-down_since;
+        d->touch_held_time=(uint32_t)(held>UINT32_MAX ? UINT32_MAX : held);
+    } else down_since=0;
+    active[0]=seen[0]; active[1]=seen[1];
+}
+
 /* Opens the first gamepad SDL knows about; called under lock. */
 static SDL_Gamepad *current_gamepad(void) {
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
@@ -472,6 +498,7 @@ uint32_t runtime_pad_buttons(void) { return delivered_buttons; }
 static void sample_game(PadData *d);
 static void sample(PadData *d) {
     sample_game(d);
+    finish_touch(d);
     delivered_buttons=d->buttons;
 }
 static void sample_game(PadData *d) {
@@ -488,7 +515,7 @@ static void sample_game(PadData *d) {
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     if (hold_after_capture) {
-        if (d->buttons) d->buttons=0;
+        if (d->buttons) { d->buttons=0; d->touch_count=0; }
         else hold_after_capture=0;
     }
 }
