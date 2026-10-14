@@ -25,7 +25,7 @@ engine/maiden_events.cpp and engine/dream_mirror_layout.cpp.
                                               game's own screens, once the Doll and the storage box
                                               have been used (enhanced_lamps.py). With Rebirth on,
                                               its altar edit shares the Nightmare's lamp archive.
-  pc_boss_rematches     (BB_PC_REMATCHES)     EXPERIMENTAL, no launcher toggle: Rematch Cleric Beast
+  pc_boss_rematches     (BB_PC_REMATCHES)     EXPERIMENTAL (launcher toggle, off): Rematch Cleric Beast
                                               at its lamp once defeated (boss_rematches.py). Brings
                                               the lamps' menu with it; the permanent defeat flag
                                               and first-kill rewards are left alone.
@@ -60,7 +60,7 @@ FEATURES = {
 }
 # Off unless switched on, except these: they change nothing the game does by themselves.
 DEFAULT_ON = {'pc_menu'}
-# Only for testing in play (environment variable, no toggle in the launcher or the overlay).
+# Still a first test: the launcher labels its toggle experimental; none in the overlay.
 EXPERIMENTAL = {'pc_boss_rematches'}
 # Bumped when a rewrite changes, so every install makes its files again.
 VERSION = 'enhancements 4'  # 4: Achievements replaces PC Enhancements in the six-section movie

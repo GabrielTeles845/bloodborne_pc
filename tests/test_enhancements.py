@@ -52,9 +52,9 @@ class SettingsTests(unittest.TestCase):
         for key in set(enhancements.FEATURES) - enhancements.DEFAULT_ON - enhancements.EXPERIMENTAL:
             self.assertIn(f'{{"{key}", ', header)
             self.assertIn(f"('{key}', ", launcher)
-        for key in enhancements.EXPERIMENTAL:  # not offered to players until tested in play
+        for key in enhancements.EXPERIMENTAL:  # launcher only, labelled experimental; not the overlay
             self.assertNotIn(f'{{"{key}", ', header)
-            self.assertNotIn(f"('{key}', ", launcher)
+            self.assertRegex(launcher, rf"\('{key}', \('[^']*\(experimental")
 
 
 class RewriteTests(unittest.TestCase):
