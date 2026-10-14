@@ -192,7 +192,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
-                'frames_ahead': '', 'frame_stats': False, 'gpu_profile': False,
+                'frames_ahead': '', 'vram_budget_mb': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': True, 'online': False, 'online_server': 'srv.shadps4.net:31313',
                 'online_webapi': '', 'online_npid': '', 'online_password': '', 'online_upnp': True,
@@ -244,6 +244,9 @@ MOUSE_SPEEDS = [(str(v), (f'{v / 10:.1f}x',)) for v in (5, 7, 10, 13, 16, 20, 30
 MOVE_SMOOTHING = [('100', ('Off', 'Выкл.')), ('80', ('Light', 'Слабое')),
                   ('60', ('Medium (default)', 'Среднее (по умолчанию)')), ('35', ('Strong', 'Сильное'))]
 FRAMES_AHEAD = [('', ('1 (default)', '1 (по умолчанию)')), ('2', ('2',)), ('0', ('Unbounded', 'Без ограничения'))]
+VRAM_BUDGETS = [('', ('Automatic (recommended)', 'Автоматически (рекомендуется)')),
+                ('2560', ('2.5 GB',)), ('3072', ('3 GB',)), ('4096', ('4 GB',)),
+                ('5120', ('5 GB',)), ('6144', ('6 GB',)), ('8192', ('8 GB',))]
 
 # Graphics presets, after Lantern Launcher's idea (Low to Ultra, recommended from the GPU) but
 # with this port's own settings: only the ones that cost GPU time. The upscaler (DLSS needs an
@@ -486,6 +489,8 @@ def game_environment(s):
     env['BB_FPS'] = s['fps_mode']
     if s.get('frame_cap', ''):
         env['BB_FPS_LIMIT'] = s['frame_cap']
+    if str(s.get('vram_budget_mb', '')) in {value for value, _ in VRAM_BUDGETS if value}:
+        env['BB_GC_BUDGET_MB'] = str(s['vram_budget_mb'])
     for key, name in (('draw_pipe', 'BB_DRAW_PIPE'), ('readbacks', 'BB_READBACKS'), ('frames_ahead', 'BB_FRAMES_AHEAD')):
         if s[key]:
             env[name] = s[key]
@@ -1325,6 +1330,12 @@ class Launcher:
         self.section(f, _('Detail', 'Детализация'))
         self.row(f, _('Model detail (LOD)', 'Детализация моделей'), self.choice(f, 'model_lod', 'ini', LODS),
                  _('A game patch (game version 1.09).', 'Патч игры (версия 1.09).'))
+        self.row(f, _('Video memory pressure target', 'Порог видеопамяти'),
+                 self.choice(f, 'vram_budget_mb', 'app', VRAM_BUDGETS),
+                 _('Starts clearing old textures and buffers before this amount. This is not a hard cap; '
+                   'lower values can cause stutter. Restart the game to apply.',
+                   'Начинает освобождать старые текстуры и буферы до этого объёма. Это не жёсткий предел; '
+                   'низкие значения могут вызвать рывки. Перезапустите игру.'))
         self.check(f, 'show_fps', 'ini', _('Show the FPS counter', 'Показывать FPS'))
 
     def build_display(self):

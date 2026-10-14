@@ -1026,12 +1026,17 @@ void TextureCache::GarbageCollectImages() {
             const char* env = std::getenv("BB_GC_BUDGET_MB");
             return env ? std::strtoull(env, nullptr, 10) << 20 : 0;
         }();
+        // bbport: a set budget (the launcher's Video memory pressure target) never exceeds the
+        // driver's own.
+        const u64 driver_budget = instance.GetDeviceMemoryBudgetNow();
+        const u64 budget = forced_budget && driver_budget ? std::min(forced_budget, driver_budget)
+                           : forced_budget                ? forced_budget
+                                                          : driver_budget;
         if (instance.IsIntegrated() || forced_budget) {
-            const u64 budget = forced_budget ? forced_budget : instance.GetDeviceMemoryBudgetNow();
             if (budget != 0) {
                 trigger_gc_memory = budget / 10 * 7;
-                pressure_gc_memory = budget / 100 * 85;
-                critical_gc_memory = budget / 100 * 95;
+                pressure_gc_memory = budget / 100 * (instance.IsIntegrated() ? 85 : 80);
+                critical_gc_memory = budget / 100 * (instance.IsIntegrated() ? 95 : 90);
             }
         } else {
             // bbport: on a discrete GPU the startup marks put pressure at 40% of the budget
@@ -1041,7 +1046,6 @@ void TextureCache::GarbageCollectImages() {
             // Pressure at 80% and critical at 90% of the driver's budget; below them only the
             // idle rule (images unused for BB_GC_IDLE_SECONDS) applies, which keeps the issue #32
             // fix: the textures of areas left behind still go.
-            const u64 budget = instance.GetDeviceMemoryBudgetNow();
             if (budget != 0) {
                 pressure_gc_memory = budget / 100 * 80;
                 critical_gc_memory = budget / 100 * 90;

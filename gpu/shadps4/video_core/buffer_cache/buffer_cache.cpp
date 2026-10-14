@@ -445,6 +445,10 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
             .memory = backing.memory,
             .memoryOffset = backing.offset + ((start - backing.start) << block_shift),
         });
+        for (u64 chunk = start >> blocks_per_chunk_shift;
+             chunk < (end >> blocks_per_chunk_shift); ++chunk) {
+            chunk_arenas[chunk].push_back(new_arena);
+        }
     });
 
     u64 base_page = first_addr >> arena_page_bits;
@@ -500,6 +504,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
             const auto device_memory =
                 Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
             chunk_memory[chunk] = device_memory;
+            chunk_arenas[chunk].push_back(arena);
 
             Backing backing;
             backing.start = start;
@@ -791,17 +796,25 @@ void BufferCache::RunGarbageCollector(u64 used_memory, u64 pressure_memory, u64 
     const auto device = instance.GetDevice();
     for (const auto& [last_use, chunk] : idle) {
         const VAddr address = chunk << chunk_shift;
-        const Buffer* arena = address_space[address >> arena_page_bits];
         const u64 first_block = chunk << blocks_per_chunk_shift;
         const u64 end_block = (chunk + 1) << blocks_per_chunk_shift;
         resident_ranges.Subtract(first_block, end_block);
         // Unbound before the next submission; the next use binds new memory and uploads again.
-        BindsForArena(arena)->binds.push_back(vk::SparseMemoryBind{
-            .resourceOffset = address - arena->cpu_addr,
-            .size = chunk_size,
-            .memory = VK_NULL_HANDLE,
-            .memoryOffset = 0,
-        });
+        for (const Buffer* bound_arena : chunk_arenas.at(chunk)) {
+            auto& binds = BindsForArena(bound_arena)->binds;
+            const u64 resource_offset = address - bound_arena->cpu_addr;
+            // A migration can still have a pending bind for this chunk. Replace it instead of
+            // submitting overlapping bind and unbind ranges in the same sparse batch.
+            binds.erase(std::remove_if(binds.begin(), binds.end(), [&](const auto& bind) {
+                            return bind.resourceOffset == resource_offset;
+                        }), binds.end());
+            binds.push_back(vk::SparseMemoryBind{
+                .resourceOffset = resource_offset,
+                .size = chunk_size,
+                .memory = VK_NULL_HANDLE,
+                .memoryOffset = 0,
+            });
+        }
         // Shaders reading guest memory by address fault on it again instead.
         runtime.FillBuffer(bda_pagetable_buffer.get(), first_block * sizeof(vk::DeviceAddress),
                            (end_block - first_block) * sizeof(vk::DeviceAddress), 0u);
@@ -811,6 +824,7 @@ void BufferCache::RunGarbageCollector(u64 used_memory, u64 pressure_memory, u64 
             device.freeMemory(memory);
         });
         chunk_memory.erase(chunk);
+        chunk_arenas.erase(chunk);
     }
     gc_released += idle.size();
 

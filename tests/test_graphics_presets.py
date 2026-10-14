@@ -1,6 +1,8 @@
 from pathlib import Path
+import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'launcher'))
 import bbport_launcher_win as core
@@ -49,6 +51,15 @@ class GraphicsPresetTests(unittest.TestCase):
         for status, expected in cases.items():
             with self.subTest(status=status):
                 self.assertEqual(core.recommended_graphics_preset(status), expected)
+
+    def test_video_memory_target_is_passed_to_the_game(self):
+        app = dict(core.APP_DEFAULTS)
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertNotIn('BB_GC_BUDGET_MB', core.game_environment(app))
+            app['vram_budget_mb'] = '3072'
+            self.assertEqual(core.game_environment(app)['BB_GC_BUDGET_MB'], '3072')
+            app['vram_budget_mb'] = '999999'
+            self.assertNotIn('BB_GC_BUDGET_MB', core.game_environment(app))
 
 
 if __name__ == '__main__':

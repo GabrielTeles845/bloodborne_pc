@@ -60,6 +60,9 @@ FIELDS = {
             hint='Motion data for moving characters: fewer ghosting trails with an upscaler.'),
         row('model_lod', 'Model detail', 'choice', core.LODS,
             'How soon distant models switch to simpler versions. Highest costs GPU time.'),
+        row('vram_budget_mb', 'Video memory pressure target', 'choice', core.VRAM_BUDGETS,
+            'Starts clearing old textures and buffers before the chosen amount. This is not a hard VRAM cap; '
+            'lower values may cause stutter. Restart the game to apply.'),
         row('show_fps', 'Show FPS counter', 'toggle'),
         *[row(key, title[0], 'toggle', hint=EFFECT_HINTS.get(key, '')) for key, title, _ in core.EFFECTS],
     ],
@@ -134,6 +137,7 @@ SETTINGS_SECTIONS = {
         ('Upscaling', ['upscaler', 'preset', 'live_resolution', 'sharpen', 'sharpness',
                        'object_motion']),
         ('Image effects', ['model_lod'] + [key for key, _, _ in core.EFFECTS]),
+        ('Video memory', ['vram_budget_mb']),
         ('Overlay', ['show_fps']),
     ],
     'Controls': [
@@ -169,6 +173,7 @@ SETTING_FIELDS = {field['key']: field for fields in FIELDS.values() for field in
 SEARCH_TERMS = {
     'output_res': 'screen resolution display', 'fps_mode': 'fps frame rate',
     'frame_cap': 'fps limit unlocked', 'upscaler': 'dlss fsr taa',
+    'vram_budget_mb': 'vram video memory texture cache pressure budget',
     'user_dir': 'save folder save path', 'game_dir': 'eboot install game files',
     'online_npid': 'account id username', 'mouse_camera': 'camera controls', 'mouse_menu': 'cursor pointer click menus',
     'ui_language': 'launcher language', 'mods_enabled': 'load mods',

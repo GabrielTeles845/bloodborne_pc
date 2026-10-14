@@ -207,6 +207,9 @@ private:
     /// Second (RunGarbageCollector's clock) each chunk was last bound, by chunk index.
     std::vector<u32> chunk_last_use;
     std::unordered_map<u64, vk::DeviceMemory> chunk_memory;
+    /// An arena migration binds the same allocation into the replacement buffer while the old
+    /// sparse buffer remains alive. Unbind every buffer before freeing the allocation.
+    std::unordered_map<u64, std::vector<const Buffer*>> chunk_arenas;
     std::atomic<u32> gc_second{0};
     u32 gc_run_second{};
     u64 gc_released{};
