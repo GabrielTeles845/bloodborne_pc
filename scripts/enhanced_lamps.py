@@ -224,8 +224,14 @@ def add_lamp_menu(data: bytes, expected_sha: str, *, active_state: int = 6,
     return result
 
 
-def make(dvdroot: Path) -> dict[Path, bytes]:
-    """Build supported lamp archives from an exact 1.09 dump; return no partial output."""
+def make(dvdroot: Path, rematches=None) -> dict[Path, bytes]:
+    """Build supported lamp archives from an exact 1.09 dump; return no partial output.
+    rematches: {(map, script): (defeat flag, request flag, text id)} adds a boss rematch entry to
+    those lamps' menus (boss_rematches.lamp_rows)."""
+    rematches = dict(rematches or {})
+    unknown = set(rematches) - set(INPUTS)
+    if unknown:
+        raise UnsupportedLamp(f'no lamp script {sorted(unknown)[0]} to add a rematch to')
     targets = defaultdict(list)
     for (map_name, script_name), digest in INPUTS.items():
         targets[map_name].append((script_name, digest, 6, 5, 3))
@@ -240,6 +246,7 @@ def make(dvdroot: Path) -> dict[Path, bytes]:
             i = archive.index(script_name)
             archive.files[i] = add_lamp_menu(archive.files[i], digest,
                                             active_state=active_state,
-                                            follow_state=follow_state, warp_args=warp_args)
+                                            follow_state=follow_state, warp_args=warp_args,
+                                            rematch=rematches.get((map_name, script_name)))
         files[relative] = dcx_compress(archive.to_bytes(), template=packed)
     return files

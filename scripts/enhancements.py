@@ -25,10 +25,11 @@ engine/maiden_events.cpp and engine/dream_mirror_layout.cpp.
                                               game's own screens, once the Doll and the storage box
                                               have been used (enhanced_lamps.py). With Rebirth on,
                                               its altar edit shares the Nightmare's lamp archive.
-  pc_boss_rematches     (BB_PC_REMATCHES)     EXPERIMENTAL (launcher toggle, off): Rematch Cleric Beast
-                                              at its lamp once defeated (boss_rematches.py). Brings
-                                              the lamps' menu with it; the permanent defeat flag
-                                              and first-kill rewards are left alone.
+  pc_boss_rematches     (BB_PC_REMATCHES)     EXPERIMENTAL (launcher toggle, off): Rematch a defeated
+                                              boss at its own lamp, all 19 that have one
+                                              (boss_rematches.py). Brings the lamps' menu with it;
+                                              the permanent defeat flags and first-kill rewards are
+                                              left alone.
   pc_menu               (BB_PC_MENU)          the in-game PC menu's assets (menu_assets.py): its
                                               sections in the options movie and its strings in
                                               every language. On by default: it only adds rows.
@@ -55,7 +56,7 @@ FEATURES = {
     # After Rebirth: both rewrite m24_02_00_00's talk archive, and the later layer wins (mods.py).
     'pc_enhanced_lamps': ('BB_PC_LAMPS', 'enhanced-lamps', 'Lamps: Level Up and Storage'),
     # After the lamps: its Central Yharnam talk archive adds the rematch to the lamp menu.
-    'pc_boss_rematches': ('BB_PC_REMATCHES', 'boss-rematches', 'Boss rematches (experimental: Cleric Beast)'),
+    'pc_boss_rematches': ('BB_PC_REMATCHES', 'boss-rematches', 'Boss rematches at their lamps (experimental)'),
     'pc_menu': ('BB_PC_MENU', 'pc-menu', 'In-game PC menu (System > PC Settings)'),
 }
 # Off unless switched on, except these: they change nothing the game does by themselves.
@@ -63,7 +64,7 @@ DEFAULT_ON = {'pc_menu'}
 # Still a first test: the launcher labels its toggle experimental; none in the overlay.
 EXPERIMENTAL = {'pc_boss_rematches'}
 # Bumped when a rewrite changes, so every install makes its files again.
-VERSION = 'enhancements 4'  # 4: Achievements replaces PC Enhancements in the six-section movie
+VERSION = 'enhancements 5'  # 5: rematches for every boss with a lamp
 
 
 def sha256(data):
@@ -359,13 +360,13 @@ def rebirth(dvdroot):
         return {}
 
 
-def enhanced_lamps(dvdroot, keys=()):
+def enhanced_lamps(dvdroot, keys=(), rematches=None):
     """Level Up and Storage at every lit lamp. The Altar of Despair's archive holds lamps too:
     with Rebirth on, its altar script is rewritten here as well, so whichever layer is read the
-    archive has both."""
+    archive has both. rematches: the boss lamps' rematch entries (boss_rematches.lamp_rows)."""
     import enhanced_lamps as lamps
     try:
-        files = lamps.make(dvdroot)
+        files = lamps.make(dvdroot, rematches=rematches)
     except (OSError, FormatError, ValueError) as error:
         print(f'Enhancements: Lamps: the lamps keep their menus ({error})', file=sys.stderr)
         return {}
@@ -383,17 +384,31 @@ def enhanced_lamps(dvdroot, keys=()):
 
 
 def boss_rematches(dvdroot, keys=()):
-    """The Cleric Beast rematch (experimental). Its lamp archives come from the lamps' own
-    composition (with Rebirth's altar when that is on), except Central Yharnam's, which also
-    carries the rematch entry."""
+    """Boss rematches at the bosses' own lamps (experimental). Its lamp archives are the lamps'
+    own composition (with Rebirth's altar when that is on) with the rematch entries added."""
     import boss_rematches as rematches
+    # The two invaders rewrite five of the same event files: with both on, the rematch edits go on
+    # top of theirs, so whichever layer is read the maps have both.
+    def with_invaders(data, rule):
+        try:
+            return two_invaders_map(data, rule)
+        except Skip:  # the invaders' layer leaves this map alone too
+            return data
+
+    before = {}
+    if 'pc_two_invaders' in keys:
+        for rule in MAIDEN_MAPS:
+            before[rule[0]] = lambda data, rule=rule: with_invaders(data, rule)
     try:
-        files = rematches.make(dvdroot)
+        files = rematches.make(dvdroot, before=before)
     except (OSError, FormatError, ValueError) as error:
         print(f'Enhancements: Boss rematches: not made ({error})', file=sys.stderr)
         return {}
-    rematch_lamp = Path('script') / 'talk' / 'm24_01_00_00.talkesdbnd.dcx'
-    files.update({path: data for path, data in enhanced_lamps(dvdroot, keys).items() if path != rematch_lamp})
+    lamps = enhanced_lamps(dvdroot, keys, rematches.lamp_rows())
+    if not lamps:
+        print('Enhancements: Boss rematches: not made (the lamp menus could not be made)', file=sys.stderr)
+        return {}
+    files.update(lamps)
     return files
 
 
@@ -405,7 +420,7 @@ def pc_menu(dvdroot):
 MAKERS = {'pc_two_invaders': two_invaders, 'pc_mirror_appearance': dream_mirror, 'pc_rebirth': rebirth,
           'pc_enhanced_lamps': enhanced_lamps, 'pc_boss_rematches': boss_rematches, 'pc_menu': pc_menu}
 # Makers whose files depend on which other features are on (their stamp names those features).
-COMBINED = {'pc_enhanced_lamps': ('pc_rebirth',), 'pc_boss_rematches': ('pc_rebirth',)}
+COMBINED = {'pc_enhanced_lamps': ('pc_rebirth',), 'pc_boss_rematches': ('pc_rebirth', 'pc_two_invaders')}
 
 
 def enabled(settings, env):

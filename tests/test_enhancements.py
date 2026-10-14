@@ -141,10 +141,32 @@ class RealGameTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(altar.files[altar.index('t242307.esd')]).hexdigest(),
                              enhancements.REBIRTH_OUT)
             yharnam = Bnd4(dcx_decompress((root / 'script/talk/m24_01_00_00.talkesdbnd.dcx').read_bytes()))
-            lamp = esd.parse(yharnam.files[yharnam.index('t241002.esd')])
-            self.assertIsNotNone(lamp.group(enhanced_lamps.LAMP_MENU_GROUP))
-        # Off unless the experiment is asked for: there is no launcher toggle.
+            for name, states in (('t241000.esd', 11), ('t241002.esd', 14), ('t241003.esd', 14)):
+                lamp = esd.parse(yharnam.files[yharnam.index(name)])
+                self.assertEqual(len(lamp.group(enhanced_lamps.LAMP_MENU_GROUP).states), states, name)
+            # Ebrietas's lamp shares the altar's archive: its rematch and Rebirth are both there.
+            ebrietas = esd.parse(altar.files[altar.index('t242001.esd')])
+            self.assertEqual(len(ebrietas.group(enhanced_lamps.LAMP_MENU_GROUP).states), 14)
+        # Off unless switched on (the launcher's toggle is labelled experimental).
         self.assertNotIn('pc_boss_rematches', enhancements.enabled({'pc_boss_rematches': '0'}, {}))
+
+    def test_rematches_keep_the_two_invaders(self):
+        from emevd import Emevd
+        import boss_rematches
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            keys = enhancements.enabled({'pc_two_invaders': '1', 'pc_boss_rematches': '1'}, {})
+            self.assertLess(keys.index('pc_two_invaders'), keys.index('pc_boss_rematches'))  # rematches win
+            made = {m.name: m for m in enhancements.make(GAME, out, keys)}
+            for rule in enhancements.MAIDEN_MAPS:
+                relative = f'dvdroot_ps4/event/{rule[0]}.emevd.dcx'
+                invaders = Emevd(dcx_decompress((made['two-invaders'] / relative).read_bytes()))
+                both = Emevd(dcx_decompress((made['boss-rematches'] / relative).read_bytes()))
+                for event in (rule[3], rule[4]):  # the maidens' ring and stop events
+                    self.assertEqual(both.event_instructions(event), invaders.event_instructions(event))
+                for boss in boss_rematches.BOSSES:
+                    if boss.map == rule[0]:
+                        self.assertTrue(both.event_instructions(boss.ids[4]), boss.name)
 
     def test_lamps_and_rebirth_share_the_altar_archive(self):
         from fromsoft import Bnd4

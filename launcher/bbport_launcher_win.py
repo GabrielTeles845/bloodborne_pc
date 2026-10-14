@@ -181,8 +181,8 @@ ENHANCEMENTS = [
                     'Перерождение у Алтаря отчаяния'), False),
     ('pc_enhanced_lamps', ('Lamps: Level Up and Storage at every lit lamp',
                            'Фонари: повышение уровня и хранилище у каждого фонаря'), False),
-    ('pc_boss_rematches', ('Boss rematches at the lamp (experimental: Cleric Beast; back up your saves)',
-                           'Повторные бои с боссами у фонаря (эксперимент: Чудовище-священник; сохраните копию сохранений)'), False),
+    ('pc_boss_rematches', ('Boss rematches at their lamps (experimental; back up your saves)',
+                           'Повторные бои с боссами у их фонарей (эксперимент; сохраните копию сохранений)'), False),
 ]
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y', 'mouse_menu',
              *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}
@@ -1493,9 +1493,9 @@ class Launcher:
         for key, title, _on in ENHANCEMENTS:
             self.check(f, key, 'ini', _(*title))
         self.note(f, _('Made from your own game files at launch. Restart to apply; Load mods is not required.'))
-        self.note(f, _('Boss rematches are a first test: only Cleric Beast so far, not yet played through on a '
-                       'real save.', 'Повторные бои - первая проба: пока только Чудовище-священник, на настоящем '
-                       'сохранении ещё не проверены.'))
+        self.note(f, _('Boss rematches: a defeated boss\'s own lamp offers a rematch for one Insight. Tested in '
+                       'play on the Cleric Beast; the other 18 are new.', 'Повторные бои: фонарь побеждённого босса '
+                       'предлагает бой заново за одно озарение. В игре проверен Чудовище-священник; остальные 18 новые.'))
         self.section(f, _('Third-party patches', 'Сторонние патчи'))
         self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
                     _('shadPS4/GoldHEN XML patch files for version 1.09. Empty: {}',
