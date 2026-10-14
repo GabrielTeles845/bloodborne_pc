@@ -10,7 +10,8 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   Memory given to the game's buffers was never released, so usage grew with every area until
   `ErrorOutOfDeviceMemory` after an hour or two. When video memory gets short, buffers unused
   for a few seconds now give theirs back; cards with room to spare behave as before.
-  `BB_BUFFER_GC=0` turns it off.
+  `BB_BUFFER_GC=0` turns it off. *Settings → Graphics → Video memory* can start clearing
+  earlier (a pressure target, not a hard cap; Automatic by default).
 - **Opening PC Graphics, PC Display and the other PC sections no longer crashes with button
   prompt mods** ([#3](https://github.com/Jgamrot/bloodborne_pc/issues/3)). The menus' fixed
   Scaleform memory is mostly taken by `menu/common.tpf`; the Xbox 360 Prompts mod's larger copy
@@ -22,6 +23,8 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
 - **Installer: a renamed plain 1.09 update PKG is accepted** (a browser's `(1)`, store-style
   names). Only names that look like the 60 FPS variants are refused, each step says whether it
   wants the base game or the update, and picking the same PKG twice is refused.
+- **Touchpad gestures:** each touch now gets its own ID and a hold time, as a DualShock 4
+  reports them, instead of zero for every sample.
 - **Missing walls and floors you could walk through** ([#6](https://github.com/Jgamrot/bloodborne_pc/issues/6)).
   Now and then a piece of a map loaded without its model or collision, and it stayed broken
   until the game was closed. The game reads its archives two ways at once: one thread moves to a
