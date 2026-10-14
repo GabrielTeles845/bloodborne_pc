@@ -4,8 +4,24 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## Unreleased
+## 1.8.2
 
+- **Video memory no longer runs out on 4 GB cards** ([#3](https://github.com/Jgamrot/bloodborne_pc/issues/3)).
+  Memory given to the game's buffers was never released, so usage grew with every area until
+  `ErrorOutOfDeviceMemory` after an hour or two. When video memory gets short, buffers unused
+  for a few seconds now give theirs back; cards with room to spare behave as before.
+  `BB_BUFFER_GC=0` turns it off.
+- **Opening PC Graphics, PC Display and the other PC sections no longer crashes with button
+  prompt mods** ([#3](https://github.com/Jgamrot/bloodborne_pc/issues/3)). The menus' fixed
+  Scaleform memory is mostly taken by `menu/common.tpf`; the Xbox 360 Prompts mod's larger copy
+  left too little for a PC section (a crash at `0xdcf79`). The menus get 8 MB more
+  (`BB_MENU_HEAP_EXTRA_MB=0` keeps the original size).
+- **A damaged `.dcx` file no longer stops the game** ([#8](https://github.com/Jgamrot/bloodborne_pc/issues/8)):
+  the feature that needs it turns off with a log line, and a failing PC enhancements or shader
+  pre-build step lets the game start as with that step off.
+- **Installer: a renamed plain 1.09 update PKG is accepted** (a browser's `(1)`, store-style
+  names). Only names that look like the 60 FPS variants are refused, each step says whether it
+  wants the base game or the update, and picking the same PKG twice is refused.
 - **Missing walls and floors you could walk through** ([#6](https://github.com/Jgamrot/bloodborne_pc/issues/6)).
   Now and then a piece of a map loaded without its model or collision, and it stayed broken
   until the game was closed. The game reads its archives two ways at once: one thread moves to a
