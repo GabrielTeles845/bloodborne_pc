@@ -732,13 +732,14 @@ void ShadNetClient::HandleServerFeaturesReply(const std::vector<u8>& payload) {
     m_sem_authenticated.release();
 }
 
-// bbport: the port's own name and version (the launcher's, BB_PORT_VERSION), in the form of
-// shadPS4's fork builds ("shadPS4 <owner>/...") so a server's rules can tell it apart.
+// bbport: shadPS4's own fork-release format ("shadPS4 <owner>/v<shadPS4 version>", as
+// BuildVersionString makes it), which the shadNet admins asked for: the server signed out
+// "shadPS4 Jgamrot/bloodborne_pc v1.8.2". The port's own version (the launcher's,
+// BB_PORT_VERSION) goes to the log only.
 u64 ShadNetClient::ReportClientVersion() {
     const char* port_version = std::getenv("BB_PORT_VERSION");
     shadnet::SetClientVersionRequest req;
-    req.set_version(std::string("shadPS4 Jgamrot/bloodborne_pc v") +
-                    (port_version && *port_version ? port_version : "unknown"));
+    req.set_version("shadPS4 Jgamrot/v0.20.0");
     const std::string blob = req.SerializeAsString();
     std::vector<u8> payload;
     payload.reserve(4 + blob.size());
@@ -748,7 +749,8 @@ u64 ShadNetClient::ReportClientVersion() {
     payload.push_back(static_cast<u8>(sz >> 16));
     payload.push_back(static_cast<u8>(sz >> 24));
     payload.insert(payload.end(), blob.begin(), blob.end());
-    LOG_INFO(ShadNet, "Client version reported: '{}'", req.version());
+    LOG_INFO(ShadNet, "Client version reported: '{}' (port v{})", req.version(),
+             port_version && *port_version ? port_version : "unknown");
     return SubmitRequest(CommandType::SetClientVersion, payload);
 }
 

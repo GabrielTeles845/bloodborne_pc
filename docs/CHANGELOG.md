@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.8.3
+
+- **Online works again.** Since 14 October the shadNet server only accepts version reports in
+  shadPS4's own format and signed 1.8.2 out ("This shadNet server doesn't accept your shadPS4
+  build"). The port now reports itself the way shadPS4's own fork releases do,
+  `shadPS4 Jgamrot/v0.20.0`, as the server's admins asked. The port's version stays in the log.
+
 ## 1.8.2
 
 - **Video memory no longer runs out on 4 GB cards** ([#3](https://github.com/Jgamrot/bloodborne_pc/issues/3)).
