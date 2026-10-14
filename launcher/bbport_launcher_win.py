@@ -1422,6 +1422,12 @@ class Launcher:
                                  'go through a shadNet server.'))
         self.check(f, 'online', 'app', _('Play online'),
                    _('Off: the game stays offline, as before.'))
+        self.note(f, _('Heads-up: the public shadPS4 server (srv.shadps4.net) currently signs this port out '
+                       '("doesn\'t accept your shadPS4 build"), since its 14 October 2026 update. To play together, '
+                       'use seamless co-op on a server one of you runs, or a private shadNet server.',
+                       'Внимание: публичный сервер shadPS4 (srv.shadps4.net) сейчас отключает этот порт '
+                       '("doesn\'t accept your shadPS4 build") после обновления 14 октября 2026. Для совместной игры '
+                       'используйте бесшовный кооператив на сервере одного из вас или частный сервер shadNet.'))
         self.var('online', 'app').trace_add('write', lambda *_a: self.refresh_status())
         self.section(f, _('Game server (messages, bloodstains, ghosts)'))
         community = self.var('online_community', 'app')
