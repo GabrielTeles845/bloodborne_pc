@@ -21,6 +21,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -225,9 +226,51 @@ def run_setup(game_exe):
 
 # --- Hosting -----------------------------------------------------------------------------------------
 
+# This port's build of the co-op shadNet server (packaging/windows/build_coop_server.sh):
+# Wozzardman's shadnet-p2p with one patch, so clients on shadPS4 0.20's network code (this port
+# since 1.9.5) get STUN replies; BBSC's own shadnet.exe drops their signaling packets. BBSC's game
+# server is used as it is.
+PORT_DIR = (Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False)
+            else Path(__file__).resolve().parent.parent)
+
+
+def bundled_server():
+    for folder in (PORT_DIR / 'bin' / 'coop-server', PORT_DIR / 'out' / 'coop-server'):
+        if (folder / 'shadnet.exe').is_file():
+            return folder
+    return None
+
+
+def shadnet_dir(sync=False):
+    """The folder shadnet.exe runs from. It keeps shadnet.cfg and its database beside itself, so
+    this port's server runs from its own folder under bbport-coop, which updates leave alone.
+    sync (only while the server is stopped): copy the bundled programs there, and BBSC's
+    configuration (ports, seamless co-op, the host's registration key) the first time."""
+    bundled = bundled_server()
+    if bundled is None:
+        return package_dir('server') / 'server'
+    target = coop_dir() / 'shadnet-bbport'
+    if sync:
+        for source in bundled.rglob('*'):
+            if not source.is_file():
+                continue
+            copy = target / source.relative_to(bundled)
+            if (not copy.is_file() or copy.stat().st_size != source.stat().st_size
+                    or copy.stat().st_mtime < source.stat().st_mtime):
+                copy.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, copy)
+        bbsc = package_dir('server') / 'server'
+        for name in ('shadnet.cfg', 'worlds.cfg', 'scoreboards.cfg'):
+            if not (target / name).exists() and (bbsc / name).is_file():
+                shutil.copy2(bbsc / name, target / name)
+    return target
+
+
 def registration_key():
     """The host's own key (created on first use): only players who have it can make accounts."""
-    cfg = package_dir('server') / 'server' / 'shadnet.cfg'
+    cfg = shadnet_dir() / 'shadnet.cfg'
+    if not cfg.is_file():
+        cfg = shadnet_dir(sync=True) / 'shadnet.cfg'
     text = cfg.read_text(encoding='utf-8')
     for line in text.splitlines():
         if line.startswith('RegistrationSecretKey='):
@@ -256,14 +299,18 @@ class Host:
     def start(self, address):
         self.stop()
         server = package_dir('server') / 'server'
+        shadnet = shadnet_dir()
         # Servers left over from a launcher that closed without stopping them hold the ports.
         end_leftovers(server)
+        if shadnet != server:
+            end_leftovers(shadnet)
+        shadnet = shadnet_dir(sync=True)
         logs = server / 'logs'
         logs.mkdir(exist_ok=True)
         stamp = time.strftime('%Y%m%d-%H%M%S')
         env = dict(os.environ, SHADNET_BLOODBORNE_SEAMLESS_COOP='1')
         shadnet_log = open(logs / f'shadnet-{stamp}.log', 'w', encoding='utf-8', errors='replace')
-        self.processes.append(subprocess.Popen([str(server / 'shadnet.exe')], cwd=server, env=env,
+        self.processes.append(subprocess.Popen([str(shadnet / 'shadnet.exe')], cwd=shadnet, env=env,
                                                stdout=shadnet_log, stderr=subprocess.STDOUT,
                                                stdin=subprocess.DEVNULL, creationflags=NO_WINDOW))
         time.sleep(2)

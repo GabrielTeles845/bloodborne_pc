@@ -33,10 +33,34 @@ class CoopTests(unittest.TestCase):
         cfg = coop.package_dir('server') / 'server' / 'shadnet.cfg'
         cfg.parent.mkdir(parents=True)
         cfg.write_text('[General]\nHost=0.0.0.0\nRegistrationSecretKey=\n', encoding='utf-8')
-        key = coop.registration_key()
-        self.assertEqual(len(key), 40)
-        self.assertEqual(coop.registration_key(), key)
+        with mock.patch.object(coop, 'bundled_server', return_value=None):  # BBSC's own server
+            key = coop.registration_key()
+            self.assertEqual(len(key), 40)
+            self.assertEqual(coop.registration_key(), key)
         self.assertIn(f'RegistrationSecretKey={key}', cfg.read_text(encoding='utf-8'))
+
+    def test_the_bundled_server_runs_from_its_own_folder_with_the_hosts_key(self):
+        # This port's shadnet.exe (STUN fix) keeps its config and database beside itself: it is
+        # copied under bbport-coop and takes BBSC's configuration, key included, the first time.
+        bbsc = coop.package_dir('server') / 'server'
+        bbsc.mkdir(parents=True)
+        (bbsc / 'shadnet.cfg').write_text('[General]\nRegistrationSecretKey=hostkey\n', encoding='utf-8')
+        bundled = Path(self.folder.name) / 'port' / 'bin' / 'coop-server'
+        (bundled / 'sqldrivers').mkdir(parents=True)
+        (bundled / 'shadnet.exe').write_bytes(b'new server')
+        (bundled / 'sqldrivers' / 'qsqlite.dll').write_bytes(b'plugin')
+        with mock.patch.object(coop, 'bundled_server', return_value=bundled):
+            self.assertEqual(coop.registration_key(), 'hostkey')
+            folder = coop.shadnet_dir()
+            self.assertEqual(folder, coop.coop_dir() / 'shadnet-bbport')
+            self.assertEqual((folder / 'shadnet.exe').read_bytes(), b'new server')
+            self.assertTrue((folder / 'sqldrivers' / 'qsqlite.dll').is_file())
+            # Its own config from then on; an update of the programs keeps it.
+            (folder / 'shadnet.cfg').write_text('[General]\nRegistrationSecretKey=kept\n', encoding='utf-8')
+            (bundled / 'shadnet.exe').write_bytes(b'newer server!')
+            coop.shadnet_dir(sync=True)
+            self.assertEqual((folder / 'shadnet.exe').read_bytes(), b'newer server!')
+            self.assertEqual(coop.registration_key(), 'kept')
 
     def test_environment_points_this_launch_at_the_host(self):
         base = {'BB_ONLINE': '0', 'BB_SHADNET_NPID': 'normal', 'BB_GAME_DIR': 'game'}
