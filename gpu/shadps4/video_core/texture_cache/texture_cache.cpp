@@ -1027,6 +1027,10 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 }
 
 void TextureCache::GarbageCollectImages() {
+    // bbport: the driver's own critical mark (90% of its budget, as below). With the launcher's
+    // Video memory pressure target the marks below can be far under it; dropping GPU-written
+    // images is only for when VRAM itself is running out.
+    u64 vram_critical = critical_gc_memory;
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
         // bbport: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding
@@ -1042,6 +1046,9 @@ void TextureCache::GarbageCollectImages() {
         // bbport: a set budget (the launcher's Video memory pressure target) never exceeds the
         // driver's own.
         const u64 driver_budget = instance.GetDeviceMemoryBudgetNow();
+        if (driver_budget != 0) {
+            vram_critical = driver_budget / 100 * (instance.IsIntegrated() ? 95 : 90);
+        }
         const u64 budget = forced_budget && driver_budget ? std::min(forced_budget, driver_budget)
                            : forced_budget                ? forced_budget
                                                           : driver_budget;
@@ -1087,6 +1094,8 @@ void TextureCache::GarbageCollectImages() {
     }();
     // The tick at the start of that second (an older one where no submission came then).
     const u64 idle_tick = gc_tick_at_second[(second - idle_seconds) % gc_tick_at_second.size()];
+    // Last used a minute ago or more (lru_touched_tick: real use, not the collector's Touch).
+    const u64 minute_tick = gc_tick_at_second[(second - 60) % gc_tick_at_second.size()];
     std::scoped_lock lock{mutex};
     bool pressured = false;
     bool aggresive = false;
@@ -1116,13 +1125,20 @@ void TextureCache::GarbageCollectImages() {
         // tiled ones cannot be written back at all) neither use up the deletions nor stay first
         // in line: they move to the back of the list. The oldest ones being such render targets
         // stopped the collector for good, and VRAM grew with every area visited.
-        if (tiled && download) {
+        // bbport (Supermedo/bloodborne_pc 44e7644): past the critical mark of the driver's own
+        // budget, one unused for a minute goes all the same, unwritten (render targets of an
+        // area left behind): it is the GPU's only copy, but out of VRAM the game slows to
+        // system memory or stops instead.
+        const bool drop = tiled && download && aggresive &&
+                          total_used_memory >= vram_critical &&
+                          image.lru_touched_tick < minute_tick;
+        if (tiled && download && !drop) {
             ++gc_kept;
             gc_kept_bytes += image.info.guest_size;
             lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
-        if (download && !pressured) {
+        if (download && !pressured && !drop) {
             lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
@@ -1131,7 +1147,9 @@ void TextureCache::GarbageCollectImages() {
         // deletions once there were 20 of them and nothing was evicted again (0 evictions for a
         // whole session, the texture cache climbing until `ErrorOutOfDeviceMemory` - issue #32).
         --num_deletions;
-        if (download) {
+        if (drop) {
+            ++gc_dropped;
+        } else if (download) {
             // bbport: synchronously, while the image still protects its pages. A deferred
             // write-back landed after FreeImage had unprotected them, over whatever the game
             // had meanwhile stored there (e.g. its heap after unloading an area).
@@ -1171,14 +1189,15 @@ void TextureCache::GarbageCollectImages() {
         if (now - gc_report_time >= std::chrono::seconds(5)) {
             std::printf("Texture cache: memory pressure, %llu of %llu MiB (critical %llu): "
                         "%llu images evicted, %llu written back since the last report; "
-                        "%llu old GPU-written tiled images kept (%llu MiB)\n",
+                        "%llu old GPU-written tiled images kept (%llu MiB), %llu dropped\n",
                         (unsigned long long)(total_used_memory >> 20),
                         (unsigned long long)(pressure_gc_memory >> 20),
                         (unsigned long long)(critical_gc_memory >> 20),
                         (unsigned long long)gc_evictions, (unsigned long long)gc_downloads,
-                        (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20));
+                        (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20),
+                        (unsigned long long)gc_dropped);
             gc_report_time = now;
-            gc_evictions = gc_downloads = 0;
+            gc_evictions = gc_downloads = gc_dropped = 0;
         }
     }
 }
