@@ -4,6 +4,35 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9.4 experimental
+
+Fixes from Supermedo's upstream that this fork still lacked, each checked against our own code first,
+and The Hunter's Dream online backend, still hidden.
+
+- **No more stop when the graphics driver refuses a pipeline** ("Failed to create graphics pipeline:
+  ErrorUnknown", code 23, mostly AMD): its draws are skipped and it isn't cached. Motion-vector
+  pipelines are no longer preloaded from the cache, the root cause of most of those refusals.
+- **Crash fixes:** the texture cache's image list no longer moves in memory while an image is in use
+  (a crash in FindDepthTarget); the GPU command recorder always has a chunk to write into; a garbage
+  GPU command header drops the rest of that buffer instead of stopping the game.
+- **AMD RX 6000 (RDNA2):** object motion no longer loses the device; it is off on AMD cards before
+  RDNA3 (`BB_OBJECT_MOTION=1` to test it).
+- **Physics at 60, 90 and uncapped frame rates:** the FPS presets now set the physics step to the
+  right value, not the patch file's 1/15 or 1/30 of a second (ragdolls, cloth, falling).
+- **Video memory full:** an allocation the driver's budget refuses is made past it instead of
+  stopping the game; old render targets of areas left behind can be freed.
+- **Fewer texture-upload checks:** only images the GPU may write keep a hash of their upload.
+- **Shader resource walker:** reads made ahead of the game fall back to their recovery point instead
+  of permanently changing the walker.
+- **Display:** no title-menu flicker above 1080p (parsifal295, #56); the loading screen's item
+  picture stays at outputs other than 1080p (bmy via parsifal295, #62).
+- The GPU, its video memory and the driver are named at the top of every log.
+- **The Hunter's Dream (hidden, `BB_HUNTERS_DREAM=1`):** Supermedo's port of Awaken's backend
+  (bbhost's protocol, GPL-3): Discord sign-in by code on the Online page, the game's server
+  functions over HTTP to the game server only. Not offered until its team has agreed. This build
+  reports itself as `bbport-jgamrot <version>`. Seamless co-op keeps its own network code and
+  never uses this backend.
+
 ## 1.9.3 experimental
 
 - **Co-op bells: BBSC now gives its Hunt Bell and Kin Bell.** BBSC replaces the vanilla bells with
