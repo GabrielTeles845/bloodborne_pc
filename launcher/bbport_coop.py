@@ -392,6 +392,12 @@ def co_op_environment(env, address, name, password, probe):
     port_user.mkdir(parents=True, exist_ok=True)
     (port_user / 'host_overrides.json').write_text(text, encoding='utf-8')
     env = dict(env)
+    # BBSC's co-op kit (its Hunt Bell, Kin Bell and the rest, which replace the vanilla bells) is
+    # only given after BBSC has backed up the save, and BBSC finds saves only in shadPS4's layout
+    # unless BBSC_SAVE_DIR names the folder: this port's user\savedata\<user>\CUSA00207\SPRJ0005.
+    save_dir = active_save_dir(Path(env.get('BB_USER_DIR') or port_user))
+    if save_dir:
+        env['BBSC_SAVE_DIR'] = str(save_dir)
     env.update({
         'BBSC_RELAY': f'{address}:{RELAY_PORT}',  # BBSC's relay (warps, world sync) on the host
         'BB_PROBE': str(launcher),
@@ -406,6 +412,16 @@ def co_op_environment(env, address, name, password, probe):
         'BB_COOP': '1',
     })
     return env
+
+
+def active_save_dir(user_dir):
+    """The game's save folder (SPRJ0005, userdata0000...) written most recently, or None."""
+    newest = None
+    for folder in Path(user_dir).glob('savedata/*/CUSA00207/SPRJ0005'):
+        times = [f.stat().st_mtime for f in folder.glob('userdata00*') if f.is_file()]
+        if times and (newest is None or max(times) > newest[0]):
+            newest = (max(times), folder)
+    return newest[1] if newest else None
 
 
 def backup_saves(user_dir):

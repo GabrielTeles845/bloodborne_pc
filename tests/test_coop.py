@@ -57,6 +57,21 @@ class CoopTests(unittest.TestCase):
         self.assertEqual(overrides['https://ss4.scej-network.jp:20443'], 'http://100.65.141.9:20443')
         self.assertEqual(overrides['https://thehuntersdream.com:18671/summon_messenger'],
                          'http://100.65.141.9:31315')
+        self.assertNotIn('BBSC_SAVE_DIR', env)  # no saves yet: BBSC finds none either way
+
+    def test_bbsc_is_told_where_the_saves_are(self):
+        # BBSC gives its co-op kit (Hunt Bell, Kin Bell) only after backing up the save it finds.
+        user = Path(self.folder.name) / 'saves'
+        older = user / 'savedata' / '2' / 'CUSA00207' / 'SPRJ0005'
+        newer = user / 'savedata' / '1' / 'CUSA00207' / 'SPRJ0005'
+        for folder, when in ((older, 1000), (newer, 2000)):
+            folder.mkdir(parents=True)
+            (folder / 'userdata0000').write_bytes(b'save')
+            os.utime(folder / 'userdata0000', (when, when))
+        port = Path(self.folder.name) / 'bbport-windows'
+        env = coop.co_op_environment({'BB_USER_DIR': str(user)}, '100.65.141.9', 'hunter', 'secret',
+                                     port / 'bin' / 'bb-probe.exe')
+        self.assertEqual(Path(env['BBSC_SAVE_DIR']), newer)
 
     def test_unsafe_package_paths_are_refused(self):
         data = io.BytesIO()
