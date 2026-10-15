@@ -4,7 +4,22 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## 1.9.4 experimental
+## 1.9.5 experimental (co-op network test)
+
+A pre-release to test seamless co-op on the new network code; it includes everything listed under
+1.9.4, which was not released on its own. Host and guests all need 1.9.5: it cannot connect to
+1.9.3 or older.
+
+- **Network code from shadPS4 0.20**, as in Supermedo's port (Awaken's adaptation): the network,
+  PSN and shadNet libraries replace the shadp2p-based ones. This is what The Hunter's Dream team
+  asked ports to use.
+- **Co-op hosts run a fixed co-op server.** BBSC's server (Wozzardman's shadnet-p2p) ignored the
+  new network code's connection-setup packets, so the bells could not bring players together.
+  The port now ships that server with one fix (it answers both packet formats), built from source
+  by `packaging/windows/build_coop_server.sh`. *Start hosting* uses it automatically and keeps the
+  registration key, so invite codes stay valid; co-op accounts are made again on first *Play co-op*.
+
+## 1.9.4 experimental (not released on its own)
 
 Fixes from Supermedo's upstream that this fork still lacked, each checked against our own code first,
 and The Hunter's Dream online backend, still hidden.
