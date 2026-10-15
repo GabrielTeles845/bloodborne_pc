@@ -17,7 +17,22 @@
 
 #include <vk_mem_alloc.h>
 
+#include <atomic>
+#include <cstdio>
+
 namespace Vulkan {
+
+void NoteOverBudget(const char* what) {
+    static std::atomic<bool> image_noted{false}, buffer_noted{false};
+    auto& noted = what[0] == 'i' ? image_noted : buffer_noted;
+    if (!noted.exchange(true)) {
+        std::printf("GPU: video memory full: %s memory allocated past the driver's budget (the driver "
+                    "may keep it in system memory: slower, but the game goes on). A lower output "
+                    "resolution or upscaler preset needs less.\n",
+                    what);
+        std::fflush(stdout);
+    }
+}
 
 namespace {
 
@@ -733,6 +748,20 @@ void Instance::CollectDeviceParameters() {
     const std::string api_version = GetReadableVersion(properties.apiVersion);
     const std::string extensions = fmt::format("{}", fmt::join(available_extensions, ", "));
 
+    // bbport: the GPU, its VRAM and the driver in every log (LOG_INFO is filtered out by
+    // default), flushed so it is there even if the device is lost right after. Idea from
+    // parsifal295 (PR #61).
+    u64 vram = 0;
+    const auto heaps = physical_device.getMemoryProperties();
+    for (u32 i = 0; i < heaps.memoryHeapCount; ++i) {
+        if (heaps.memoryHeaps[i].flags & vk::MemoryHeapFlagBits::eDeviceLocal) {
+            vram = std::max<u64>(vram, heaps.memoryHeaps[i].size);
+        }
+    }
+    std::printf("GPU: %s%s, %llu MiB VRAM, driver %s (%s), Vulkan %s\n", model_name.c_str(),
+                IsIntegrated() ? " (integrated)" : "", static_cast<unsigned long long>(vram >> 20),
+                driver_name.c_str(), driver.driverInfo.data(), api_version.c_str());
+    std::fflush(stdout);
     LOG_INFO(Render_Vulkan, "GPU_Vendor: {}", vendor_name);
     LOG_INFO(Render_Vulkan, "GPU_Model: {}", model_name);
     LOG_INFO(Render_Vulkan, "GPU_Integrated: {}", IsIntegrated() ? "Yes" : "No");

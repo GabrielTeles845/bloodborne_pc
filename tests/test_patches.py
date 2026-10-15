@@ -107,12 +107,21 @@ class NativeUiTests(unittest.TestCase):
 
 class FpsPatchTests(unittest.TestCase):
     def test_fps_physics_write_preserves_unrelated_instruction(self):
-        for preset, value in [('60 FPS++', '8988883D'), ('90 FPS++', '8988083D'),
-                              ('Uncap FPS++', '8988883B')]:
+        for preset, value in [('60 FPS++', '8988083D'), ('90 FPS++', '610B363C'),
+                              ('Uncap FPS++', '8988083C')]:
             with self.subTest(preset=preset):
                 writes = compile_patches(XML, [preset], '01.09', SEGMENTS)
                 self.assertIn((0x00f383ca - EBOOT_BASE, bytes.fromhex(value)), writes)
                 self.assertNotIn(0x011383ca - EBOOT_BASE, [at for at, data in writes])
+
+    def test_fps_presets_set_the_physics_step_per_frame_rate(self):
+        # shadPS4's maintained patch values (upstream be1cde3): 1/30 at 60 FPS (the game's own),
+        # 1/90 at 90 FPS, 1/120 uncapped. The old values were 1/15, 1/30 and 1/240.
+        for preset, step in [('60 FPS++', 30), ('90 FPS++', 90), ('Uncap FPS++', 120)]:
+            with self.subTest(preset=preset):
+                writes = dict(compile_patches(XML, [preset], '01.09', SEGMENTS))
+                value = struct.unpack('<f', writes[0x00f383ca - EBOOT_BASE])[0]
+                self.assertAlmostEqual(1 / value, step, places=2)
 
     def test_other_versions_keep_their_xml_addresses(self):
         tree = ET.parse(XML)

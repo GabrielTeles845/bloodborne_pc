@@ -237,13 +237,17 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
         const auto new_image_id = slot_images.insert(instance, runtime, slot_image_views, new_info);
         RegisterImage(new_image_id);
 
+        // insert() may have grown slot_images and moved every image: `cache_image` would then
+        // point at freed storage, so look it up again.
+        auto& old_image = slot_images[cache_image_id];
+
         // Inherit image usage
         auto& new_image = slot_images[new_image_id];
-        new_image.usage = cache_image.usage;
+        new_image.usage = old_image.usage;
         new_image.flags &= ~ImageFlagBits::Dirty;
         // When creating a depth buffer through overlap resolution don't clear it on first use.
         new_image.info.meta_info.htile_clear_mask = 0;
-        runtime.CopyColorAndDepth(&cache_image, &new_image);
+        runtime.CopyColorAndDepth(&old_image, &new_image);
 
         // Free the cache image.
         FreeImage(cache_image_id);
@@ -761,10 +765,12 @@ ImageView& TextureCache::FindDepthTarget(ImageId image_id, const ImageDesc& desc
         }
         Image& stencil_image = slot_images[stencil_id];
         TouchImage(stencil_image);
-        stencil_image.AssociateDepth(image_id, image.image_uid);
+        // insert() above may have grown slot_images and moved every image, leaving `image`
+        // pointing at freed storage: look the depth image up again.
+        stencil_image.AssociateDepth(image_id, slot_images[image_id].image_uid);
     }
 
-    return image.FindView(desc.view_info, false);
+    return slot_images[image_id].FindView(desc.view_info, false);
 }
 
 void TextureCache::RefreshImage(Image& image) {
@@ -807,12 +813,19 @@ void TextureCache::RefreshImage(Image& image) {
         // had no reference, and the first CPU write anywhere in its page replaced the GPU's
         // contents with stale guest memory (a 1x1 exposure texture computed once: the
         // character creation preview went black after one frame).
-        const u8* mip_addr = std::bit_cast<u8*>(image.info.guest_address) + mip_offset;
-        const u64 mip_hash = XXH3_64bits(mip_addr, mip_size);
-        if (is_gpu_modified && !is_gpu_dirty && image.mip_hashes[m] == mip_hash) {
-            continue;
+        // Only for images the GPU writes or may write (small ones, targets, storage images): a
+        // streamed texture hashed here cost the GPU thread its whole size again on every upload.
+        const bool track = (is_gpu_modified && !is_gpu_dirty) || mip_size <= 64_KB ||
+                           image.usage.storage || image.usage.render_target ||
+                           image.usage.depth_target;
+        if (track) {
+            const u8* mip_addr = std::bit_cast<u8*>(image.info.guest_address) + mip_offset;
+            const u64 mip_hash = XXH3_64bits(mip_addr, mip_size);
+            if (is_gpu_modified && !is_gpu_dirty && image.mip_hashes[m] == mip_hash) {
+                continue;
+            }
+            image.mip_hashes[m] = mip_hash;
         }
-        image.mip_hashes[m] = mip_hash;
 
         const u32 extent_width = mip_pitch ? std::min(mip_pitch, width) : width;
         const u32 extent_height = mip_height ? std::min(mip_height, height) : height;
@@ -1014,6 +1027,10 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 }
 
 void TextureCache::GarbageCollectImages() {
+    // bbport: the driver's own critical mark (90% of its budget, as below). With the launcher's
+    // Video memory pressure target the marks below can be far under it; dropping GPU-written
+    // images is only for when VRAM itself is running out.
+    u64 vram_critical = critical_gc_memory;
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
         // bbport: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding
@@ -1029,6 +1046,9 @@ void TextureCache::GarbageCollectImages() {
         // bbport: a set budget (the launcher's Video memory pressure target) never exceeds the
         // driver's own.
         const u64 driver_budget = instance.GetDeviceMemoryBudgetNow();
+        if (driver_budget != 0) {
+            vram_critical = driver_budget / 100 * (instance.IsIntegrated() ? 95 : 90);
+        }
         const u64 budget = forced_budget && driver_budget ? std::min(forced_budget, driver_budget)
                            : forced_budget                ? forced_budget
                                                           : driver_budget;
@@ -1074,6 +1094,8 @@ void TextureCache::GarbageCollectImages() {
     }();
     // The tick at the start of that second (an older one where no submission came then).
     const u64 idle_tick = gc_tick_at_second[(second - idle_seconds) % gc_tick_at_second.size()];
+    // Last used a minute ago or more (lru_touched_tick: real use, not the collector's Touch).
+    const u64 minute_tick = gc_tick_at_second[(second - 60) % gc_tick_at_second.size()];
     std::scoped_lock lock{mutex};
     bool pressured = false;
     bool aggresive = false;
@@ -1103,13 +1125,20 @@ void TextureCache::GarbageCollectImages() {
         // tiled ones cannot be written back at all) neither use up the deletions nor stay first
         // in line: they move to the back of the list. The oldest ones being such render targets
         // stopped the collector for good, and VRAM grew with every area visited.
-        if (tiled && download) {
+        // bbport (Supermedo/bloodborne_pc 44e7644): past the critical mark of the driver's own
+        // budget, one unused for a minute goes all the same, unwritten (render targets of an
+        // area left behind): it is the GPU's only copy, but out of VRAM the game slows to
+        // system memory or stops instead.
+        const bool drop = tiled && download && aggresive &&
+                          total_used_memory >= vram_critical &&
+                          image.lru_touched_tick < minute_tick;
+        if (tiled && download && !drop) {
             ++gc_kept;
             gc_kept_bytes += image.info.guest_size;
             lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
-        if (download && !pressured) {
+        if (download && !pressured && !drop) {
             lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
@@ -1118,7 +1147,9 @@ void TextureCache::GarbageCollectImages() {
         // deletions once there were 20 of them and nothing was evicted again (0 evictions for a
         // whole session, the texture cache climbing until `ErrorOutOfDeviceMemory` - issue #32).
         --num_deletions;
-        if (download) {
+        if (drop) {
+            ++gc_dropped;
+        } else if (download) {
             // bbport: synchronously, while the image still protects its pages. A deferred
             // write-back landed after FreeImage had unprotected them, over whatever the game
             // had meanwhile stored there (e.g. its heap after unloading an area).
@@ -1158,14 +1189,15 @@ void TextureCache::GarbageCollectImages() {
         if (now - gc_report_time >= std::chrono::seconds(5)) {
             std::printf("Texture cache: memory pressure, %llu of %llu MiB (critical %llu): "
                         "%llu images evicted, %llu written back since the last report; "
-                        "%llu old GPU-written tiled images kept (%llu MiB)\n",
+                        "%llu old GPU-written tiled images kept (%llu MiB), %llu dropped\n",
                         (unsigned long long)(total_used_memory >> 20),
                         (unsigned long long)(pressure_gc_memory >> 20),
                         (unsigned long long)(critical_gc_memory >> 20),
                         (unsigned long long)gc_evictions, (unsigned long long)gc_downloads,
-                        (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20));
+                        (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20),
+                        (unsigned long long)gc_dropped);
             gc_report_time = now;
-            gc_evictions = gc_downloads = 0;
+            gc_evictions = gc_downloads = gc_dropped = 0;
         }
     }
 }

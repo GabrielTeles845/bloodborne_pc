@@ -239,7 +239,9 @@ def compile_patches(xml, names, app_version, segments):
             offset=int(line.get('Address'),0)-EBOOT_BASE
             # The 1.09 FPS XML mistypes the physics-step address by 0x200000.
             # 0x011383ca lies inside an unrelated multi-byte NOP;
-            # the intended float immediate is at 0x00f383ca in this build.
+            # the intended float immediate is at 0x00f383ca in this build (1/30 in the game).
+            # The values in patches/Bloodborne.xml for these presets are shadPS4's maintained
+            # ones (upstream be1cde3): 1/30 at 60 FPS, 1/90 at 90, 1/120 uncapped.
             if (app_version == '01.09' and name in ('60 FPS++', '90 FPS++', 'Uncap FPS++')
                     and offset == 0x011383ca-EBOOT_BASE):
                 offset = 0x00f383ca-EBOOT_BASE
