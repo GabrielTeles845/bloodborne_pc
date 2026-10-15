@@ -4,10 +4,28 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9.2 experimental
+
+A pre-release: the launcher does not offer it as an update. Fixes for seamless co-op, found in
+the first test of 1.9.1:
+
+- **The game no longer exits (code 3) when it starts with seamless co-op.** While the game
+  loaded, every page of its memory was briefly made unreadable before each part got its own
+  protection. BBSC checks some of that memory from another thread every few milliseconds, and
+  a check in that moment ended the game (`Fault: read access ... at bbsc.dll+0x1933`). Only
+  memory the game doesn't use is made unreadable now. For co-op, the game code also stays
+  writable, as BBSC expects from shadPS4.
+- **BBSC finds the host's server.** It looks for the host's address in its own places, and
+  1.9.1 put it somewhere else, so warps and world sync had no server ("Relay: no game server
+  address"). Co-op launches now give BBSC the address directly.
+- **Stop hosting stops the whole server.** BBSC's game server runs a second copy of itself, which
+  kept running after Stop hosting or closing the launcher and kept the co-op ports busy. Both
+  copies stop now, and Start hosting first ends any that were left over.
+
 ## 1.9.1 experimental
 
 A pre-release: the launcher does not offer it as an update. It is 1.8.3 (with everything in
-1.8.2) plus the seamless co-op of 1.9 and the first boss rematch.
+1.8.2) plus the seamless co-op of 1.9 and boss rematches for every boss with a lamp.
 
 - **Seamless co-op is how to play together for now.** The public shadPS4 server
   (srv.shadps4.net) signs this port out since its 14 October update, whatever version the port
