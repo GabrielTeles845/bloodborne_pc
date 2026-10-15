@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 import webbrowser
 import zipfile
@@ -201,6 +202,9 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'online_webapi': '', 'online_npid': '', 'online_password': '', 'online_upnp': True,
                 'coop_name': '', 'coop_password': '', 'coop_invite': '',
                 'online_community': COMMUNITY_SERVER,
+                # The co-op pool: 'shadnet' (the server above) or 'huntersdream' (shown only with
+                # BB_HUNTERS_DREAM=1), and The Hunter's Dream account from its Discord sign-in.
+                'online_pool': 'shadnet', 'thd_online_id': '', 'thd_token': '',
                 # First-run setup (bbport_startup): setupVersion is the wizard version last
                 # finished or skipped; launchDirectly starts the game without the launcher.
                 'setupCompleted': False, 'setupSkipped': False, 'setupVersion': 1,
@@ -433,6 +437,87 @@ def server_check(server, webapi, community):
     return '\n'.join(lines)
 
 
+# The Hunter's Dream pool: the engine's own backend for it (BB_NET_BACKEND=thd, bbhost's
+# protocol, Awaken's port as Supermedo took it in). Hidden until The Hunter's Dream team (Metr1k)
+# has agreed to this fork connecting; BB_HUNTERS_DREAM=1 shows it for those tests.
+HUNTERS_DREAM_POOL = os.environ.get('BB_HUNTERS_DREAM') == '1'
+ONLINE_POOLS = [('shadnet', ('shadNet server (address below)',)),
+                ('huntersdream', ("The Hunter's Dream (Discord sign-in)",))]
+# Which build a server sees: shadNet's client version and The Hunter's Dream's client field
+# ("bbport-jgamrot/<version>"). This fork's own name, never an official shadPS4 one.
+CLIENT_VERSION = f'bbport-jgamrot {VERSION}'
+
+
+def hunters_dream_selected(s):
+    return HUNTERS_DREAM_POOL and s.get('online_pool') == 'huntersdream'
+
+
+def thd_call(url, body):
+    """A call to The Hunter's Dream's account service (bbhost's): its reply, or ValueError with
+    the server's reason."""
+    request = urllib.request.Request(url, data=json.dumps(body).encode(), method='POST',
+                                     headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            text = response.read()
+    except urllib.error.HTTPError as error:
+        text = error.read()
+    try:
+        reply = json.loads(text)
+    except ValueError:
+        reply = None
+    if not isinstance(reply, dict) or 'ResKind' not in reply:
+        raise ValueError(f'{url} has no account service')
+    if reply['ResKind'] != 0:
+        raise ValueError(reply.get('Message') or 'refused')
+    return reply
+
+
+def thd_sign_in(game_server, on_code, cancelled=lambda: False):
+    """Discord sign-in the way bbhost does it: a code to approve on the website. on_code(page,
+    code) shows it. Returns (online id, token); raises ValueError."""
+    auth = community_address(game_server)
+    start = thd_call(auth + '/auth/device/start',
+                     {'DeviceName': f'bbport-jgamrot on {os.environ.get("COMPUTERNAME", "PC")}'})
+    device, user_code = start.get('DeviceCode', ''), start.get('UserCode', '')
+    if not device or not user_code:
+        raise ValueError('no code in the reply')
+    interval = max(1, int(start.get('Interval') or 5))
+    deadline = time.monotonic() + int(start.get('ExpiresIn') or 600)
+    on_code(start.get('VerificationUri') or auth + '/link', user_code)
+    while time.monotonic() < deadline and not cancelled():
+        time.sleep(interval)
+        poll = thd_call(auth + '/auth/device/poll', {'DeviceCode': device})
+        status = poll.get('Status')
+        if status == 'approved':
+            if not poll.get('OnlineId') or not poll.get('Token'):
+                raise ValueError('no token in the reply')
+            return poll['OnlineId'], poll['Token']
+        if status == 'slow_down':
+            interval += 5
+        elif status == 'denied':
+            raise ValueError('the sign-in was denied')
+        elif status == 'expired':
+            break
+    raise ValueError('the sign-in was cancelled' if cancelled() else 'the code expired; try again')
+
+
+def server_check_hunters_dream(community):
+    """Whether The Hunter's Dream's game server and bbhost service answer (off the UI thread)."""
+    lines = []
+    for title, url in ((_('Game server {0}'), community + ':20443/bb-eu/ss.info'),
+                       (_('Co-op service {0}'), community + ':18671/')):
+        name = title.format(url.split('://', 1)[1].split('/')[0])
+        try:
+            urllib.request.urlopen(url, timeout=6).close()
+            lines.append(_('{0}: reachable').format(name))
+        except urllib.error.HTTPError:
+            lines.append(_('{0}: reachable').format(name))   # it answered
+        except (OSError, ValueError) as error:
+            lines.append(_('{0}: not reachable ({1})').format(name, error))
+    return '\n'.join(lines)
+
+
 # Keyboard button prompts: PCBButtons by JinkiJinn (Nexus Mods, Bloodborne mod 460, shipped with
 # credit as its permissions allow) replaces the game's prompt images with keyboard keys. The
 # package keeps it in bundled/ (packaging/windows/bundled in a source checkout), outside the mods
@@ -472,7 +557,8 @@ def install_keyboard_prompts(mods_dir):
 
 def game_environment(s):
     env = dict(os.environ)
-    env['BB_PORT_VERSION'] = VERSION  # reported to shadNet after signing in
+    env['BB_PORT_VERSION'] = VERSION
+    env['BB_CLIENT_VERSION'] = CLIENT_VERSION  # what shadNet and The Hunter's Dream see
     env['BB_GAME_DIR'] = s['game_dir']
     if s['user_dir']:
         env['BB_USER_DIR'] = s['user_dir']
@@ -515,6 +601,14 @@ def game_environment(s):
         env['BB_SHADNET_PASSWORD'] = str(s['online_password'])
         env['BB_UPNP'] = '1' if s['online_upnp'] else '0'
         env['BB_COMMUNITY_SERVER'] = community_address(s['online_community'])
+        if hunters_dream_selected(s):
+            # The engine's Hunter's Dream backend with the Discord-linked account (run.py sets
+            # the game server and the backend's addresses).
+            env['BB_NET_BACKEND'] = 'thd'
+            env['BB_THD_ONLINE_ID'] = str(s.get('thd_online_id', ''))
+            env['BB_THD_TOKEN'] = str(s.get('thd_token', ''))
+            for key in ('BB_SHADNET_SERVER', 'BB_SHADNET_WEBAPI', 'BB_SHADNET_NPID', 'BB_SHADNET_PASSWORD'):
+                env.pop(key, None)
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     return env
@@ -1429,6 +1523,8 @@ class Launcher:
                        '("doesn\'t accept your shadPS4 build") после обновления 14 октября 2026. Для совместной игры '
                        'используйте бесшовный кооператив на сервере одного из вас или частный сервер shadNet.'))
         self.var('online', 'app').trace_add('write', lambda *_a: self.refresh_status())
+        if HUNTERS_DREAM_POOL:
+            self.build_hunters_dream(f)
         self.section(f, _('Game server (messages, bloodstains, ghosts)'))
         community = self.var('online_community', 'app')
         self.row(f, _('Game server'), ttk.Entry(f, textvariable=community, width=40),
@@ -1476,6 +1572,50 @@ class Launcher:
         result.grid(row=self.next_row(f), column=1, sticky='w', pady=(6, 0))
         self.note(f, _('Everyone in a session needs the same game version (1.09) and the same server. '
                        'Cheats change the game for the other players too: turn them off when you play together.'))
+
+    def build_hunters_dream(self, f):
+        """The co-op pool choice and The Hunter's Dream's Discord sign-in (BB_HUNTERS_DREAM=1)."""
+        ttk = self.ttk
+        self.section(f, _("The Hunter's Dream (test build)"))
+        self.row(f, _('Co-op pool'), self.choice(f, 'online_pool', 'app', ONLINE_POOLS),
+                 _("The Hunter's Dream signs in with Discord below; the shadNet server uses the account "
+                   'fields further down.'))
+        thd_id, thd_token = self.var('thd_online_id', 'app'), self.var('thd_token', 'app')
+        account = ttk.Label(f, text='', justify='left')
+
+        def show_account():
+            name = thd_id.get() if thd_token.get() else ''
+            account.configure(text=_('Signed in as {}').format(name) if name else _('Not signed in'))
+        show_account()
+        self.row(f, _('Account'), account)
+        signing = ttk.Label(f, text='', style='Muted.TLabel', justify='left', wraplength=self.px(560))
+        code_label = ttk.Label(f, text='', font=('Segoe UI', 20, 'bold'))
+
+        def sign_in():
+            signing.configure(text=_('Starting the sign-in…'))
+            code_label.configure(text='')
+            game = self.var('online_community', 'app').get()
+
+            def on_code(page, code):
+                text = _('In the page that opened ({0}), sign in with Discord and enter this code:').format(page)
+                self.ui_calls.put(lambda: (signing.configure(text=text), code_label.configure(text=code)))
+                webbrowser.open(page)
+
+            def work():
+                try:
+                    name, token = thd_sign_in(game, on_code)
+                except (OSError, ValueError) as error:
+                    self.ui_calls.put(lambda e=error: (signing.configure(text=_('Sign-in failed: {}').format(e)),
+                                                       code_label.configure(text='')))
+                    return
+                self.ui_calls.put(lambda: (thd_id.set(name), thd_token.set(token), signing.configure(text=''),
+                                           code_label.configure(text=''), show_account(), self.collect()))
+            threading.Thread(target=work, daemon=True).start()
+        self.row(f, '', ttk.Button(f, text=_('Sign in with Discord'), command=sign_in))
+        signing.grid(row=self.next_row(f), column=1, sticky='w', pady=(6, 0))
+        code_label.grid(row=self.next_row(f), column=1, sticky='w', pady=(4, 0))
+        self.note(f, _("The connection to The Hunter's Dream is Awaken's port of bbhost's network code; "
+                       "bbhost and The Hunter's Dream are by droogie. Seamless co-op does not use it."))
 
     def build_mods(self):
         f = self.scrolled_page('mods', _('Mods & patches', 'Моды и патчи'),
@@ -1797,6 +1937,12 @@ class Launcher:
             if choice is None:
                 return
             online.set(bool(choice))
+        if (online.get() and HUNTERS_DREAM_POOL and self.var('online_pool', 'app').get() == 'huntersdream'
+                and not self.var('thd_token', 'app').get()):
+            self.messagebox.showwarning('Bloodborne', _("The Hunter's Dream: sign in with Discord on the "
+                                                        'Online page first.'))
+            self.show('online')
+            return
         if online.get() and '@' in npid.get():
             self.messagebox.showwarning(
                 'Bloodborne', _('The Online ID is the account name (NPID) you registered on the server, '

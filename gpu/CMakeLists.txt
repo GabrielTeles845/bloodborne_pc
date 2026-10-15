@@ -165,7 +165,10 @@ add_library(bbgpu ${BBGPU_KIND} ${VIDEO_CORE} ${RECOMPILER} ${COMMON} ${SHIM_SOU
     shadps4/core/libraries/videodec/video_utils.cpp)
 add_dependencies(bbgpu host_shaders)
 # bbport co-op: PS4 network and PSN libraries with the shadNet client, from shadp2p
-# (github.com/Wozzardman/shadp2p, GPL-2.0), for private Bloodborne co-op servers.
+# (github.com/Wozzardman/shadp2p, GPL-2.0), for private Bloodborne co-op servers (BBSC's
+# seamless co-op server speaks this shadp2p protocol). The Hunter's Dream backend (bbnet/thd,
+# from droogie's bbhost, GPL-3.0-or-later, as Awaken (Awakenchan/BloodBorneButPc) and Supermedo
+# put it together) takes the NP and sceNet imports with BB_NET_BACKEND=thd.
 find_package(Protobuf CONFIG REQUIRED)
 set(SHADNET_PROTO_OUT "${CMAKE_CURRENT_BINARY_DIR}/shadnet_proto_gen")
 file(MAKE_DIRECTORY "${SHADNET_PROTO_OUT}")
@@ -180,8 +183,12 @@ file(GLOB_RECURSE BBNET_SOURCES CONFIGURE_DEPENDS shadps4/core/libraries/network
 # emulator's UI layers.
 list(FILTER BBNET_SOURCES EXCLUDE REGEX
     "np_trophy|trophy_ui|np_sns_facebook_dialog|np_profile_dialog/|np_commerce/")
+file(GLOB BBNET_THD_SOURCES CONFIGURE_DEPENDS bbnet/thd/*.cpp)
+# A C++ exception in the backend returns an error to the game instead of ending it.
+set_source_files_properties(${BBNET_THD_SOURCES} PROPERTIES COMPILE_DEFINITIONS BB_HLE_EXCEPTION_GUARD)
 find_package(nlohmann_json CONFIG REQUIRED)
-add_library(bbnet STATIC ${BBNET_SOURCES} "${SHADNET_PROTO_OUT}/shadnet.pb.cc" bbnet/bbnet_glue.cpp)
+add_library(bbnet STATIC ${BBNET_SOURCES} ${BBNET_THD_SOURCES} "${SHADNET_PROTO_OUT}/shadnet.pb.cc"
+    bbnet/bbnet_glue.cpp)
 target_include_directories(bbnet PRIVATE shim shadps4 shadps4/shadnet "${SHADNET_PROTO_OUT}"
     third_party/imgui third_party/httplib)
 target_link_libraries(bbnet PRIVATE nlohmann_json::nlohmann_json)
@@ -189,6 +196,11 @@ target_link_libraries(bbnet PRIVATE nlohmann_json::nlohmann_json)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 target_compile_definitions(bbnet PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT CPPHTTPLIB_ZLIB_SUPPORT)
+# OpenSSL verifies the server's chain (with the Windows ROOT and CA stores) and the host name.
+# cpp-httplib's second check on Windows rebuilt the chain from the leaf alone and could pick an
+# expired cross-signed "ISRG Root X2" from the user's intermediate store: "SSL server
+# verification failed" (error 10) for The Hunter's Dream on some PCs.
+target_compile_definitions(bbnet PRIVATE CPPHTTPLIB_DISABLE_WINDOWS_AUTOMATIC_ROOT_CERTIFICATES_UPDATE)
 target_link_libraries(bbnet PRIVATE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 if (WIN32)
     target_sources(bbnet PRIVATE third_party/wepoll/wepoll.c)

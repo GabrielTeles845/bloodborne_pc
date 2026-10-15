@@ -265,7 +265,21 @@ Item {
                         GlassButton { text: "Test connection"; width: 148; height: 38; onClicked: launcher.testConnection() }
                     }
                     Note { visible: is("Online", "Play online"); text: "Enter an account ID, not an email address. Test connection checks that the servers answer, not your sign-in." }
-                    Note { visible: is("Online", "Play online"); text: "Heads-up: the public shadPS4 server (srv.shadps4.net) currently signs this port out (\"doesn't accept your shadPS4 build\"), since its 14 October 2026 update. Online on it won't work until its admins allow the port. To play together, use Co-op (seamless co-op on a server one of you runs), or enter a private shadNet server below." }
+                    Note { visible: is("Online", "Play online"); text: "Heads-up: the shadPS4 team's public server (srv.shadps4.net) serves official shadPS4 builds only and signs this port out. To play together, use Co-op (seamless co-op on a server one of you runs), or enter a private shadNet server below." + (launcher.huntersDreamPool ? " The Hunter's Dream pool is a test build: use it only once The Hunter's Dream team has agreed." : "") }
+                    // The Hunter's Dream (BB_HUNTERS_DREAM=1): Discord sign-in by a code approved on its website.
+                    Note { visible: is("Online", "The Hunter's Dream"); text: "The Hunter's Dream (thehuntersdream.com) is the server bbhost players use for summons, bloodstains and messages. Choose it as the co-op pool under Play online, then sign in with Discord here: the launcher opens its website and shows a code to enter there. Only the account id and its token are kept, in this launcher's settings." }
+                    Note { visible: is("Online", "The Hunter's Dream"); text: launcher.thdStatus; color: Theme.text; font.pixelSize: 13 }
+                    Row { visible: is("Online", "The Hunter's Dream") && launcher.thdCode !== ""; spacing: 14
+                        Text { text: launcher.thdCode; color: Theme.text; font.family: Theme.sans; font.pixelSize: 30; font.letterSpacing: 4; anchors.verticalCenter: parent.verticalCenter }
+                        GlassButton { text: "Copy code"; width: 120; height: 38; anchors.verticalCenter: parent.verticalCenter; onClicked: launcher.thdCopyCode() }
+                    }
+                    Row { visible: is("Online", "The Hunter's Dream"); spacing: 10
+                        GlassButton { text: launcher.thdBusy ? "Waiting for Discord…" : (launcher.thdSignedIn ? "Sign in again" : "Sign in with Discord"); width: 200; height: 38; enabled: !launcher.thdBusy; onClicked: launcher.thdSignIn() }
+                        GlassButton { visible: launcher.thdBusy; text: "Cancel"; width: 110; height: 38; onClicked: launcher.thdCancel() }
+                        GlassButton { visible: !launcher.thdBusy && launcher.thdSignedIn; text: "Sign out"; width: 110; height: 38; onClicked: launcher.thdSignOut() }
+                        GlassButton { text: "Test connection"; width: 148; height: 38; onClicked: launcher.testConnection() }
+                    }
+                    Note { visible: is("Online", "The Hunter's Dream"); text: "The connection to The Hunter's Dream is Awaken's port of bbhost's network code (GPL-3.0), as Supermedo's port took it in; bbhost and The Hunter's Dream are by droogie and its team. Seamless co-op (the Co-op page) does not use it." }
                     Note { visible: is("Co-op", "Seamless co-op"); text: "Experimental. Seamless co-op is BBSC by CLS_AMG (Bloodborne Seamless Co-op 0.0.1): one session through deaths, lamps, areas and bosses, each hunter keeping their own character. One of you hosts the server on their PC; both need Tailscale (tailscale.com) signed in to the same tailnet. Your saves are backed up before every session. Normal play and online are unchanged." }
                     Note { visible: is("Co-op", "Seamless co-op") || is("Co-op", "Host a session") || is("Co-op", "Join a host"); text: launcher.coopStatus }
                     Row { visible: is("Co-op", "Seamless co-op"); spacing: 10

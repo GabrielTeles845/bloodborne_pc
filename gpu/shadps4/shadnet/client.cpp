@@ -732,14 +732,17 @@ void ShadNetClient::HandleServerFeaturesReply(const std::vector<u8>& payload) {
     m_sem_authenticated.release();
 }
 
-// bbport: shadPS4's own fork-release format ("shadPS4 <owner>/v<shadPS4 version>", as
-// BuildVersionString makes it), which the shadNet admins asked for: the server signed out
-// "shadPS4 Jgamrot/bloodborne_pc v1.8.2". The port's own version (the launcher's,
-// BB_PORT_VERSION) goes to the log only.
+// bbport: the build as this fork names itself, from the launcher (BB_CLIENT_VERSION,
+// "bbport-jgamrot <version>", as Supermedo's port reports "bbport <version>"); never an official
+// shadPS4 version string. The public shadNet server serves official shadPS4 builds only.
 u64 ShadNetClient::ReportClientVersion() {
     const char* port_version = std::getenv("BB_PORT_VERSION");
+    const char* client_version = std::getenv("BB_CLIENT_VERSION");
     shadnet::SetClientVersionRequest req;
-    req.set_version("shadPS4 Jgamrot/v0.20.0");
+    req.set_version(client_version && *client_version
+                        ? std::string(client_version)
+                        : std::string("bbport-jgamrot ") +
+                              (port_version && *port_version ? port_version : "dev"));
     const std::string blob = req.SerializeAsString();
     std::vector<u8> payload;
     payload.reserve(4 + blob.size());
