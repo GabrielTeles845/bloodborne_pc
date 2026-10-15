@@ -356,6 +356,10 @@ static const HostOverrideState& GetHostOverrideState() {
     return s;
 }
 
+// bbport: The Hunter's Dream backend (gpu/bbnet/thd).
+extern "C" bool bbthd_enabled();
+extern "C" void bbthd_add_game_headers(std::vector<std::pair<std::string, std::string>>* headers);
+
 bool ApplyHostOverride(std::string& scheme, std::string& host, u16& port, bool& is_secure,
                        std::string_view path) {
     const auto& state = GetHostOverrideState();
@@ -414,6 +418,17 @@ bool ApplyHostOverride(std::string& scheme, std::string& host, u16& port, bool& 
     }
     if (it == state.entries.end()) {
         it = state.entries.find(host);
+    }
+    if (it == state.entries.end()) {
+        // bbport: "*.example.com" matches every host under it.
+        for (auto e = state.entries.begin(); e != state.entries.end(); ++e) {
+            const std::string& key = e->first;
+            if (key.size() > 2 && key[0] == '*' && key[1] == '.' && host.size() > key.size() - 1 &&
+                host.compare(host.size() - (key.size() - 1), key.size() - 1, key, 1) == 0) {
+                it = e;
+                break;
+            }
+        }
     }
     if (it == state.entries.end()) {
         it = state.entries.find("*");
@@ -1763,6 +1778,10 @@ int PS4_SYSV_ABI sceHttpSendRequest(int reqId, const void* postData, u64 size) {
         }
         for (const auto& h : req.headers) {
             plan.headers.push_back(h);
+        }
+        // bbport: The Hunter's Dream binds the game's requests to the account and its ruleset.
+        if (bbthd_enabled()) {
+            bbthd_add_game_headers(&plan.headers);
         }
         // Pull Content-Type out of headers
         for (const auto& [k, v] : plan.headers) {

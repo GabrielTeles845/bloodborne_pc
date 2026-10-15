@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // bbport co-op: what the network and NP libraries from shadp2p need from the rest of
-// shadPS4, implemented on top of the bbport runtime, and their registration.
+// shadPS4, implemented on top of the bbport runtime, and their registration. With
+// BB_NET_BACKEND=thd The Hunter's Dream backend (thd/) takes the NP and sceNet imports instead.
 
 #include <chrono>
 #include <condition_variable>
@@ -58,12 +59,26 @@
 #include "core/libraries/np/np_tus.h"
 #include "core/libraries/np/np_web_api/np_web_api.h"
 #include "core/libraries/np/np_web_api2/np_web_api2.h"
+#include "thd/thd.h"
 
 extern "C" {
 int32_t runtime_thread_spawn(void** out, void* PS4_SYSV_ABI (*entry)(void*), void* argument,
                              uint64_t stack, const char* name);
 int32_t runtime_thread_join_spawned(void* thread, void** result);
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
 }
+
+// The Hunter's Dream backend reads game structures (the player's position for the live map):
+// only from mapped guest memory (bbport).
+namespace BbEngine {
+bool host_read_safe(const void* p, void* out, std::size_t n) {
+    if (!runtime_memory_is_mapped(reinterpret_cast<uintptr_t>(p), n)) {
+        return false;
+    }
+    std::memcpy(out, p, n);
+    return true;
+}
+} // namespace BbEngine
 
 // ---- Kernel ---------------------------------------------------------------------------------
 
@@ -453,9 +468,28 @@ extern "C" void bbnet_configure(const char* app0, const char* serial, const char
 
 // ---- Registration ------------------------------------------------------------------------------
 
+extern "C" void bbnet_initialize(void) {
+    if (BbThd::Enabled()) {
+        BbThd::Initialize();
+    }
+}
+
+extern "C" void bbnet_set_image(unsigned char* image, uint64_t size) {
+    BbThd::SetImage(image, size);
+}
+
 extern "C" void bbnet_register(void) {
     Core::Loader::SymbolsResolver resolver;
     Core::Loader::SymbolsResolver* sym = &resolver;
+    if (BbThd::Enabled()) {
+        // The Hunter's Dream: its NP and sceNet imports; the game's HTTP stays sceHttp's.
+        BbThd::Register(sym);
+        Libraries::Http::RegisterLib(sym);
+        Libraries::Http2::RegisterLib(sym);
+        Libraries::Ssl::RegisterLib(sym);
+        Libraries::Ssl2::RegisterLib(sym);
+        return;
+    }
     Libraries::Net::RegisterLib(sym);
     Libraries::NetCtl::RegisterLib(sym);
     Libraries::Http::RegisterLib(sym);
