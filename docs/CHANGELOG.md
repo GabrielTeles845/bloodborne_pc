@@ -4,6 +4,13 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9.3 experimental
+
+- **Co-op bells: BBSC now gives its Hunt Bell and Kin Bell.** BBSC replaces the vanilla bells with
+  its own co-op kit, but only after backing up the save, and it couldn't find this port's saves
+  ("BBSC kit: no save folder found to back up"), so nobody got the kit and the guest couldn't
+  ring a bell. Co-op launches now tell BBSC where the save is.
+
 ## 1.9.2 experimental
 
 A pre-release: the launcher does not offer it as an update. Fixes for seamless co-op, found in
