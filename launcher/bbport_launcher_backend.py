@@ -182,6 +182,14 @@ SETTINGS_SECTIONS = {
         ('Logs', []),
     ],
 }
+# The Hunter's Dream pool (core.HUNTERS_DREAM_POOL: BB_HUNTERS_DREAM=1 until its team agrees to
+# this fork connecting): the pool choice beside "Play online" and a section for the Discord sign-in.
+if core.HUNTERS_DREAM_POOL:
+    FIELDS['Online'].insert(1, row('online_pool', 'Co-op pool', 'choice', core.ONLINE_POOLS,
+                                   hint="The Hunter's Dream: sign in with Discord in its section. "
+                                        'shadNet server: the account and server below.'))
+    SETTINGS_SECTIONS['Online'][0][1].insert(1, 'online_pool')
+    SETTINGS_SECTIONS['Online'].insert(1, ("The Hunter's Dream", []))
 SETTING_FIELDS = {field['key']: field for fields in FIELDS.values() for field in fields}
 SEARCH_TERMS = {
     'output_res': 'screen resolution display', 'fps_mode': 'fps frame rate',
@@ -198,6 +206,8 @@ SEARCH_ACTIONS = [
     ('Game & Saves', 'Your data', 'Import trophy keys', 'keys.json trophies'),
     ('Game & Saves', 'Your data', 'Open saves folder', 'save path'),
     ('Online', 'Play online', 'Test connection', 'server reachability'),
+    *([('Online', "The Hunter's Dream", 'Sign in with Discord', 'discord account hunters dream thd')]
+      if core.HUNTERS_DREAM_POOL else []),
     ('Mods & Patches', 'Installed mods', 'Refresh mods', 'load order'),
     ('System', 'Launch', 'Desktop shortcut', 'start menu'),
     ('System', 'Launch', 'Add to Steam', 'integration'),
@@ -224,6 +234,9 @@ class LauncherBackend(QObject):
     coopChanged = Signal()
     _coopDone = Signal(str)
     _coopProgress = Signal(str)
+    thdChanged = Signal()
+    _thdUpdate = Signal(str, str)        # status, code
+    _thdDone = Signal(str, str, str)     # error, online id, token
     gameStarted = Signal()
     gameFinished = Signal(int, bool)  # exit code, whether the game got as far as running
     presetApplied = Signal()
@@ -261,6 +274,13 @@ class LauncherBackend(QObject):
         self._coop_launch_env = None
         self._coopDone.connect(self._coop_finished)
         self._coopProgress.connect(self._coop_show_progress)
+        # The Hunter's Dream's Discord sign-in (a code approved on its website).
+        self._thd_status = ''
+        self._thd_code = ''
+        self._thd_busy = False
+        self._thd_cancel = False
+        self._thdUpdate.connect(self._thd_update)
+        self._thdDone.connect(self._thd_finished)
         self.refresh_addons()
         if self._route['mode'] != 'direct':
             self.start_background_checks()
@@ -752,6 +772,10 @@ class LauncherBackend(QObject):
             return
         if self.onlineIdInvalid:
             self._set_notice('Online ID must be your account name, not an email address.')
+            return
+        if (env is None and self.app.get('online') and core.hunters_dream_selected(self.app)
+                and not self.thdSignedIn):
+            self._set_notice("The Hunter's Dream: sign in with Discord on the Online page first.")
             return
         self._write()
         self._log = ''
@@ -1255,6 +1279,90 @@ class LauncherBackend(QObject):
         """The launcher is closing: hosted servers stop with it."""
         self._coop_host.stop()
 
+    # --- The Hunter's Dream (BB_NET_BACKEND=thd): Discord sign-in by device code -------------------
+
+    @Property(bool, constant=True)
+    def huntersDreamPool(self):
+        return core.HUNTERS_DREAM_POOL
+
+    @Property(bool, notify=thdChanged)
+    def thdSignedIn(self):
+        return bool(self.app.get('thd_token') and self.app.get('thd_online_id'))
+
+    @Property(str, notify=thdChanged)
+    def thdStatus(self):
+        if self._thd_status:
+            return self._thd_status
+        if self.thdSignedIn:
+            return f"Signed in to The Hunter's Dream as {self.app.get('thd_online_id')}."
+        return "Not signed in to The Hunter's Dream."
+
+    @Property(str, notify=thdChanged)
+    def thdCode(self):
+        return self._thd_code
+
+    @Property(bool, notify=thdChanged)
+    def thdBusy(self):
+        return self._thd_busy
+
+    @Slot()
+    def thdSignIn(self):
+        if self._thd_busy:
+            return
+        self._thd_busy, self._thd_cancel, self._thd_code = True, False, ''
+        self._thd_status = 'Starting the sign-in…'
+        self.thdChanged.emit()
+        game = self.app.get('online_community', '')
+
+        def on_code(page, code):
+            self._thdUpdate.emit(f'In the page that opened ({page}), sign in with Discord and '
+                                 'enter this code:', code)
+            webbrowser.open(page)
+
+        def work():
+            try:
+                name, token = core.thd_sign_in(game, on_code, lambda: self._thd_cancel)
+            except (OSError, ValueError) as error:
+                self._thdDone.emit(f'Sign-in failed: {error}', '', '')
+                return
+            self._thdDone.emit('', name, token)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot(str, str)
+    def _thd_update(self, status, code):
+        self._thd_status, self._thd_code = status, code
+        self.thdChanged.emit()
+
+    @Slot(str, str, str)
+    def _thd_finished(self, error, name, token):
+        self._thd_busy, self._thd_code = False, ''
+        if error:
+            self._thd_status = error
+        else:
+            self.app['thd_online_id'], self.app['thd_token'] = name, token
+            self._thd_status = ''
+            self._write()
+        self.thdChanged.emit()
+
+    @Slot()
+    def thdCancel(self):
+        self._thd_cancel = True
+        self._thd_status = 'Cancelling…'
+        self.thdChanged.emit()
+
+    @Slot()
+    def thdSignOut(self):
+        self.app['thd_online_id'], self.app['thd_token'] = '', ''
+        self._thd_status = "Signed out of The Hunter's Dream on this PC."
+        self._write()
+        self.thdChanged.emit()
+
+    @Slot()
+    def thdCopyCode(self):
+        if self._thd_code:
+            QGuiApplication.clipboard().setText(self._thd_code)
+            self._set_notice('Sign-in code copied.')
+
     @Slot()
     def openShadNetRegistration(self):
         webbrowser.open('https://shadps4.net/shadnet/register/')
@@ -1262,10 +1370,18 @@ class LauncherBackend(QObject):
     @Slot()
     def testConnection(self):
         self._set_notice('Testing online servers…')
+        hunters_dream = core.hunters_dream_selected(self.app)
+        signed_in = self.app.get('thd_online_id', '') if self.thdSignedIn else ''
+
         def work():
-            server = str(self.app['online_server']).strip() or core.APP_DEFAULTS['online_server']
-            result = core.server_check(server, core.webapi_setting(self.app),
-                                       core.community_address(self.app['online_community']))
+            community = core.community_address(self.app['online_community'])
+            if hunters_dream:
+                result = core.server_check_hunters_dream(community)
+                result += '\n' + (f'Signed in as {signed_in}' if signed_in else
+                                  'Not signed in: use "Sign in with Discord".')
+            else:
+                server = str(self.app['online_server']).strip() or core.APP_DEFAULTS['online_server']
+                result = core.server_check(server, core.webapi_setting(self.app), community)
             self.connectionResult.emit(result)
         threading.Thread(target=work, daemon=True).start()
 

@@ -49,11 +49,40 @@ def online_overrides(env, user_dir):
         # FromSoftware's old storage buckets.
         overrides = {GAME_SERVER: community}
         overrides.update({f'https://{bucket}:443': f'{scheme}://{host}:{COMMUNITY_API_PORT}'
-                          for bucket in ('bb-playlog-prod.s3.amazonaws.com',
-                                         'bb-playlog-test.s3.amazonaws.com')})
+                          for bucket in PLAY_LOG_HOSTS})
         print(f'Co-op: game server {community}')
         path.write_text(json.dumps(overrides, indent=2) + '\n', encoding='utf-8')
     env['SHADPS4_HTTP_HOST_OVERRIDES_JSON'] = str(path)
+
+
+# The Hunter's Dream co-op pool (BB_NET_BACKEND=thd, with bbhost players): the engine's own
+# backend for it (gpu/bbnet/thd, bbhost's protocol, from Awaken's port). The game's servers and
+# play logs go to the game server over HTTP; the account comes from the launcher's Discord sign-in.
+PLAY_LOG_HOSTS = ('bb-playlog-prod.s3.amazonaws.com', 'bb-playlog-test.s3.amazonaws.com')
+THD_ENV = ('BB_NET_BACKEND', 'BB_THD_TOKEN', 'BB_THD_ONLINE_ID', 'BB_THD_SERVER', 'BB_THD_AUTH',
+           'BB_THD_RULESET')
+
+
+def hunters_dream(env, user_dir):
+    if not env.get('BB_THD_TOKEN') or not env.get('BB_THD_ONLINE_ID'):
+        fail("The Hunter's Dream: not signed in. Sign in with Discord on the launcher's Online page.")
+    community = (env.get('BB_COMMUNITY_SERVER') or COMMUNITY_SERVER).rstrip('/')
+    if '://' not in community:
+        community = 'https://' + community
+    base = community
+    overrides = {'*.scej-network.jp': base}
+    overrides.update({host: f'{base}:{COMMUNITY_API_PORT}' for host in PLAY_LOG_HOSTS})
+    path = user_dir / 'host_overrides.json'
+    path.write_text(json.dumps(overrides, indent=2) + '\n', encoding='utf-8')
+    for key in ('BB_SHADNET_SERVER', 'BB_SHADNET_WEBAPI', 'BB_SHADNET_NPID', 'BB_SHADNET_PASSWORD',
+                'BB_SHADNET_TOKEN'):
+        env.pop(key, None)
+    env.update(SHADPS4_HTTP_HOST_OVERRIDES_JSON=str(path), BB_THD_SERVER=f'{base}:{COMMUNITY_API_PORT}',
+               BB_THD_AUTH=base)
+    env.setdefault('BB_THD_RULESET', 'vanilla')
+    env.setdefault('BB_P2P_PORT', '3658')
+    env.setdefault('BB_SIGN_TIMEOUT', '30')
+    print(f"Co-op: The Hunter's Dream as {env['BB_THD_ONLINE_ID']} ({base})")
 
 
 def fail(message):
@@ -283,8 +312,17 @@ def main():
         user_dir = Path(env.get('BB_USER_DIR', data / 'user')).resolve()
         user_dir.mkdir(parents=True, exist_ok=True)
         env.setdefault('BB_GPU_USER_DIR', str(user_dir))
-        if env.get('BB_ONLINE') == '1':
+        if env.get('BB_COOP') == '1':
+            # Seamless co-op (BBSC) runs on the shadNet backend and the host's own servers: never
+            # The Hunter's Dream's, whatever pool the main settings choose.
+            for key in THD_ENV:
+                env.pop(key, None)
+        if env.get('BB_ONLINE') == '1' and env.get('BB_NET_BACKEND') == 'thd':
+            hunters_dream(env, user_dir)
+        elif env.get('BB_ONLINE') == '1':
             online_overrides(env, user_dir)
+        else:
+            env.pop('BB_NET_BACKEND', None)
         this = ['--run'] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())]
         restart = [sys.executable, *this, '--after', str(os.getpid()), *args]
         env['BB_RESTART_COMMAND'] = subprocess.list2cmdline(restart)

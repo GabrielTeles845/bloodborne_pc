@@ -392,6 +392,11 @@ def co_op_environment(env, address, name, password, probe):
     port_user.mkdir(parents=True, exist_ok=True)
     (port_user / 'host_overrides.json').write_text(text, encoding='utf-8')
     env = dict(env)
+    # Co-op runs on the shadNet backend against the host's servers, never The Hunter's Dream's,
+    # whatever pool the main online settings choose (run.py drops these again for BB_COOP=1).
+    for key in ('BB_NET_BACKEND', 'BB_THD_TOKEN', 'BB_THD_ONLINE_ID', 'BB_THD_SERVER', 'BB_THD_AUTH',
+                'BB_THD_RULESET'):
+        env.pop(key, None)
     # BBSC's co-op kit (its Hunt Bell, Kin Bell and the rest, which replace the vanilla bells) is
     # only given after BBSC has backed up the save, and BBSC finds saves only in shadPS4's layout
     # unless BBSC_SAVE_DIR names the folder: this port's user\savedata\<user>\CUSA00207\SPRJ0005.
