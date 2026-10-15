@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "bbport_toggles.h"
 #include <atomic>
 #include <cstring>
 #include <mutex>
@@ -100,6 +101,13 @@ static bool SrtWalkerSignalHandler(void* context, void* fault_address) {
     const void* code = Common::GetRip(context);
     if (code < code_start || code >= code_end) {
         return false; // Not in SRT code range
+    }
+    // bbport: walks ahead of the game (draw preparation workers, the recording thread's table
+    // check) may follow pointers into memory the game has reused since. They go back to their
+    // recovery point (probe.c's vectored_fault, after this handler) and the GPU thread walks
+    // the tables itself; patching here made one stale read zero that load for good.
+    if (runtime_fault_recover) {
+        return false;
     }
 
     // bbport: the draw preparation workers run walkers concurrently, and two of them can fault
