@@ -82,6 +82,27 @@ class CoopTests(unittest.TestCase):
         with self.assertRaises(coop.CoopError):
             coop.create_account('100.65.141.9', '', 'hunter', 'abc')
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows process trees')
+    def test_stopping_a_server_ends_its_child_too(self):
+        # Like BBSC-GameServer.exe: a parent that starts a second copy of itself and waits.
+        import subprocess
+        import time
+        pid_file = Path(self.folder.name) / 'child.pid'
+        child = 'import time; time.sleep(60)'
+        parent = (f"import subprocess, sys, pathlib; c = subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                  f"pathlib.Path({str(pid_file)!r}).write_text(str(c.pid)); c.wait()")
+        process = subprocess.Popen([sys.executable, '-c', parent])
+        for _ in range(100):
+            if pid_file.exists() and pid_file.read_text():
+                break
+            time.sleep(0.05)
+        child_pid = int(pid_file.read_text())
+        coop.end_tree(process)
+        self.assertIsNotNone(process.poll())
+        alive = subprocess.run(['tasklist', '/FI', f'PID eq {child_pid}', '/NH'], capture_output=True,
+                               text=True).stdout
+        self.assertNotIn(str(child_pid), alive)
+
 
 if __name__ == '__main__':
     unittest.main()

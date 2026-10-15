@@ -256,6 +256,8 @@ class Host:
     def start(self, address):
         self.stop()
         server = package_dir('server') / 'server'
+        # Servers left over from a launcher that closed without stopping them hold the ports.
+        end_leftovers(server)
         logs = server / 'logs'
         logs.mkdir(exist_ok=True)
         stamp = time.strftime('%Y%m%d-%H%M%S')
@@ -280,13 +282,35 @@ class Host:
     def stop(self):
         for process in self.processes:
             if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
+                end_tree(process)
         self.processes = []
         self.address = None
+
+
+def end_tree(process):
+    """BBSC-GameServer.exe runs a second copy of itself as a child: end the whole tree, or the
+    child keeps the ports after Stop hosting."""
+    if os.name == 'nt':
+        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True,
+                       creationflags=NO_WINDOW)
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+
+
+def end_leftovers(server):
+    """Ends shadnet.exe and BBSC-GameServer.exe processes started from this server folder."""
+    if os.name != 'nt':
+        return
+    folder = str(Path(server).resolve()).replace("'", "''")
+    script = (f"Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and "
+              f"$_.ExecutablePath.StartsWith('{folder}\\', 'OrdinalIgnoreCase') }} | "
+              "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
+    subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
+                   capture_output=True, creationflags=NO_WINDOW)
 
 
 # --- Invites and accounts ------------------------------------------------------------------------
