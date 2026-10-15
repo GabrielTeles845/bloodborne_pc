@@ -655,10 +655,31 @@ int main(int argc, char **argv) {
     bb_hooks_seal();
 #endif
     protect(traps, round_page((import_count + 1) * 32), 5);
-    protect(image, round_page(size), 0);
+    /* Only the pages no segment covers become inaccessible; the segments' pages go straight from
+     * read-write to their own protection. A tool injected into the process (BBSC's import-slot
+     * watcher) may read the image from another thread at any moment, so the whole image must
+     * never pass through no-access, even briefly. */
+    for (uint64_t at = 0, end = round_page(size); at < end;) {
+        uint64_t next = end;
+        int covered = 0;
+        for (uint64_t i = 0; i < ns; ++i) {
+            uint64_t a = segments[i].address, b = a + round_page(segments[i].size);
+            if (a <= at && at < b) { covered = 1; next = b < next ? b : next; }
+            else if (a > at && a < next) next = a;
+        }
+        if (!covered) protect(image + at, next - at, 0);
+        at = next;
+    }
+    /* Seamless co-op (BB_COOP=1, BBSC): its hooks may write game code directly later on, as
+     * shadPS4 keeps the code writable; give it the same. Other launches keep code read-only. */
+    const char *coop = getenv("BB_COOP");
+    const unsigned code_writable = (coop && !strcmp(coop, "1")) ? 2 : 0;
+    if (code_writable) puts("Co-op: game code stays writable for BBSC's hooks");
     int executable_entry = 0;
     for (uint64_t i = 0; i < ns; ++i) {
-        protect(image + segments[i].address, round_page(segments[i].size), (unsigned)segments[i].flags);
+        unsigned flags = (unsigned)segments[i].flags;
+        if (flags & 1) flags |= code_writable;
+        protect(image + segments[i].address, round_page(segments[i].size), flags);
         if ((segments[i].flags & 1) && entry >= segments[i].address && entry - segments[i].address < segments[i].size)
             executable_entry = 1;
     }

@@ -35,7 +35,7 @@ PACKAGES = {
     'client': ('0.0.1_hotfix', 'BBSC-0.0.1-BBport.zip', 'BBSC-0.0.1-BBport'),
     'server': ('v0.0.1', 'BBSC-0.0.1-Server.zip', 'BBSC-0.0.1-Server'),
 }
-SHADNET_PORT, MATCHING_PORT, WEBAPI_PORT, GAME_PORT = 31313, 31314, 31315, 20443
+SHADNET_PORT, MATCHING_PORT, WEBAPI_PORT, GAME_PORT, RELAY_PORT = 31313, 31314, 31315, 20443, 20444
 INVITE_PREFIX = 'BBCOOP-'
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 TAILSCALE = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'Tailscale' / 'tailscale.exe'
@@ -44,7 +44,7 @@ TAILSCALE = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'Tailsca
 FIREWALL_RANGES = ('100.64.0.0/10', 'LocalSubnet')
 FIREWALL_PORTS = (('shadnet', 'TCP', SHADNET_PORT), ('matching', 'UDP', MATCHING_PORT),
                   ('webapi', 'TCP', WEBAPI_PORT), ('game server', 'TCP', GAME_PORT),
-                  ('relay', 'TCP', 20444), ('sessions', 'TCP', 18671), ('STUN', 'UDP', 3478))
+                  ('relay', 'TCP', RELAY_PORT), ('sessions', 'TCP', 18671), ('STUN', 'UDP', 3478))
 RULE_PREFIX = 'Bloodborne co-op'
 
 
@@ -354,13 +354,22 @@ def co_op_environment(env, address, name, password, probe):
     # BBSC game server's server info names, both on the host.
     overrides = coop_dir() / 'host_overrides.json'
     overrides.parent.mkdir(parents=True, exist_ok=True)
-    overrides.write_text(json.dumps({
+    text = json.dumps({
         'https://ss4.scej-network.jp:20443': f'http://{address}:{GAME_PORT}',
         'http://thehuntersdream.com:18671/summon_messenger': f'http://{address}:{WEBAPI_PORT}',
         'https://thehuntersdream.com:18671/summon_messenger': f'http://{address}:{WEBAPI_PORT}',
-    }, indent=2) + '\n', encoding='utf-8')
+    }, indent=2) + '\n'
+    overrides.write_text(text, encoding='utf-8')
+    # BBSC reads the same file itself, but only from <folder the game starts in>\user (run.py
+    # starts it in the port's folder), its exe's folder\user or %APPDATA%\shadPS4. Every normal
+    # online launch rewrites the port's user\host_overrides.json, so this copy serves this
+    # co-op launch only.
+    port_user = Path(probe).resolve().parent.parent / 'user'
+    port_user.mkdir(parents=True, exist_ok=True)
+    (port_user / 'host_overrides.json').write_text(text, encoding='utf-8')
     env = dict(env)
     env.update({
+        'BBSC_RELAY': f'{address}:{RELAY_PORT}',  # BBSC's relay (warps, world sync) on the host
         'BB_PROBE': str(launcher),
         'BBSC_EMULATOR': str(probe),
         'BB_ONLINE': '1',
