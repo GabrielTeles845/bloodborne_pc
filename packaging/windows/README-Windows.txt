@@ -123,9 +123,9 @@ Mods and patches
 Credits
 - PKG extraction: ShadPs4Plus PKG Extractor 1.1 by AzaharPlus, GPL-2.0,
   https://github.com/AzaharPlus/shadPS4Plus. Its license is in licenses\.
-- Online play: shadp2p by Wozzardman (https://github.com/Wozzardman/shadp2p), shadNet by the
-  shadPS4 team, The Hunter's Dream by droogie. The Hunter's Dream backend (test build) is
-  Awaken's port of bbhost's network code (https://github.com/Awakenchan/BloodBorneButPc,
+- Online play: shadPS4 0.20's network code and shadNet by the shadPS4 team, put together by
+  Awaken; The Hunter's Dream by droogie. The first online version was built on shadp2p by
+  Wozzardman. The Hunter's Dream backend (test build) is Awaken's port of bbhost's network code (https://github.com/Awakenchan/BloodBorneButPc,
   GPL-3.0-or-later; licenses\online-code-NOTICE.md); thanks to Metr1k and The Hunter's Dream team.
 - bbport (the Linux port this is built on): https://github.com/deadinside28/bloodborne_pc
 - Windows port: https://github.com/Supermedo/bloodborne_pc

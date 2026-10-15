@@ -124,6 +124,13 @@ if [[ -f out/bbport_dlss.dll && -f out/nvngx_dlss.dll ]]; then
 else
     echo "DLSS bridge not built (packaging/windows/build_dlss.sh): no DLSS in this package" >&2
 fi
+# Seamless co-op hosts: the shadNet server with the PS4-framing STUN fix
+# (packaging/windows/build_coop_server.sh). Without it hosts use BBSC's own shadnet.exe.
+if [[ -f out/coop-server/shadnet.exe ]]; then
+    cp -r out/coop-server "$dest/bin/"
+else
+    echo "Co-op server not built (packaging/windows/build_coop_server.sh): hosts use BBSC's" >&2
+fi
 # Online co-op: the libraries compiled in (wepoll, cpp-httplib) and the MSYS2 DLLs it loads.
 mkdir -p "$dest/licenses"
 cp gpu/third_party/wepoll/LICENSE "$dest/licenses/wepoll-LICENSE.txt"
@@ -131,6 +138,7 @@ cp gpu/third_party/httplib/LICENSE "$dest/licenses/cpp-httplib-LICENSE.txt"
 cp packaging/windows/licenses/*.txt "$dest/licenses/"
 # Where The Hunter's Dream backend comes from (Awaken's port of bbhost's network code, GPL-3.0).
 cp gpu/bbnet/THD-PORT.md "$dest/licenses/online-code-NOTICE.md"
+cp gpu/bbnet/SHADNET-PORT.md "$dest/licenses/shadps4-network-NOTICE.md"
 for package in protobuf abseil-cpp openssl miniupnpc zlib; do
     license=/clang64/share/licenses/$package/LICENSE
     if [[ -f $license ]]; then cp "$license" "$dest/licenses/$package-LICENSE.txt"; fi

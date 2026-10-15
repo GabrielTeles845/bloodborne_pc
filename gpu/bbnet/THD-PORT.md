@@ -11,12 +11,11 @@ Supermedo/bloodborne_pc (3405c4d). These portions are GPL-3.0-or-later
 contributors.
 
 With that pool the game's NP and sceNet imports are these instead of the shadNet ones. sceHttp
-stays this port's (`shadps4/core/libraries/network/http.cpp`), with two `bbport` hooks that act
+stays shadPS4's (`vendor/shadps4/core/libraries/network/http.cpp`), with two `bbport` hooks that act
 only in that pool: `*.example.com` host-override keys and the account token and ruleset headers.
 The servers see the build as `BB_CLIENT_VERSION` (`bbport-jgamrot <version>`, set by the
 launcher).
 
-Unlike Supermedo's build, this fork keeps the shadp2p-based network, NP and shadNet libraries
-(`shadps4/core/libraries/network`, `np`, `shadps4/shadnet`) rather than shadPS4 0.20's: seamless
-co-op (BBSC) runs on a shadp2p server, whose P2P framing shadPS4 0.20 no longer speaks. Without
-`BB_NET_BACKEND=thd` nothing in `thd/` runs.
+The network, NP and shadNet libraries beside it are shadPS4 v0.20.0's with Awaken's changes
+(`vendor/`, see SHADNET-PORT.md), as in Supermedo's build; this fork's earlier shadp2p-based
+copies are gone. Without `BB_NET_BACKEND=thd` nothing in `thd/` runs.

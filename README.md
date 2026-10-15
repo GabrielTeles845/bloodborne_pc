@@ -205,11 +205,14 @@ page take precedence:
   [shadPS4 team](https://github.com/shadps4-emu/shadPS4) for the renderer and shader recompiler.
 - [droogie's bbhost](https://github.com/droogie/bbhost) for the in-engine PC menus, Rebirth,
   the mirror, two invaders and keyboard prompt text.
-- Online: the network and PSN code of [shadp2p](https://github.com/Wozzardman/shadp2p) by
-  Wozzardman, and the backend for [The Hunter's Dream](https://thehuntersdream.com) (test build,
-  `BB_HUNTERS_DREAM=1`) by **Awaken** ([BloodBorneButPc](https://github.com/Awakenchan/BloodBorneButPc)),
-  adapted from bbhost's network code (GPL-3.0-or-later) and taken in through Supermedo's port; see
-  [gpu/bbnet/THD-PORT.md](gpu/bbnet/THD-PORT.md). Thanks to Metr1k and The Hunter's Dream team.
+- Online: the network, NP and shadNet code of [shadPS4](https://github.com/shadps4-emu/shadPS4)
+  0.20, put together for the port by **Awaken** ([BloodBorneButPc](https://github.com/Awakenchan/BloodBorneButPc))
+  with the backend for [The Hunter's Dream](https://thehuntersdream.com) (test build,
+  `BB_HUNTERS_DREAM=1`) adapted from bbhost's network code (GPL-3.0-or-later), taken in through
+  Supermedo's port; see [gpu/bbnet/SHADNET-PORT.md](gpu/bbnet/SHADNET-PORT.md) and
+  [gpu/bbnet/THD-PORT.md](gpu/bbnet/THD-PORT.md). Thanks to Metr1k and The Hunter's Dream team, and
+  to Wozzardman's [shadp2p](https://github.com/Wozzardman/shadp2p), which the first online version
+  was built on.
 - Fixes and features from Supermedo pull requests, kept with their authors' commits: ayozetr
   (DLC), DarkSpartan, gtggdd4mzb-source and yumlevi, andrecabralgit, noatdk, FIocker (including
   the English menu), jpramosjp and gStone.
