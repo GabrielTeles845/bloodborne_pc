@@ -74,6 +74,19 @@ class HuntersDreamTests(unittest.TestCase):
         self.assertEqual(env['BB_CLIENT_VERSION'], f'bbport-jgamrot {launcher.VERSION}')
         self.assertNotIn('shadPS4', env['BB_CLIENT_VERSION'])
 
+    def test_sign_in_opens_the_link_page_with_its_code(self):
+        # As bbhost does: /link?code=..., so the website asks to approve this code after the
+        # Discord sign-in (its "code from the game" box is for the other direction).
+        replies = [{'ResKind': 0, 'DeviceCode': 'dev', 'UserCode': 'ABCD-EFGH', 'Interval': 1,
+                    'ExpiresIn': 60, 'VerificationUri': 'https://thehuntersdream.com/link'},
+                   {'ResKind': 0, 'Status': 'approved', 'OnlineId': 'Hunter1', 'Token': 'tok'}]
+        pages = []
+        with mock.patch.object(launcher, 'thd_call', side_effect=lambda url, body: replies.pop(0)), \
+                mock.patch.object(launcher.time, 'sleep'):
+            result = launcher.thd_sign_in('thehuntersdream.com', lambda page, code: pages.append((page, code)))
+        self.assertEqual(result, ('Hunter1', 'tok'))
+        self.assertEqual(pages, [('https://thehuntersdream.com/link?code=ABCD-EFGH', 'ABCD-EFGH')])
+
     def test_pool_is_shown_unless_switched_off(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop('BB_HUNTERS_DREAM', None)

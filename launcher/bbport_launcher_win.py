@@ -26,6 +26,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 import zipfile
@@ -484,7 +485,11 @@ def thd_sign_in(game_server, on_code, cancelled=lambda: False):
         raise ValueError('no code in the reply')
     interval = max(1, int(start.get('Interval') or 5))
     deadline = time.monotonic() + int(start.get('ExpiresIn') or 600)
-    on_code(start.get('VerificationUri') or auth + '/link', user_code)
+    # As bbhost opens it: the website's /link page with the code in its address, so after the
+    # Discord sign-in there the page asks to approve this code. (Its "code from the game" box is
+    # for the other direction: signing in to the website from an account made in the game.)
+    page = start.get('VerificationUri') or auth + '/link'
+    on_code(page + ('&' if '?' in page else '?') + 'code=' + urllib.parse.quote(user_code), user_code)
     while time.monotonic() < deadline and not cancelled():
         time.sleep(interval)
         poll = thd_call(auth + '/auth/device/poll', {'DeviceCode': device})
@@ -1597,7 +1602,7 @@ class Launcher:
             game = self.var('online_community', 'app').get()
 
             def on_code(page, code):
-                text = _('In the page that opened ({0}), sign in with Discord and enter this code:').format(page)
+                text = _('On the page that opened, sign in with Discord and approve this code (not in its "code from the game" box):')
                 self.ui_calls.put(lambda: (signing.configure(text=text), code_label.configure(text=code)))
                 webbrowser.open(page)
 

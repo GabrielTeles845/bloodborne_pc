@@ -1314,8 +1314,8 @@ class LauncherBackend(QObject):
         game = self.app.get('online_community', '')
 
         def on_code(page, code):
-            self._thdUpdate.emit(f'In the page that opened ({page}), sign in with Discord and '
-                                 'enter this code:', code)
+            self._thdUpdate.emit('On the page that opened, sign in with Discord and approve this code '
+                                 '(not in its "code from the game" box):', code)
             webbrowser.open(page)
 
         def work():
