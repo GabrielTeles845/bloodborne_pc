@@ -4,6 +4,22 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## 1.9.6
+
+Everything from 1.9.4 and 1.9.5 as a full release, plus a clearer way to choose how you play.
+
+- **Choose how PLAY starts the game, on the Home page:** *Offline*, *Online · The Hunter's
+  Dream* or *Online · Seamless co-op*. The button says which (Play offline / Play online / Play
+  co-op), and a line under it says what will happen (signed in as..., hosting on..., joining your
+  host...). In co-op mode PLAY starts co-op itself. When a mode still needs setting up, PLAY opens
+  the right settings page.
+- **Settings → Online is The Hunter's Dream only:** the Discord sign-in, UPnP and Test connection.
+  The shadNet server account and address are gone; the shadPS4 team's public server refuses this
+  port, and an old "Play online" with a shadNet server now starts offline.
+- **The Hunter's Dream sign-in opens its website with the code filled in**, as bbhost does: sign in
+  with Discord there and approve it. (Before, the code had to be typed, and the page's "code from
+  the game" box is for something else.)
+
 ## 1.9.5 experimental (co-op network test)
 
 A pre-release to test seamless co-op on the new network code; it includes everything listed under
