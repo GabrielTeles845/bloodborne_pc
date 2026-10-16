@@ -98,13 +98,8 @@ FIELDS = {
         *[row(key, title[0], 'toggle') for key, title, _ in core.TWEAKS],
     ],
     'Online': [
-        row('online', 'Play online', 'toggle'),
-        row('online_community', 'Community game server'),
-        row('online_server', 'shadNet server'),
-        row('online_webapi', 'shadNet WebAPI'),
-        row('online_npid', 'Online account ID'),
-        row('online_password', 'Online password', 'password'),
-        row('online_upnp', 'UPnP', 'toggle'),
+        row('online_upnp', 'UPnP', 'toggle',
+            hint='Opens a port on your router for summons. Turn it off on Tailscale or another VPN.'),
     ],
     'Co-op': [
         row('coop_name', 'Co-op name', hint='Your name in co-op, 3-16 letters, numbers, - or _.'),
@@ -158,9 +153,9 @@ SETTINGS_SECTIONS = {
         ('Your data', ['user_dir']),
         ('In-game preferences', ['language', 'player_name'] + [key for key, _, _ in core.EXTRAS[:1]]),
     ],
+    # Online is The Hunter's Dream only; how PLAY starts the game is chosen on the Home page.
     'Online': [
-        ('Play online', ['online', 'online_npid', 'online_password']),
-        ('Connection details', ['online_community', 'online_server', 'online_webapi', 'online_upnp']),
+        ("The Hunter's Dream", ['online_upnp']),
     ],
     'Co-op': [
         ('Seamless co-op', ['coop_name', 'coop_password']),
@@ -182,13 +177,6 @@ SETTINGS_SECTIONS = {
         ('Logs', []),
     ],
 }
-# The Hunter's Dream pool (core.HUNTERS_DREAM_POOL, on unless BB_HUNTERS_DREAM=0): the pool choice beside "Play online" and a section for the Discord sign-in.
-if core.HUNTERS_DREAM_POOL:
-    FIELDS['Online'].insert(1, row('online_pool', 'Co-op pool', 'choice', core.ONLINE_POOLS,
-                                   hint="The Hunter's Dream: sign in with Discord in its section. "
-                                        'shadNet server: the account and server below.'))
-    SETTINGS_SECTIONS['Online'][0][1].insert(1, 'online_pool')
-    SETTINGS_SECTIONS['Online'].insert(1, ("The Hunter's Dream", []))
 SETTING_FIELDS = {field['key']: field for fields in FIELDS.values() for field in fields}
 SEARCH_TERMS = {
     'output_res': 'screen resolution display', 'fps_mode': 'fps frame rate',
@@ -204,9 +192,7 @@ SEARCH_ACTIONS = [
     ('Game & Saves', 'Game files', 'Install from ZIP / PKG', 'game files setup'),
     ('Game & Saves', 'Your data', 'Import trophy keys', 'keys.json trophies'),
     ('Game & Saves', 'Your data', 'Open saves folder', 'save path'),
-    ('Online', 'Play online', 'Test connection', 'server reachability'),
-    *([('Online', "The Hunter's Dream", 'Sign in with Discord', 'discord account hunters dream thd')]
-      if core.HUNTERS_DREAM_POOL else []),
+    ('Online', "The Hunter's Dream", 'Sign in with Discord', 'discord account hunters dream thd online'),
     ('Mods & Patches', 'Installed mods', 'Refresh mods', 'load order'),
     ('System', 'Launch', 'Desktop shortcut', 'start menu'),
     ('System', 'Launch', 'Add to Steam', 'integration'),
@@ -234,6 +220,7 @@ class LauncherBackend(QObject):
     _coopDone = Signal(str)
     _coopProgress = Signal(str)
     thdChanged = Signal()
+    playModeChanged = Signal()
     _thdUpdate = Signal(str, str)        # status, code
     _thdDone = Signal(str, str, str)     # error, online id, token
     gameStarted = Signal()
@@ -243,6 +230,8 @@ class LauncherBackend(QObject):
     def __init__(self, route=None):
         super().__init__()
         self.app = {**core.APP_DEFAULTS, **core.load_json(core.CONFIG_FILE, {})}
+        for signal in (self.changed, self.coopChanged, self.thdChanged):
+            signal.connect(self.playModeChanged)
         self._route = dict(route or LAUNCHER_ROUTE)
         self._problem = self._route.get('problem', '')
         self._game_started = False
@@ -420,7 +409,7 @@ class LauncherBackend(QObject):
 
     @Property(bool, notify=changed)
     def onlineIdInvalid(self):
-        return bool(self.app.get('online') and '@' in str(self.app.get('online_npid', '')))
+        return False  # the shadNet account fields are gone; PLAY checks playModeBlocked
 
     @Property('QVariantList', notify=changed)
     def readiness(self):
@@ -1284,6 +1273,74 @@ class LauncherBackend(QObject):
     def huntersDreamPool(self):
         return core.HUNTERS_DREAM_POOL
 
+    # --- Play mode: what PLAY starts (offline, The Hunter's Dream, seamless co-op) ----------------
+
+    @Property(str, notify=playModeChanged)
+    def playMode(self):
+        return core.play_mode(self.app)
+
+    @Slot(str)
+    def setPlayMode(self, mode):
+        if mode not in core.PLAY_MODES:
+            return
+        self.app['play_mode'] = mode
+        # The game's online switch follows: on for The Hunter's Dream; co-op launches turn it on
+        # for themselves, pointed at the host.
+        self.app['online'] = mode == 'huntersdream'
+        if mode == 'huntersdream':
+            self.app['online_pool'] = 'huntersdream'
+        self._write()
+
+    def _coop_ready(self):
+        name, password = self._coop_account()
+        return bool(name and password and (self._coop_host.running or self.app.get('coop_invite', '').strip()))
+
+    @Property(bool, notify=playModeChanged)
+    def playModeBlocked(self):
+        mode = self.playMode
+        if mode == 'huntersdream':
+            return not self.thdSignedIn
+        if mode == 'coop':
+            return not self._coop_ready()
+        return False
+
+    @Property(str, notify=playModeChanged)
+    def playModeSummary(self):
+        """One line under PLAY: what it will start."""
+        mode = self.playMode
+        if mode == 'huntersdream':
+            if self.thdSignedIn:
+                return f"Online on The Hunter's Dream as {self.app.get('thd_online_id')}: messages, bloodstains and summons with everyone."
+            return "Online on The Hunter's Dream: sign in with Discord first (Settings → Online)."
+        if mode == 'coop':
+            name, password = self._coop_account()
+            if not name or not password:
+                return 'Seamless co-op: choose a co-op name and password first (Settings → Co-op).'
+            if self._coop_host.running:
+                return f'Seamless co-op: you host on {self._coop_host.address}; send your friends the invite code.'
+            if self.app.get('coop_invite', '').strip():
+                return "Seamless co-op: joining your host's server from the invite code."
+            return "Seamless co-op: start hosting, or paste a host's invite code (Settings → Co-op)."
+        return 'Offline: your own world, no servers.'
+
+    @Property('QVariantList', notify=playModeChanged)
+    def playModeSettings(self):
+        """Where the setting that blocks PLAY is: [category, section]."""
+        if self.playMode == 'huntersdream':
+            return ['Online', "The Hunter's Dream"]
+        if self.playMode == 'coop':
+            name, password = self._coop_account()
+            return ['Co-op', 'Seamless co-op' if not (name and password) else 'Host a session']
+        return ['Online', "The Hunter's Dream"]
+
+    @Slot()
+    def playSelected(self):
+        """PLAY: the selected mode."""
+        if self.playMode == 'coop':
+            self.coopPlay()
+        else:
+            self.play()
+
     @Property(bool, notify=thdChanged)
     def thdSignedIn(self):
         return bool(self.app.get('thd_token') and self.app.get('thd_online_id'))
@@ -1368,19 +1425,14 @@ class LauncherBackend(QObject):
 
     @Slot()
     def testConnection(self):
-        self._set_notice('Testing online servers…')
-        hunters_dream = core.hunters_dream_selected(self.app)
+        self._set_notice("Testing The Hunter's Dream…")
         signed_in = self.app.get('thd_online_id', '') if self.thdSignedIn else ''
 
         def work():
             community = core.community_address(self.app['online_community'])
-            if hunters_dream:
-                result = core.server_check_hunters_dream(community)
-                result += '\n' + (f'Signed in as {signed_in}' if signed_in else
-                                  'Not signed in: use "Sign in with Discord".')
-            else:
-                server = str(self.app['online_server']).strip() or core.APP_DEFAULTS['online_server']
-                result = core.server_check(server, core.webapi_setting(self.app), community)
+            result = core.server_check_hunters_dream(community)
+            result += '\n' + (f'Signed in as {signed_in}' if signed_in else
+                              'Not signed in: use "Sign in with Discord".')
             self.connectionResult.emit(result)
         threading.Thread(target=work, daemon=True).start()
 

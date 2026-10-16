@@ -16,10 +16,10 @@ Item {
                                  launcher.setupRunning ? "Preparing game files" :
                                  gameBlocked ? "Game files needed" :
                                  savesBlocked ? "Saves need attention" :
-                                 onlineBlocked ? "Online account needs attention" : "Ready to hunt"
+                                 onlineBlocked ? (launcher.playMode === "coop" ? "Co-op needs setting up" : "Sign in to play online") : "Ready to hunt"
     property string statusDetail: gameBlocked ? "Choose your Bloodborne folder, or install it from your own ZIP or PKG dump." :
                                   savesBlocked ? "The saves folder cannot be written. Choose another one." :
-                                  onlineBlocked ? "Enter your shadNet account ID, not an email address." : ""
+                                  onlineBlocked ? launcher.playModeSummary : ""
     property int enabledMods: {
         let n = 0
         for (const m of launcher.contentMods) if (m.enabled) n++
@@ -112,7 +112,8 @@ Item {
                     highlighted: true; serif: true
                     text: launcher.running ? "Game running" : launcher.setupRunning ? "Installing…" :
                           home.gameBlocked ? "Set up game files" : home.savesBlocked ? "Choose a saves folder" :
-                          home.onlineBlocked ? "Fix online account" : "Play"
+                          home.onlineBlocked ? (launcher.playMode === "coop" ? "Set up co-op" : "Sign in with Discord") :
+                          launcher.playMode === "coop" ? "Play co-op" : launcher.playMode === "huntersdream" ? "Play online" : "Play offline"
                     enabled: !launcher.running && !launcher.setupRunning
                     onClicked: home.primaryRequested()
                 }
@@ -120,6 +121,44 @@ Item {
                     visible: launcher.running; width: 120; height: 58; text: "Stop"
                     onClicked: launcher.stop()
                 }
+            }
+            Item { width: 1; height: 12 }
+
+            // How PLAY starts the game: offline, online on The Hunter's Dream, or seamless co-op.
+            Row {
+                id: modes
+                width: parent.width; spacing: 8
+                Repeater {
+                    model: [{mode: "offline", label: "Offline"},
+                            {mode: "huntersdream", label: "Online · The Hunter's Dream"},
+                            {mode: "coop", label: "Online · Seamless co-op"}]
+                    delegate: Rectangle {
+                        readonly property bool chosen: launcher.playMode === modelData.mode
+                        width: (modes.width - modes.spacing * 2) / 3; height: 40; radius: Theme.radius
+                        color: chosen ? Theme.surfaceHover : modeArea.containsMouse ? Theme.surfaceHover : "transparent"
+                        border.width: 1; border.color: chosen ? Theme.accent : modeArea.containsMouse ? Theme.lineStrong : Theme.line
+                        Text {
+                            anchors.fill: parent; anchors.margins: 6
+                            text: modelData.label; elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            color: parent.chosen ? Theme.text : Theme.textDim
+                            font.family: Theme.sans; font.pixelSize: 13
+                        }
+                        MouseArea {
+                            id: modeArea; anchors.fill: parent; hoverEnabled: true
+                            enabled: !launcher.running
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: launcher.setPlayMode(modelData.mode)
+                        }
+                    }
+                }
+            }
+            Item { width: 1; height: 8 }
+            Text {
+                width: parent.width; wrapMode: Text.WordWrap
+                text: launcher.playModeSummary
+                color: home.onlineBlocked ? Theme.warn : Theme.textDim
+                font.family: Theme.sans; font.pixelSize: 13
             }
             Item { width: 1; height: 22 }
 

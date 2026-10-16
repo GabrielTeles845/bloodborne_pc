@@ -62,9 +62,17 @@ class HuntersDreamTests(unittest.TestCase):
         self.assertEqual((env['BB_NET_BACKEND'], env['BB_THD_ONLINE_ID'], env['BB_THD_TOKEN']),
                          ('thd', 'Hunter1', 'tok'))
         self.assertNotIn('BB_SHADNET_NPID', env)
+        # The shadNet-server pool is gone: an old setting with it starts offline now.
         env = launcher.game_environment({**self.settings, 'online_pool': 'shadnet'})
         self.assertNotIn('BB_NET_BACKEND', env)
-        self.assertEqual(env['BB_SHADNET_NPID'], 'shadnet_name')
+        self.assertNotIn('BB_SHADNET_NPID', env)
+        self.assertNotEqual(env.get('BB_ONLINE'), '1')
+        # The play mode decides: offline and co-op modes never start the normal online path.
+        for mode in ('offline', 'coop'):
+            env = launcher.game_environment({**self.settings, 'play_mode': mode})
+            self.assertNotIn('BB_NET_BACKEND', env)
+            self.assertNotEqual(env.get('BB_ONLINE'), '1')
+        self.assertEqual(launcher.game_environment({**self.settings, 'play_mode': 'huntersdream'})['BB_NET_BACKEND'], 'thd')
         with mock.patch.object(launcher, 'HUNTERS_DREAM_POOL', False):
             self.assertNotIn('BB_NET_BACKEND', launcher.game_environment(self.settings))
         self.assertNotIn('BB_NET_BACKEND', launcher.game_environment({**self.settings, 'online': False}))

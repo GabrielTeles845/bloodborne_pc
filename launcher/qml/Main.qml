@@ -15,18 +15,18 @@ ApplicationWindow {
     property var checks: launcher.readiness
     property bool gameBlocked: checks.length > 0 && checks[0].level === "error"
     property bool savesBlocked: (checks.length > 2 && checks[2].level === "error") || !launcher.savesWritable
-    property bool onlineBlocked: launcher.onlineIdInvalid
+    property bool onlineBlocked: launcher.playModeBlocked
     property bool blocked: gameBlocked || savesBlocked || onlineBlocked || launcher.setupRunning
-    property string statusTitle: launcher.running ? "The hunt is underway" : launcher.setupRunning ? "Preparing game files" : gameBlocked ? "Game files need attention" : savesBlocked ? "Saves need attention" : onlineBlocked ? "Online account needs attention" : "Ready to play"
-    property string statusDetail: launcher.running ? "Bloodborne is running." : launcher.setupRunning ? "Installation is in progress." : gameBlocked ? checks[0].detail : savesBlocked ? "Choose a writable saves folder." : onlineBlocked ? "Enter an account ID rather than an email address." : "Everything required is ready."
+    property string statusTitle: launcher.running ? "The hunt is underway" : launcher.setupRunning ? "Preparing game files" : gameBlocked ? "Game files need attention" : savesBlocked ? "Saves need attention" : onlineBlocked ? (launcher.playMode === "coop" ? "Co-op needs setting up" : "Sign in to play online") : "Ready to play"
+    property string statusDetail: launcher.running ? "Bloodborne is running." : launcher.setupRunning ? "Installation is in progress." : gameBlocked ? checks[0].detail : savesBlocked ? "Choose a writable saves folder." : onlineBlocked ? launcher.playModeSummary : "Everything required is ready."
 
     function openWizard(step) { wizardStep = step; page = "Setup" }
     function openSettings(category, section) { page = "Settings"; settings.openAt(category || "", section || "") }
     function primaryAction() {
         if (gameBlocked) openWizard(1)
         else if (savesBlocked) openWizard(2)
-        else if (onlineBlocked) openSettings("Online", "Play online")
-        else if (!launcher.running && !launcher.setupRunning) launcher.play()
+        else if (onlineBlocked) openSettings(launcher.playModeSettings[0], launcher.playModeSettings[1])
+        else if (!launcher.running && !launcher.setupRunning) launcher.playSelected()
     }
     Component.onCompleted: {
         wizardStep = launcher.wizardStartStep

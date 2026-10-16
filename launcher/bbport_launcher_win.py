@@ -205,7 +205,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'online_community': COMMUNITY_SERVER,
                 # The co-op pool: 'shadnet' (the server above) or 'huntersdream' (shown only with
                 # BB_HUNTERS_DREAM=0 hides it), and The Hunter's Dream account from its Discord sign-in.
-                'online_pool': 'shadnet', 'thd_online_id': '', 'thd_token': '',
+                'online_pool': 'shadnet', 'thd_online_id': '', 'thd_token': '', 'play_mode': '',
                 # First-run setup (bbport_startup): setupVersion is the wizard version last
                 # finished or skipped; launchDirectly starts the game without the launcher.
                 'setupCompleted': False, 'setupSkipped': False, 'setupVersion': 1,
@@ -449,6 +449,19 @@ ONLINE_POOLS = [('shadnet', ('shadNet server (address below)',)),
 CLIENT_VERSION = f'bbport-jgamrot {VERSION}'
 
 
+# How the launcher's PLAY starts the game: 'offline', 'huntersdream' (online on The Hunter's
+# Dream, Discord sign-in) or 'coop' (seamless co-op on a server one of the players hosts).
+PLAY_MODES = ('offline', 'huntersdream', 'coop')
+
+
+def play_mode(s):
+    """The play mode; older settings (Play online with The Hunter's Dream pool) map to it."""
+    mode = s.get('play_mode')
+    if mode in PLAY_MODES:
+        return mode
+    return 'huntersdream' if s.get('online') and s.get('online_pool') == 'huntersdream' else 'offline'
+
+
 def hunters_dream_selected(s):
     return HUNTERS_DREAM_POOL and s.get('online_pool') == 'huntersdream'
 
@@ -597,7 +610,9 @@ def game_environment(s):
         if '=' in item:
             key, value = item.split('=', 1)
             env[key] = value
-    if s.get('online'):
+    # Online only in The Hunter's Dream play mode; seamless co-op sets up its own launch
+    # (bbport_coop.co_op_environment), and the shadNet-server pool is no longer offered.
+    if s.get('online') and play_mode(s) == 'huntersdream':
         server = str(s['online_server']).strip() or APP_DEFAULTS['online_server']
         env['BB_ONLINE'] = '1'
         env['BB_SHADNET_SERVER'] = server
