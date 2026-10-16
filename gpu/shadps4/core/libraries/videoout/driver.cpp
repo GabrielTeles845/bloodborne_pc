@@ -11,6 +11,7 @@
 #include <sys/resource.h>
 #endif
 #include "common/assert.h"
+#include "bbport_settings.h"
 #include "bbport_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "common/debug.h"
@@ -603,11 +604,18 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
     // 120. Slots are now waited for precisely (PreciseSleepUntil). Supermedo/bloodborne_pc#28
     // by DUDUYG. BB_STRICT_FRAME_CAP=0 brings back the old grid and sleeps.
     const u32 frame_limit = EmulatorSettings.GetFrameLimit();
-    const auto frame_period = frame_limit ? std::chrono::nanoseconds(1000000000 / frame_limit)
-                                          : std::chrono::nanoseconds(0);
+    // bbport: frame generation with FIFO presentation lowers the limit while it runs
+    // (BbSettings::frame_gen_flip_limit, set by the Presenter).
+    const auto period_now = [frame_limit] {
+        const int fg_limit = BbSettings::Get().frame_gen_flip_limit.load(std::memory_order_relaxed);
+        const u32 limit = fg_limit > 0 && frame_limit ? std::min(frame_limit, u32(fg_limit))
+                                                      : frame_limit;
+        return limit ? std::chrono::nanoseconds(1000000000 / limit) : std::chrono::nanoseconds(0);
+    };
     auto next_flip = std::chrono::steady_clock::now();
     static const bool strict_cap = EmulatorSettingsImpl::Flag("BB_STRICT_FRAME_CAP", true);
     const auto advance_slot = [&](std::chrono::steady_clock::time_point now) {
+        const auto frame_period = period_now();
         return strict_cap ? std::chrono::steady_clock::now() + frame_period
                           : std::max(next_flip + frame_period, now - frame_period);
     };
