@@ -203,7 +203,7 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 'coop_name': '', 'coop_password': '', 'coop_invite': '',
                 'online_community': COMMUNITY_SERVER,
                 # The co-op pool: 'shadnet' (the server above) or 'huntersdream' (shown only with
-                # BB_HUNTERS_DREAM=1), and The Hunter's Dream account from its Discord sign-in.
+                # BB_HUNTERS_DREAM=0 hides it), and The Hunter's Dream account from its Discord sign-in.
                 'online_pool': 'shadnet', 'thd_online_id': '', 'thd_token': '',
                 # First-run setup (bbport_startup): setupVersion is the wizard version last
                 # finished or skipped; launchDirectly starts the game without the launcher.
@@ -438,9 +438,9 @@ def server_check(server, webapi, community):
 
 
 # The Hunter's Dream pool: the engine's own backend for it (BB_NET_BACKEND=thd, bbhost's
-# protocol, Awaken's port as Supermedo took it in). Hidden until The Hunter's Dream team (Metr1k)
-# has agreed to this fork connecting; BB_HUNTERS_DREAM=1 shows it for those tests.
-HUNTERS_DREAM_POOL = os.environ.get('BB_HUNTERS_DREAM') == '1'
+# protocol, Awaken's port as Supermedo took it in): the pool choice and the Discord sign-in on
+# the Online page, as Supermedo shows them since its 1.8.1. BB_HUNTERS_DREAM=0 hides them.
+HUNTERS_DREAM_POOL = os.environ.get('BB_HUNTERS_DREAM') != '0'
 ONLINE_POOLS = [('shadnet', ('shadNet server (address below)',)),
                 ('huntersdream', ("The Hunter's Dream (Discord sign-in)",))]
 # Which build a server sees: shadNet's client version and The Hunter's Dream's client field
@@ -1574,7 +1574,7 @@ class Launcher:
                        'Cheats change the game for the other players too: turn them off when you play together.'))
 
     def build_hunters_dream(self, f):
-        """The co-op pool choice and The Hunter's Dream's Discord sign-in (BB_HUNTERS_DREAM=1)."""
+        """The co-op pool choice and The Hunter's Dream's Discord sign-in (BB_HUNTERS_DREAM=0 hides them)."""
         ttk = self.ttk
         self.section(f, _("The Hunter's Dream (test build)"))
         self.row(f, _('Co-op pool'), self.choice(f, 'online_pool', 'app', ONLINE_POOLS),

@@ -74,11 +74,14 @@ class HuntersDreamTests(unittest.TestCase):
         self.assertEqual(env['BB_CLIENT_VERSION'], f'bbport-jgamrot {launcher.VERSION}')
         self.assertNotIn('shadPS4', env['BB_CLIENT_VERSION'])
 
-    def test_pool_is_hidden_unless_asked_for(self):
+    def test_pool_is_shown_unless_switched_off(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop('BB_HUNTERS_DREAM', None)
-            fresh = load('bb_launcher_fresh', 'launcher/bbport_launcher_win.py')
-        self.assertFalse(fresh.HUNTERS_DREAM_POOL)
+            shown = load('bb_launcher_shown', 'launcher/bbport_launcher_win.py')
+        with mock.patch.dict(os.environ, {'BB_HUNTERS_DREAM': '0'}):
+            hidden = load('bb_launcher_hidden', 'launcher/bbport_launcher_win.py')
+        self.assertTrue(shown.HUNTERS_DREAM_POOL)
+        self.assertFalse(hidden.HUNTERS_DREAM_POOL)
 
     def test_co_op_never_uses_the_hunters_dream(self):
         base = launcher.game_environment(self.settings)

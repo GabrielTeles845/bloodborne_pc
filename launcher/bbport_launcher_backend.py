@@ -182,8 +182,7 @@ SETTINGS_SECTIONS = {
         ('Logs', []),
     ],
 }
-# The Hunter's Dream pool (core.HUNTERS_DREAM_POOL: BB_HUNTERS_DREAM=1 until its team agrees to
-# this fork connecting): the pool choice beside "Play online" and a section for the Discord sign-in.
+# The Hunter's Dream pool (core.HUNTERS_DREAM_POOL, on unless BB_HUNTERS_DREAM=0): the pool choice beside "Play online" and a section for the Discord sign-in.
 if core.HUNTERS_DREAM_POOL:
     FIELDS['Online'].insert(1, row('online_pool', 'Co-op pool', 'choice', core.ONLINE_POOLS,
                                    hint="The Hunter's Dream: sign in with Discord in its section. "

@@ -18,6 +18,9 @@ A pre-release to test seamless co-op on the new network code; it includes everyt
   The port now ships that server with one fix (it answers both packet formats), built from source
   by `packaging/windows/build_coop_server.sh`. *Start hosting* uses it automatically and keeps the
   registration key, so invite codes stay valid; co-op accounts are made again on first *Play co-op*.
+- **The Hunter's Dream with Discord sign-in, on the Online page:** choose The Hunter's Dream as the
+  co-op pool, then *Sign in with Discord* and approve the code on its website. Test build: we are
+  checking it with The Hunter's Dream team. `BB_HUNTERS_DREAM=0` hides it.
 
 ## 1.9.4 experimental (not released on its own)
 
@@ -42,7 +45,7 @@ and The Hunter's Dream online backend, still hidden.
 - **Display:** no title-menu flicker above 1080p (parsifal295, #56); the loading screen's item
   picture stays at outputs other than 1080p (bmy via parsifal295, #62).
 - The GPU, its video memory and the driver are named at the top of every log.
-- **The Hunter's Dream (hidden, `BB_HUNTERS_DREAM=1`):** Supermedo's port of Awaken's backend
+- **The Hunter's Dream:** Supermedo's port of Awaken's backend
   (bbhost's protocol, GPL-3): Discord sign-in by code on the Online page, the game's server
   functions over HTTP to the game server only. Not offered until its team has agreed. This build
   reports itself as `bbport-jgamrot <version>`. Seamless co-op keeps its own network code and

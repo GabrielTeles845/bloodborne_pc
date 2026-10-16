@@ -266,7 +266,7 @@ Item {
                     }
                     Note { visible: is("Online", "Play online"); text: "Enter an account ID, not an email address. Test connection checks that the servers answer, not your sign-in." }
                     Note { visible: is("Online", "Play online"); text: "Heads-up: the shadPS4 team's public server (srv.shadps4.net) serves official shadPS4 builds only and signs this port out. To play together, use Co-op (seamless co-op on a server one of you runs), or enter a private shadNet server below." + (launcher.huntersDreamPool ? " The Hunter's Dream pool is a test build: use it only once The Hunter's Dream team has agreed." : "") }
-                    // The Hunter's Dream (BB_HUNTERS_DREAM=1): Discord sign-in by a code approved on its website.
+                    // The Hunter's Dream (hidden with BB_HUNTERS_DREAM=0): Discord sign-in by a code approved on its website.
                     Note { visible: is("Online", "The Hunter's Dream"); text: "The Hunter's Dream (thehuntersdream.com) is the server bbhost players use for summons, bloodstains and messages. Choose it as the co-op pool under Play online, then sign in with Discord here: the launcher opens its website and shows a code to enter there. Only the account id and its token are kept, in this launcher's settings." }
                     Note { visible: is("Online", "The Hunter's Dream"); text: launcher.thdStatus; color: Theme.text; font.pixelSize: 13 }
                     Row { visible: is("Online", "The Hunter's Dream") && launcher.thdCode !== ""; spacing: 14

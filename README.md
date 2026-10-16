@@ -207,8 +207,8 @@ page take precedence:
   the mirror, two invaders and keyboard prompt text.
 - Online: the network, NP and shadNet code of [shadPS4](https://github.com/shadps4-emu/shadPS4)
   0.20, put together for the port by **Awaken** ([BloodBorneButPc](https://github.com/Awakenchan/BloodBorneButPc))
-  with the backend for [The Hunter's Dream](https://thehuntersdream.com) (test build,
-  `BB_HUNTERS_DREAM=1`) adapted from bbhost's network code (GPL-3.0-or-later), taken in through
+  with the backend for [The Hunter's Dream](https://thehuntersdream.com) (Discord
+  sign-in on the Online page) adapted from bbhost's network code (GPL-3.0-or-later), taken in through
   Supermedo's port; see [gpu/bbnet/SHADNET-PORT.md](gpu/bbnet/SHADNET-PORT.md) and
   [gpu/bbnet/THD-PORT.md](gpu/bbnet/THD-PORT.md). Thanks to Metr1k and The Hunter's Dream team, and
   to Wozzardman's [shadp2p](https://github.com/Wozzardman/shadp2p), which the first online version
