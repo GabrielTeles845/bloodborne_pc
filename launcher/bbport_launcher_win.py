@@ -101,6 +101,32 @@ def run_role(argv):
     return 0
 
 
+def https_context():
+    """Windows' trusted roots plus Mozilla's (certifi, shipped with the launcher). Python reads
+    only the roots already in the Windows store, which may lack newer ones such as Let's
+    Encrypt's (The Hunter's Dream); Windows itself fetches those on demand."""
+    import ssl
+    context = ssl.create_default_context()
+    try:
+        import certifi
+        context.load_verify_locations(certifi.where())
+    except (ImportError, OSError, ssl.SSLError):
+        pass
+    return context
+
+
+urllib.request.install_opener(urllib.request.build_opener(urllib.request.HTTPSHandler(context=https_context())))
+
+
+def connection_error_text(error):
+    """The error, with a hint when a certificate was refused."""
+    text = str(error)
+    if 'CERTIFICATE_VERIFY_FAILED' in text:
+        text += (". Check that the PC's date and time are right; HTTPS scanning in an "
+                 'antivirus or a proxy can also cause this')
+    return text
+
+
 def run_command():
     """The command that starts run.py: this executable when frozen, else Python."""
     return [sys.executable, '--run'] if FROZEN else [sys.executable, str(PORT_DIR / 'run.py')]
@@ -236,7 +262,16 @@ PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (б�
                  ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
-             ('5', ('Italian', 'Итальянский'))]
+             ('5', ('Italian', 'Итальянский')),
+             # The other languages the game ships (dvdroot_ps4/msg), by PS4 system language id.
+             ('17', ('Portuguese (Brazil)', 'Португальский (Бразилия)')),
+             ('7', ('Portuguese (Portugal)', 'Португальский (Португалия)')),
+             ('20', ('Spanish (Latin America)', 'Испанский (Латинская Америка)')),
+             ('18', ('English (UK)', 'Английский (Великобритания)')), ('6', ('Dutch', 'Нидерландский')),
+             ('16', ('Polish', 'Польский')), ('19', ('Turkish', 'Турецкий')), ('12', ('Finnish', 'Финский')),
+             ('13', ('Swedish', 'Шведский')), ('14', ('Danish', 'Датский')), ('15', ('Norwegian', 'Норвежский')),
+             ('9', ('Korean', 'Корейский')), ('10', ('Chinese (Traditional)', 'Китайский (традиционный)')),
+             ('11', ('Chinese (Simplified)', 'Китайский (упрощённый)'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
@@ -1625,7 +1660,7 @@ class Launcher:
                 try:
                     name, token = thd_sign_in(game, on_code)
                 except (OSError, ValueError) as error:
-                    self.ui_calls.put(lambda e=error: (signing.configure(text=_('Sign-in failed: {}').format(e)),
+                    self.ui_calls.put(lambda e=error: (signing.configure(text=_('Sign-in failed: {}').format(connection_error_text(e))),
                                                        code_label.configure(text='')))
                     return
                 self.ui_calls.put(lambda: (thd_id.set(name), thd_token.set(token), signing.configure(text=''),

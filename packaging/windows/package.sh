@@ -33,11 +33,11 @@ if [[ ! -x $venv/Scripts/python.exe ]]; then
 fi
 # Qt Quick uses real translucent surfaces over full-window artwork. Pillow remains for the
 # classic Tk fallback. Essentials avoids the unrelated, very large Qt Addons wheel.
-"$venv/Scripts/python.exe" -m pip install -q --disable-pip-version-check pyinstaller pillow PySide6_Essentials==6.12.0
+"$venv/Scripts/python.exe" -m pip install -q --disable-pip-version-check pyinstaller pillow certifi PySide6_Essentials==6.12.0
 # The scripts run inside Bloodborne.exe (--script): the standard modules they import come along.
 hidden=()
 for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request ctypes.wintypes; do
+              urllib.request ctypes.wintypes certifi; do
     hidden+=(--hidden-import "$module")
 done
 "$venv/Scripts/python.exe" -m PyInstaller --noconfirm --clean --log-level WARN --windowed \

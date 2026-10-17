@@ -14,6 +14,9 @@ import bbport_startup
 
 # How long the "Launching Bloodborne" toast stays up if the game does not report running sooner.
 SPLASH_MS = 8000
+# A direct launch waits this long first, so Shift or a click on the toast can still open the
+# launcher instead (issue #11: the game started too soon to notice the hint).
+GRACE_S = 3
 
 
 def run_ui(route=None):
@@ -66,6 +69,7 @@ def run_ui(route=None):
 
     def close_splash():
         keys.stop()
+        countdown.stop()
         splash.close()
 
     def show_launcher(page='Home'):
@@ -86,6 +90,9 @@ def run_ui(route=None):
             open_launcher('Log')
 
     def start():
+        if launcher_window:
+            return  # the player chose the launcher during the countdown
+        close_timer.start()
         backend.play()
         if not backend.running:  # refused or could not start; the notice says why
             show_launcher()
@@ -97,8 +104,27 @@ def run_ui(route=None):
     backend.gameStarted.connect(close_splash)
     backend.gameFinished.connect(finished)
     keys.start()
-    QTimer.singleShot(SPLASH_MS, close_splash)
-    QTimer.singleShot(0, start)
+    close_timer = QTimer()
+    close_timer.setSingleShot(True)
+    close_timer.setInterval(SPLASH_MS)
+    close_timer.timeout.connect(close_splash)
+    remaining = [GRACE_S]
+    countdown = QTimer()
+    countdown.setInterval(1000)
+
+    def tick():
+        remaining[0] -= 1
+        splash.setProperty('countdown', remaining[0])
+        if remaining[0] <= 0:
+            countdown.stop()
+            start()
+
+    countdown.timeout.connect(tick)
+    splash.setProperty('countdown', GRACE_S)
+    if GRACE_S > 0:
+        countdown.start()
+    else:
+        QTimer.singleShot(0, start)
     return app.exec()
 
 if __name__ == "__main__":

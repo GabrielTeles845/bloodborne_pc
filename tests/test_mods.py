@@ -117,6 +117,25 @@ class ModTests(unittest.TestCase):
         self.assertEqual(done.stdout.split(), ['replaced', 'untouched', 'map', 'True'])
         self.assertEqual((self.assets / 'a.dcx').read_bytes(), b'original')
 
+    def test_overlay_moves_off_a_drive_without_links(self):
+        # exFAT/FAT32: making a folder link fails with "[WinError 1] Incorrect function".
+        a = self.mod('A')
+        refused = self.root / 'out'
+        real = mods.make_link
+
+        def make_link(link, target):
+            if refused in link.parents:
+                raise OSError(22, 'Incorrect function')
+            real(link, target)
+
+        from unittest import mock
+        with mock.patch.object(mods, 'make_link', make_link),                 mock.patch.object(mods.os, 'name', 'nt'),                 mock.patch.object(mods.tempfile, 'gettempdir', return_value=str(self.root / 'temp')):
+            (self.root / 'temp').mkdir()
+            result = mods.build_overlay(self.game, refused, [('A', a)])
+        self.assertEqual(result.parent, (self.root / 'temp').resolve())
+        self.assertEqual((result / 'dvdroot_ps4/chr/a.dcx').read_bytes(), b'mod')
+        self.assertEqual(list(refused.iterdir()), [])
+
     def test_executable_replacement_rejected(self):
         a = self.mod('A')
         (a / 'eboot.bin').write_bytes(b'unsupported')

@@ -1379,7 +1379,7 @@ class LauncherBackend(QObject):
             try:
                 name, token = core.thd_sign_in(game, on_code, lambda: self._thd_cancel)
             except (OSError, ValueError) as error:
-                self._thdDone.emit(f'Sign-in failed: {error}', '', '')
+                self._thdDone.emit(f'Sign-in failed: {core.connection_error_text(error)}', '', '')
                 return
             self._thdDone.emit('', name, token)
         threading.Thread(target=work, daemon=True).start()

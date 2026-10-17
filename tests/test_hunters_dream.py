@@ -95,6 +95,17 @@ class HuntersDreamTests(unittest.TestCase):
         self.assertEqual(result, ('Hunter1', 'tok'))
         self.assertEqual(pages, [('https://thehuntersdream.com/link?code=ABCD-EFGH', 'ABCD-EFGH')])
 
+    def test_https_trusts_the_shipped_roots_and_explains_certificate_errors(self):
+        # Issue #13: CERTIFICATE_VERIFY_FAILED on a PC whose Windows store lacks the roots.
+        import certifi
+        with open(certifi.where(), encoding='ascii') as bundle:
+            shipped = bundle.read().count('BEGIN CERTIFICATE')
+        context = launcher.https_context()
+        self.assertGreaterEqual(context.cert_store_stats()['x509_ca'], shipped)
+        text = launcher.connection_error_text(OSError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate has expired'))
+        self.assertIn('date and time', text)
+        self.assertEqual(launcher.connection_error_text(OSError('timed out')), 'timed out')
+
     def test_pool_is_shown_unless_switched_off(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop('BB_HUNTERS_DREAM', None)

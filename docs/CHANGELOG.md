@@ -4,6 +4,21 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
+## Unreleased
+
+- **More game languages** in *Settings → Game & Saves*: Portuguese (Brazil), with its dubbing,
+  Portuguese (Portugal), Spanish (Latin America), English (UK), Dutch, Polish, Turkish, Finnish,
+  Swedish, Danish, Norwegian, Korean and Chinese, as the game ships them
+  ([#12](https://github.com/Jgamrot/bloodborne_pc/issues/12)).
+- **Mods on drives without links** (exFAT, FAT32, some network drives): the game no longer stops
+  with "[WinError 1] Incorrect function"; the mod overlay moves to another drive
+  ([#17](https://github.com/Jgamrot/bloodborne_pc/issues/17)).
+- **Discord sign-in:** the launcher also trusts the certificate roots it ships, so a PC whose
+  Windows store lacks newer ones can sign in; a certificate error names the usual causes
+  ([#13](https://github.com/Jgamrot/bloodborne_pc/issues/13)).
+- **Opening the launcher:** a direct start waits 3 seconds with a larger, centred notice; hold
+  Shift or click it for the launcher ([#11](https://github.com/Jgamrot/bloodborne_pc/issues/11)).
+
 ## 1.9.6
 
 Everything from 1.9.4 and 1.9.5 as a full release, plus a clearer way to choose how you play.
