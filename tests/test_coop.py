@@ -24,6 +24,8 @@ class CoopTests(unittest.TestCase):
         code = coop.make_invite('100.65.141.9', 'abc123')
         self.assertTrue(code.startswith(coop.INVITE_PREFIX))
         self.assertEqual(coop.read_invite('  ' + code + '\n'), ('100.65.141.9', 'abc123'))
+        # Wrapped by a chat app over two lines.
+        self.assertEqual(coop.read_invite(code[:20] + '\r\n ' + code[20:]), ('100.65.141.9', 'abc123'))
         with self.assertRaises(coop.CoopError):
             coop.read_invite('hello')
         with self.assertRaises(coop.CoopError):

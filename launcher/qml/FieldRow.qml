@@ -52,6 +52,9 @@ Item {
         text: String(launcher.value(settingKey))
         placeholderText: isFolder ? "Default location" : ""
         echoMode: field.kind === "password" ? TextInput.Password : TextInput.Normal
+        // Saved as it is typed or pasted: a page change destroys the field before it loses
+        // focus, and a pasted co-op invite code was lost that way.
+        onTextEdited: launcher.setValue(settingKey, text)
         onEditingFinished: launcher.setValue(settingKey, text)
     }
     GlassButton {

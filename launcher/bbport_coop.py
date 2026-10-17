@@ -368,7 +368,8 @@ def make_invite(address, key):
 
 
 def read_invite(code):
-    code = code.strip()
+    # Chat apps wrap long codes over lines and add spaces: none belong to the code.
+    code = ''.join(code.split())
     if not code.startswith(INVITE_PREFIX):
         raise CoopError(f'An invite code starts with {INVITE_PREFIX}')
     body = code[len(INVITE_PREFIX):]
