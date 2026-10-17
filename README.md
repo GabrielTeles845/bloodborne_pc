@@ -220,7 +220,7 @@ page take precedence:
 - [Hunter's Atlas](https://github.com/MikeTat1988/HuntersAtlas), the full-screen map, by MikeTat1988
   (GPL-2.0); see [tools/atlas/README.md](tools/atlas/README.md).
 - Frame generation from Supermedo's port, and fixes from more of its pull requests: emurphy04
-  (ultrawide, live resolution), EricDar12, DarkSpartan, kamikaze-san, k1m0206, andrecabralgit,
+  (ultrawide, live resolution), EricDar12, DarkSpartan, k1m0206, andrecabralgit,
   fliperama86, parsifal295, T0ug (older processors) and cassioKenji (keyboard sprint).
 - Fixes and features from Supermedo pull requests, kept with their authors' commits: ayozetr
   (DLC), DarkSpartan, gtggdd4mzb-source and yumlevi, andrecabralgit, noatdk, FIocker (including
