@@ -486,8 +486,7 @@ vk::DeviceMemory BufferCache::AllocateArenaChunk(vk::MemoryAllocateInfo alloc_in
             Vulkan::NoteOverBudget("buffer");
         } else {
             std::printf("Buffer cache: no memory left for the guest memory backing (%llu MiB "
-                        "more); VRAM and the system-memory types the arena accepts are full
-",
+                        "more); VRAM and the system-memory types the arena accepts are full\n",
                         (unsigned long long)(alloc_info.allocationSize >> 20));
         }
     }

@@ -384,8 +384,7 @@ s32 sceVideoOutSubmitEopFlip(s32 handle, u32 buf_id, u32 mode, s64 flip_arg, voi
                     if (reported.fetch_add(1, std::memory_order_relaxed) < 5) {
                         std::printf("VideoOut: flip IRQ for buffer %u before its label was set "
                                     "(label %llu, last flipped buffer %d, %llu flips done); "
-                                    "flipping anyway
-", buf_id,
+                                    "flipping anyway\n", buf_id,
                                     (unsigned long long)port->buffer_labels[buf_id], port->prev_index,
                                     (unsigned long long)port->flip_status.count);
                     }
