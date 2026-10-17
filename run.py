@@ -228,12 +228,15 @@ def main():
     # mods. Only for the 01.09 game, whose camera and HUD canvas patches.py widens (hud_canvas).
     # From emurphy04 (Supermedo/bloodborne_pc PR #70).
     sys.path.insert(0, str(PORT / 'scripts'))
-    from patches import OUTPUT_SIZE, game_app_version, hud_canvas, output_size
+    from patches import OUTPUT_SIZE, eboot_is_109, game_app_version, hud_canvas, output_size
     hud_layer = Path(out) / 'hud_layout'
     shutil.rmtree(hud_layer, ignore_errors=True)
     output_res = env.get('BB_OUTPUT_RES') or ini_value(config, 'output_res') or ''
     canvas = hud_canvas(output_size({'output_res': output_res}))
-    if canvas != OUTPUT_SIZE and (game_app_version(game) in (None, '01.09') or env.get('BB_FORCE_PATCHES')):
+    # Only for the clean 1.09 eboot.bin: patches.py leaves a modified one unpatched (16:9), and
+    # widened menus on a 16:9 game came out stretched (Supermedo PR #90, emurphy04).
+    clean = game_app_version(game) in (None, '01.09') and eboot_is_109(str(Path(game).resolve() / 'eboot.bin'))
+    if canvas != OUTPUT_SIZE and (clean or env.get('BB_FORCE_PATCHES')):
         position = ini_value(config, 'hud_position') or '100'
         position = max(0, min(100, int(position) if position.isdigit() else 100)) / 100
         run_script('hud_layout.py', game, '--out', hud_layer, '--canvas-width', canvas[0],
