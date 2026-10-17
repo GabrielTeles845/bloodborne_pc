@@ -53,6 +53,13 @@ FIELDS = {
         row('preset', 'Upscaling preset', 'choice', core.PRESETS,
             'How far below the output the game renders: higher factors are faster and softer.'),
         row('output_res', 'Output resolution', 'choice', core.OUTPUTS, "The final image size, usually your display's."),
+        row('frame_gen', 'Frame generation', 'choice', core.FRAME_GENERATION,
+            "Makes frames between two of the game's: 60 FPS on screen becomes 120. Needs a display that "
+            'fast; adds a little input latency. DLSS needs a GeForce RTX 40/50 and its frame generation files.'),
+        row('frame_gen_multiplier', 'Frame generation multiplier', 'choice', core.FRAME_GEN_MULTIPLIERS,
+            '3× and 4× need DLSS on a GeForce RTX 50.'),
+        row('frame_gen_fit_display', 'Fit frame generation to the display', 'toggle',
+            hint="Generates only the frames your display's refresh rate can show."),
         row('hud_position', 'HUD position (ultrawide)', 'choice', core.HUD_POSITIONS,
             '21:9 and 32:9 outputs: health, items and Blood Echoes at the screen edges, or in the '
             'centred 16:9 area as on a 16:9 screen. Applies at the next start.'),
@@ -142,6 +149,7 @@ SETTINGS_SECTIONS = {
                                   'frames_ahead', 'present_mode']),
         ('Upscaling', ['upscaler', 'preset', 'live_resolution', 'sharpen', 'sharpness',
                        'object_motion']),
+        ('Frame generation', ['frame_gen', 'frame_gen_multiplier', 'frame_gen_fit_display']),
         ('Image effects', ['model_lod'] + [key for key, _, _ in core.EFFECTS]),
         ('Video memory', ['vram_budget_mb']),
         ('Overlay', ['show_fps']),
