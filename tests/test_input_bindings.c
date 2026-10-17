@@ -37,7 +37,7 @@ int main(void) {
     memset(keys, 0, sizeof(keys));
     keys[SDL_GetScancodeFromName("W")] = keys[SDL_GetScancodeFromName("D")] = keys[SDL_GetScancodeFromName("Left Alt")] = true;
     bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
-    assert(o.lx > 128 && o.lx < 170 && o.ly < 128 && o.ly > 86);  /* a walk, diagonally */
+    assert(o.lx > 128 && o.lx < 175 && o.ly < 128 && o.ly > 81);  /* a walk, diagonally */
     o = press("G", 0);
     assert(o.buttons == 0x100000 && o.touch_side == 0);  /* gestures: the touchpad's left */
 
@@ -55,6 +55,23 @@ int main(void) {
     SDL_Delay(50);
     bb_bindings_apply(keys, SDL_SCANCODE_COUNT, 0, &o);
     assert(o.lx == 1 && o.ly == 1);                 /* there */
+    /* A sprint is kept: W, then A alone turns along the square's edge, the larger axis full. */
+    press(NULL, 0);
+    o = press("W", 0);
+    for (int i = 0; i < 15; ++i) {
+        SDL_Delay(10);
+        o = press("A", 0);
+        const int ax = o.lx < 128 ? 128 - o.lx : o.lx - 128, ay = o.ly < 128 ? 128 - o.ly : o.ly - 128;
+        assert((ax > ay ? ax : ay) == 127);
+    }
+    assert(o.lx == 1 && o.ly == 128);               /* left */
+    /* A half turn (A -> D) goes through forward, never through neutral or back. */
+    for (int i = 0; i < 30; ++i) {
+        SDL_Delay(10);
+        o = press("D", 0);
+        assert(o.ly <= 128);
+    }
+    assert(o.lx == 255 && o.ly == 128);             /* right */
 
     /* key_firearm=X, WheelUp: the wheel's notch fires; right mouse is free then. */
     assert(bb_bindings_parse("firearm", "X, WheelUp"));

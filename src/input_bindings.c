@@ -58,6 +58,7 @@ static int g_key[BIND_COUNT], g_mouse[BIND_COUNT];
 /* Movement smoothing: travel per 1/60 s as a share of a full push (1: off), and the stick. */
 #define MOVE_SMOOTHING_DEFAULT 0.6f
 static float g_move_step = MOVE_SMOOTHING_DEFAULT, g_move_x, g_move_y;
+static double g_move_angle;
 static bool g_move_active;
 static uint64_t g_move_time;
 
@@ -171,30 +172,43 @@ void bb_bindings_apply(const bool *keys, int nkeys, uint32_t mouse, BindOutput *
         return;
     }
     float reach = (float)(STICK_HIGH - STICK_REST);
-    if (held[BIND_WALK]) reach = reach * WALK_PUSH / (x && y ? sqrtf(2.0f) : 1.0f);
-    const float tx = (float)x * reach, ty = (float)y * reach;
+    const bool walk = held[BIND_WALK];
+    if (walk) reach *= WALK_PUSH;
     /* Movement smoothing (Jgamrot/bloodborne_pc#4, after MKB2Controller's setting): a key
-     * pressed or released while moving swings the stick to its new direction over a few frames
+     * pressed or released while moving turns the stick to its new direction over a few frames
      * instead of at once - holding W, then A, otherwise snapped the stick 45 degrees in a frame
      * and the character stopped to turn. Starting to move and letting go stay immediate.
-     * bbport.ini move_smoothing: the share of a full push the stick travels per 1/60 s. */
+     * The stick turns along the gate rather than across it (measured by cassioKenji,
+     * Supermedo/bloodborne_pc PR #74): the game picks walk or run by the larger axis and ends a
+     * sprint when the direction moves 45 degrees or more between two reads, so a run stays on
+     * the square (the larger axis full at every angle) and no read turns more than 30 degrees.
+     * A half turn (A <-> D, W <-> S) goes through forward, or through the right when both ways
+     * are sideways. A walk keeps the circle of its push (a diagonal's two axes shortened).
+     * bbport.ini move_smoothing: how fast it turns (0.6 by default: 900 degrees a second). */
+    const double pi = 3.14159265358979323846;
+    const double target = atan2((double)y, (double)x);
     const uint64_t now = SDL_GetTicksNS();
     if (!g_move_active || g_move_step >= 1.0f) {
-        g_move_x = tx;
-        g_move_y = ty;
+        g_move_angle = target;
     } else {
-        float dt = (float)(now - g_move_time) / 1e9f;
-        dt = dt < 0.0f ? 0.0f : dt > 0.1f ? 0.1f : dt;
-        const float most = g_move_step * (float)(STICK_HIGH - STICK_REST) * dt * 60.0f;
-        const float dx = tx - g_move_x, dy = ty - g_move_y, dist = sqrtf(dx * dx + dy * dy);
-        if (dist <= most) {
-            g_move_x = tx;
-            g_move_y = ty;
-        } else {
-            g_move_x += dx * most / dist;
-            g_move_y += dy * most / dist;
+        double dt = (double)(now - g_move_time) / 1e9;
+        dt = dt < 0.0 ? 0.0 : dt;
+        double step = (double)g_move_step * 1500.0 * pi / 180.0 * dt;
+        if (step > 30.0 * pi / 180.0) step = 30.0 * pi / 180.0;
+        const double diff = fmod(target - g_move_angle + 3.0 * pi, 2.0 * pi) - pi; /* -pi..pi */
+        double dir = diff > 0 ? 1.0 : -1.0;
+        if (fabs(diff) > 170.0 * pi / 180.0) {
+            /* Half way round counter-clockwise is angle + pi/2; forward is y < 0. */
+            const double hy = sin(g_move_angle + pi / 2.0), hx = cos(g_move_angle + pi / 2.0);
+            dir = hy < -1e-9 ? 1.0 : hy > 1e-9 ? -1.0 : hx > 0 ? 1.0 : -1.0;
         }
+        if (fabs(diff) <= step) g_move_angle = target;
+        else g_move_angle = atan2(sin(g_move_angle + dir * step), cos(g_move_angle + dir * step));
     }
+    const double c = cos(g_move_angle), sn = sin(g_move_angle);
+    const double k = walk ? reach : reach / fmax(fabs(c), fabs(sn));
+    g_move_x = (float)(c * k);
+    g_move_y = (float)(sn * k);
     g_move_active = true;
     g_move_time = now;
     out->any = true;
