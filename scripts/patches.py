@@ -287,9 +287,11 @@ def eboot_bytes(elf,start,end):
 # offset 0x20348b8). The fingerprint covers the game's original bytes everywhere the FPS and
 # resolution patches write, so another region's build with the same code passes. Recompute it
 # with --print-fingerprint (after a run of CUSA03173 v01.09) when those patches change.
+# Ours is upstream's d9e505b value; upstream's later 34e41d1d... follows its XML's sites (the physics
+# step at 0x00F383CA); both were checked on the same clean eboot (sha256 d65f0b4f...).
 BUILTIN_XML=Path(__file__).resolve().parent.parent/'patches/Bloodborne.xml'
 FINGERPRINT_PATCHES=sorted({n for names in FPS_PRESETS.values() for n in names}|{RESOLUTION_TEMPLATE})
-PATCH_FINGERPRINTS={'01.09':'913bc4cd755826817f1fe6b5b1ecb8bebd6887889ef2a0561c5ad5802641e3d4'}
+PATCH_FINGERPRINTS={'01.09':'f1322113eac92470b28f1cb3ccd7479b27f3daf7a9a31a6107f1fa14c8d94f14'}
 
 
 def patch_sites(xml,app_version,names=FINGERPRINT_PATCHES):
