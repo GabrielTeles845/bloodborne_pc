@@ -365,6 +365,12 @@ def main():
         # (k1m0206, Supermedo PR #91; its server lookups stay on Europe).
         if env.get('BB_LANGUAGE') in ('10', '11') and 'Unlock Game Region' not in extra:
             extra = ';'.join(filter(None, (extra, 'Unlock Game Region')))
+        # Offline, the title screen goes straight to the main menu (PLAY ONLINE would only fail
+        # there); online play and co-op keep the dialog. BB_SKIP_NETWORK_CHOICE=0 shows it offline
+        # too. (bbport 0.5-pre1, deadinside28 39940f2, via parsifal295's Supermedo PR #65.)
+        if (env.get('BB_ONLINE') != '1' and env.get('BB_COOP') != '1'
+                and env.get('BB_SKIP_NETWORK_CHOICE', '1') != '0'):
+            extra = ';'.join(filter(None, (extra, 'Skip Online/Offline Choice')))
         run_script('patches.py', '--out', out, '--fps', fps, '--extra', extra,
                    '--settings', config, '--game-dir', game, '--render-res', env.get('BB_RENDER_RES', ''),
                    '--output-res', env.get('BB_OUTPUT_RES', ''),

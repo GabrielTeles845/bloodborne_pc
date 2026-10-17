@@ -362,6 +362,28 @@ def encode(line):
     raise ValueError(f'unsupported patch type {kind!r}')
 
 
+# Patches that replace code which the fingerprint above does not cover: the bytes they overwrite,
+# as the 1.09 build has them (eboot offset, hex). Another build there gets the patch left out.
+PATCH_GUARDS={
+    'Skip Online/Offline Choice':(0x1b39030,'554889e54157415641554154534881ec48130000'),
+}
+
+
+def guarded_patches(names,elf):
+    """`names` without the guarded patches whose site in eboot.elf is not the code they expect."""
+    kept=[]
+    for name in names:
+        guard=PATCH_GUARDS.get(name)
+        if guard:
+            offset,expected=guard
+            expected=bytes.fromhex(expected)
+            if eboot_bytes(elf,offset,offset+len(expected))!=expected:
+                print(f'Patches: {name} left out: this eboot.bin has other code at its address')
+                continue
+        kept.append(name)
+    return kept
+
+
 def compile_patches(xml, names, app_version, segments):
     found={}
     for meta in ET.parse(xml).getroot().iter('Metadata'):
@@ -501,6 +523,7 @@ def main():
     names+=[n for n in effect_patches(read_settings(a.settings)) if n not in names]
     validate_patch_requirements(names,a.game_dir)
     elf=(a.out/'eboot.elf').read_bytes()
+    names=guarded_patches(names,elf)
     segments=eboot_segments(elf)
     writes=compile_patches(a.xml,names,a.app_version,segments)
     if a.fps!='30' and sprint_fix_enabled(read_settings(a.settings)):
