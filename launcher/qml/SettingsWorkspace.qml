@@ -237,6 +237,11 @@ Item {
                         }
                     }
                     Note { visible: is("Controls", "Button prompts"); text: "Which buttons the game shows, from the next start. Both prompt sets come with the launcher, shared with their authors' permission: Xbox by Dommo, Keyboard (PCBButtons) by JinkiJinn. Keyboard also binds the keys its images show: E interact, Left Shift dodge, R blood vial, Q item, F transform, mouse buttons to attack." }
+                    Row { visible: is("Mods & Patches", "Hunter's Atlas (map)"); spacing: 12
+                        GlassButton { text: "Prepare maps"; width: 160; height: 38; onClicked: launcher.prepareAtlas() }
+                        Note { text: launcher.atlasStatus; anchors.verticalCenter: parent.verticalCenter; width: 420 }
+                    }
+                    Note { visible: is("Mods & Patches", "Hunter's Atlas (map)"); text: "Hunter's Atlas by MikeTat1988 (GPL-2.0): a full-screen map with your position, floors, lamps and NPCs. Its maps are made from your own game files, once. In the game, open the quick menu and choose Map (the tile beside the first row), or click it." }
                     Row { visible: is("Visuals", "Upscaling"); spacing: 12
                         GlassButton { text: "Download FSR 4 assets"; width: 190; height: 38; onClicked: launcher.downloadFsr4() }
                         Note { text: launcher.fsrStatus; anchors.verticalCenter: parent.verticalCenter; width: 380 }

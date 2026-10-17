@@ -200,6 +200,19 @@ TWEAKS = [
 # PC enhancements (scripts/enhancements.py, after bbhost): game files made at start; off is the
 # game as it shipped. BB_PC_MIRROR / BB_PC_TWO_INVADERS / BB_PC_REBIRTH / BB_PC_LAMPS /
 # BB_PC_REMATCHES override them.
+# Hunter's Atlas (MikeTat1988/HuntersAtlas, scripts/atlas.py): the full-screen map, its maps made
+# once from the player's game (Mods & Patches > Prepare maps).
+ATLAS = [
+    ('atlas_enabled', ("Hunter's Atlas: full-screen map (Map in the game's quick menu)",
+                       "Hunter's Atlas: полноэкранная карта (пункт «Карта» в быстром меню)"), False),
+    ('atlas_travel', ('Fast travel to discovered lamps from the map', 'Быстрое перемещение к открытым фонарям'), False),
+    ('atlas_fog', ("Reveal an area's map only after its boss", 'Открывать карту области только после босса'), False),
+    ('atlas_items', ('Pickup markers (vials, Insight, equipment, Coldblood)',
+                     'Метки предметов (флаконы, озарение, снаряжение, отголоски)'), False),
+]
+ATLAS_NPC_MODES = [('all', ('All NPCs', 'Все NPC')), ('new_dialogue', ('Only NPCs with new dialogue', 'Только с новыми репликами')),
+                   ('hidden', ('Hidden', 'Скрыты'))]
+ATLAS_DIR = DATA_DIR / 'atlas'
 ENHANCEMENTS = [
     ('pc_mirror_appearance', ("Hunter's Dream mirror: change appearance",
                               'Зеркало в Сне охотника: смена внешности'), False),
@@ -213,12 +226,13 @@ ENHANCEMENTS = [
                            'Повторные бои с боссами у их фонарей (эксперимент; сохраните копию сохранений)'), False),
 ]
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y', 'mouse_menu', 'frame_gen_fit_display',
-             *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}
+             *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS + ATLAS)}
 INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'hud_position': '100', 'model_lod': '0',
                 'live_resolution': 'auto', 'mouse_camera': '1', 'mouse_sensitivity': '10', 'mouse_menu': '1',
                 'mouse_invert_y': '0', 'move_smoothing': '60', 'frame_gen': 'off', 'frame_gen_multiplier': '2', 'frame_gen_fit_display': '0',
-                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
+                'atlas_npc_mode': 'all',
+                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS + ATLAS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',

@@ -36,6 +36,9 @@ int bbgpu_text_input_begin(const char *initial_utf8, const char *prompt_utf8);
 int bbgpu_text_input_poll(char *out_utf8, uint64_t size);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int bbgpu_overlay_captures_input(void);
+/* Hunter's Atlas: the quick menu's Map tile and the open map take the pad buttons they use;
+ * returns the buttons left for the game. */
+uint32_t bbgpu_atlas_route_pad(uint32_t buttons, uint8_t lx, uint8_t ly, uint8_t rx, uint8_t ry);
 /* Local trophy notifications. IDs are supplied by the game's trophy API, not PSN. */
 void bbgpu_trophy_configure(const char *game_dir, const char *user_dir, int32_t language);
 void bbgpu_trophy_load(const int64_t *timestamps, uint32_t count);

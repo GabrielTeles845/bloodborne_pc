@@ -148,7 +148,7 @@ bool WindowSDL::PollEvents() {
         rearm_after_menu = false;
     }
     const bool can_capture = BbSettings::Get().mouse_camera.load() && !text_active &&
-                             !bbgpu_overlay_captures_input() && focused && !menu_pointer;
+                             !BbOverlay::ReleasesMouse() && focused && !menu_pointer;
     if (!can_capture && !menu_pointer) {
         mouse_armed = false;
     }

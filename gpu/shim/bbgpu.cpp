@@ -337,6 +337,10 @@ ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
 extern "C" int bbgpu_overlay_captures_input(void) {
     return BbOverlay::CapturesInput() ? 1 : 0;
 }
+extern "C" uint32_t bbgpu_atlas_route_pad(uint32_t buttons, uint8_t lx, uint8_t ly, uint8_t rx,
+                                          uint8_t ry) {
+    return BbOverlay::RoutePad(buttons, lx, ly, rx, ry);
+}
 
 extern "C" void bbgpu_trophy_configure(const char* game_dir, const char* user_dir, int32_t language) {
     BbTrophies::Configure(game_dir ? game_dir : "", user_dir ? user_dir : "", language);

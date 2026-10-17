@@ -7,6 +7,8 @@
 #include <inttypes.h>
 #include <cpuid.h>
 #include "runtime.h"
+#include "runtime_map.h"
+#include "runtime_atlas_state.h"
 #include "gpu/bbgpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -673,6 +675,15 @@ int main(int argc, char **argv) {
         /* Non-16:9 output (aspect_ratio.cpp, Supermedo #12): camera and floating UI. */
         extern void aspect_ratio_bind_image(void *, uint64_t);
         aspect_ratio_bind_image(image, size);
+    }
+    /* Hunter's Atlas (MikeTat1988/HuntersAtlas, GPL-2.0): the map's read-only position and menu
+     * readers and its opt-in lamp travel, only while the launcher turns the map on. */
+    if (!cpu_only) {
+        const char *atlas = getenv("BB_ATLAS_ENABLED");
+        if (atlas && !strcmp(atlas, "1")) {
+            runtime_map_bind(image, size);
+            runtime_atlas_state_bind(image, size);
+        }
     }
     if (!cpu_only) {
         const char *respawn_fix = getenv("BB_RESPAWN_DELAY_FIX");

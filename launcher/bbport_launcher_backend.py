@@ -126,6 +126,10 @@ FIELDS = {
     'Enhancements': [
         *[row(key, title[0], 'toggle') for key, title, _ in core.ENHANCEMENTS],
     ],
+    'Atlas': [
+        *[row(key, title[0], 'toggle') for key, title, _ in core.ATLAS],
+        row('atlas_npc_mode', 'NPC markers', 'choice', core.ATLAS_NPC_MODES),
+    ],
     # Launch behaviour (launchDirectly, close_on_play, shortcuts) lives on Home; the update
     # toggle has its own row with "Check now" in Main.qml.
     'Advanced': [
@@ -176,6 +180,7 @@ SETTINGS_SECTIONS = {
     'Mods & Patches': [
         ('Installed mods', ['mods_enabled', 'mods_dir']),
         ('Built-in enhancements', [key for key, _, _ in core.ENHANCEMENTS]),
+        ("Hunter's Atlas (map)", [key for key, _, _ in core.ATLAS] + ['atlas_npc_mode']),
         ('External patches', ['patches_dir']),
         ('Gameplay patches', [key for key, _, _ in core.CHEATS] + [key for key, _, _ in core.TWEAKS]),
     ],
@@ -244,6 +249,7 @@ class LauncherBackend(QObject):
         for signal in (self.changed, self.coopChanged, self.thdChanged):
             signal.connect(self.playModeChanged)
         self._route = dict(route or LAUNCHER_ROUTE)
+        self._atlas_progress = ''  # Hunter's Atlas: the map preparation's progress line
         self._problem = self._route.get('problem', '')
         self._game_started = False
         self._checks_started = False
@@ -975,6 +981,47 @@ class LauncherBackend(QObject):
         self._set_notice(f'{choice} button prompts selected. Restart the game to apply them.'
                          + (' Keys now match the prompt images (E interact, Left Shift dodge, Q item, F transform).'
                             if choice == 'Keyboard' else ''))
+
+    @Property(str, notify=changed)
+    def atlasStatus(self):
+        if self._atlas_progress:
+            return self._atlas_progress
+        sys.path.insert(0, str(core.PORT_DIR / 'scripts'))
+        import atlas
+        return ('Maps ready.' if atlas.ready(core.ATLAS_DIR) else
+                'Maps not prepared yet: Prepare maps makes them from your game (5-15 minutes, once).')
+
+    @Slot()
+    def prepareAtlas(self):
+        """Hunter's Atlas: the maps from the player's own game (scripts/atlas.py prepare)."""
+        if self._atlas_progress:
+            return
+        game = self.app.get('game_dir')
+        self._atlas_progress = 'Preparing maps…'
+        self.changed.emit()
+
+        def work():
+            import json as json_lines
+            sys.path.insert(0, str(core.PORT_DIR / 'scripts'))
+            import atlas
+
+            def progress(line):
+                try:
+                    record = json_lines.loads(line)
+                except ValueError:
+                    return
+                if 'progress' in record:
+                    self._atlas_progress = f"Preparing maps: {record['progress']}% · {record.get('stage', '')}"
+                    self.changed.emit()
+            try:
+                atlas.prepare(game, core.ATLAS_DIR, progress)
+                message = "Hunter's Atlas maps ready. Turn the map on and play: Map is in the game's quick menu."
+            except (OSError, ValueError, RuntimeError) as error:
+                message = f'Preparing the maps failed: {error}'
+            self._atlas_progress = ''
+            self.workerNotice.emit(message)
+            self.changed.emit()
+        threading.Thread(target=work, daemon=True).start()
 
     @Slot()
     def downloadFsr4(self):

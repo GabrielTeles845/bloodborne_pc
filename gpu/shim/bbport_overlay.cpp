@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "bbport_overlay.h"
+#include "bbport_map.h"
+#include "bbport_map_art.h"
+#include "bbport_atlas_menu.h"
+#include "bbport_atlas_paths.h"
 
 #include <algorithm>
 #include <atomic>
@@ -806,6 +810,8 @@ void ImageToolsTab() {
     PageTitle("Image tools");
     Note("Graphics, display, effects and the FPS counter are in Pause > System. These tools are "
          "diagnostics beyond the game menu.");
+    // Hunter's Atlas: the map's keys and shortcuts, while the launcher has it on.
+    if (BbMap::Enabled()) BbMap::Settings();
     Section("Current image");
     InfoRow("Scene resolution", "%d x %d", s.active_render_width.load(),
             s.active_render_height.load());
@@ -1592,6 +1598,26 @@ void ConfigureContext() {
             guide_serif_font = io.Fonts->AddFontFromFileTTF(georgia.string().c_str(), 28.0f);
     }
 #endif
+    // Hunter's Atlas: the map's serif, made from the player's own menu font by its generator.
+    if (BbMap::Enabled()) {
+        const auto map_font = BbAtlasPath("BB_MAP_FONT", BbAtlasPath("BB_MAP_DIR", "navigation-map/maps")
+                                                             .parent_path() / "fonts/bloodborne-native.ttf");
+        std::ifstream face_file(map_font, std::ios::binary | std::ios::ate);
+        if (face_file) {
+            const auto bytes = face_file.tellg();
+            if (bytes > 0 && bytes < 16 * 1024 * 1024) {
+                void* data = IM_ALLOC(size_t(bytes));
+                face_file.seekg(0);
+                face_file.read(static_cast<char*>(data), bytes);
+                if (face_file) {
+                    if (auto* face = io.Fonts->AddFontFromMemoryTTF(data, int(bytes), 24.0f))
+                        BbMap::SetTitleFont(face);
+                } else {
+                    IM_FREE(data);
+                }
+            }
+        }
+    }
 }
 
 // One frame's windows, between NewFrame and Render (Render; also the offscreen preview).
@@ -1607,8 +1633,13 @@ void DrawWindows(float display_height) {
 
     if (menu_open) {
         Menu();
+        if (BbMap::IsOpen()) BbMap::Close();
     }
-    if (BbSettings::Get().show_fps && !menu_open) {
+    // Hunter's Atlas: the open map, or the Map tile beside the game's quick menu.
+    if (BbMap::IsOpen()) BbMap::Draw();
+    if (!menu_open && !text_entry_active && !BbMap::IsOpen()) BbAtlasMenu::Draw();
+    ImGui::GetIO().MouseDrawCursor = menu_open || BbMap::IsOpen() || BbAtlasMenu::Visible();
+    if (BbSettings::Get().show_fps && !menu_open && !BbMap::IsOpen()) {
         FpsCounter();
     }
     if (text_entry_active) {
@@ -1668,6 +1699,8 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
         return;
     }
     initialized = true;
+    BbMapArt::Init();
+    BbMap::Init();
     std::printf("Overlay: menu ready (Insert or L3+R3)\n");
 }
 
@@ -1692,14 +1725,19 @@ bool HandleEvent(const SDL_Event& event) {
         return false;
     }
     ImGuiIO& io = ImGui::GetIO();
-    const bool is_open = menu_open;
+    // Hunter's Atlas first: the Map tile's mouse, and the open map's keys and mouse.
+    BbAtlasMenu::Suppress(menu_open || text_entry_active);
+    if (!text_entry_active && BbAtlasMenu::HandleMouse(event)) return true;
+    if (!text_entry_active && BbMap::HandleEvent(event)) return true;
+    const bool is_open = menu_open || BbMap::IsOpen();
     switch (event.type) {
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP: {
         const bool down = event.type == SDL_EVENT_KEY_DOWN;
         if (down && !event.key.repeat &&
             (event.key.key == SDLK_INSERT || (is_open && event.key.key == SDLK_ESCAPE))) {
-            SetOpen(event.key.key == SDLK_INSERT ? !is_open : false);
+            if (BbMap::IsOpen()) BbMap::Close();
+            SetOpen(event.key.key == SDLK_INSERT ? !menu_open : false);
             return true;
         }
         if (!is_open) {
@@ -1805,11 +1843,22 @@ bool HandleEvent(const SDL_Event& event) {
 
 bool Visible() {
     return initialized && (menu_open || text_entry_active || BbSettings::Get().show_fps ||
+                           BbMap::IsOpen() || BbAtlasMenu::Visible() ||
                            active_toast.load() >= 0 || queued_toasts.load() > 0);
 }
 
 bool CapturesInput() {
-    return menu_open || text_entry_active;
+    return menu_open || text_entry_active || BbMap::CapturesInput();
+}
+
+uint32_t RoutePad(uint32_t buttons, uint8_t lx, uint8_t ly, uint8_t rx, uint8_t ry) {
+    std::scoped_lock lock{imgui_mutex};
+    if (!initialized || menu_open || text_entry_active) return buttons;
+    return BbAtlasMenu::RoutePad(buttons, lx, ly, rx, ry);
+}
+
+bool ReleasesMouse() {
+    return CapturesInput() || BbAtlasMenu::Interacting();
 }
 
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text) {
@@ -1876,6 +1925,15 @@ void NotePresent() {
 }
 
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
+    {
+        std::scoped_lock lock{imgui_mutex};
+        if (initialized) {
+            BbMap::PollTestCommands();
+            BbMap::Tick();
+            BbAtlasMenu::Suppress(menu_open || text_entry_active);
+            BbAtlasMenu::Tick();
+        }
+    }
     const float ms = last_present_ms;
     if (!Visible()) {
         return;

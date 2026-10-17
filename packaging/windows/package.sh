@@ -93,6 +93,15 @@ ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
+# Hunter's Atlas (tools/atlas/README.md): its art and generator source, and the frozen generator
+# (packaging/windows/build_atlas_generator.sh) when it was built.
+mkdir -p "$dest/tools"
+cp -r tools/atlas "$dest/tools/"
+if [[ -x out/atlas-generator/generate_atlas.exe ]]; then
+    cp -r out/atlas-generator "$dest/tools/atlas-generator"
+else
+    echo "Note: no out/atlas-generator (build_atlas_generator.sh): the package cannot prepare Hunter's Atlas maps" >&2
+fi
 # Xbox button prompts by Dommo (nexusmods.com/bloodborne/mods/30, redistribution allowed with
 # credit), shipped in every package so a fresh download has them. BB_XBOX_PROMPTS_DIR overrides
 # the copy kept in packaging/windows/mods.

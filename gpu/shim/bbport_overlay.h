@@ -38,6 +38,11 @@ void NotePresent();
 
 /// The menu is open or a text entry is shown: the game's input is held neutral.
 bool CapturesInput();
+/// Hunter's Atlas: the pad buttons left for the game once the Map tile and the open map
+/// take theirs.
+uint32_t RoutePad(uint32_t buttons, uint8_t lx, uint8_t ly, uint8_t rx, uint8_t ry);
+/// The mouse belongs to a menu (settings, map, the Map tile): no mouse camera.
+bool ReleasesMouse();
 
 /// Window thread: the game's text dialog (sceImeDialog). Shown as a box on screen until
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.
