@@ -18,6 +18,29 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   ([#13](https://github.com/Jgamrot/bloodborne_pc/issues/13)).
 - **Opening the launcher:** a direct start waits 3 seconds with a larger, centred notice; hold
   Shift or click it for the launcher ([#11](https://github.com/Jgamrot/bloodborne_pc/issues/11)).
+- **Ultrawide (21:9, 32:9), from emurphy04's work in Supermedo's port (PR #70):** wide outputs
+  get the community 21:9 patch worked out for their own aspect ratio (camera, HUD, lock-on and
+  health-bar markers) instead of a stretched 16:9 menu stage, which scrambled the item menu
+  ([#15](https://github.com/Jgamrot/bloodborne_pc/issues/15)). Full-screen menu backdrops are
+  widened, and *HUD position (ultrawide)* puts health, items and Blood Echoes at the screen edges
+  or in the centred 16:9 area. The game's PC Graphics menu lists 2560 × 1080 and 3440 × 1440 and
+  shows the ultrawide size you chose in the launcher (it showed 1280 × 720); 3840 × 1600 and
+  3840 × 1080 are new. With the upscaler off, non-16:9 outputs draw the scene again.
+- **Sharper 4K, or at least clearer:** the upscaling preset now says what size the game renders
+  at (Balanced at 4K renders 2258 × 1270; Quality 2560 × 1440; Native the full 3840 × 2160).
+- **Older processors** (Intel 2nd and 3rd generation, many Xeon E5 v1/v2, often paired with an
+  RX 580): the game's newer instructions are translated at start, best effort, from T0ug's work
+  in Supermedo's port; a CPU that cannot run the game at all is named in a message instead of
+  "exit code 3" ([#14](https://github.com/Jgamrot/bloodborne_pc/issues/14)).
+- **Keyboard:** a sprint is kept when you change direction (W, then A), and a half turn goes
+  through forward; it used to cut across and drop to a walk.
+- **Video memory full** on 4-8 GB cards: the game's memory moves to system memory instead of
+  stopping, and textures near the limit go there first; under pressure textures stay for 5
+  seconds instead of being uploaded again at once (from Supermedo's port).
+- **More from Supermedo's port:** large outputs on PCs with little RAM no longer stop at start
+  (memory committed as the game maps it); a flip out of order no longer stops the game; mods on
+  read-only game files load (WinError 5); more mod folder layouts load, and folders that are not
+  mods are named.
 
 ## 1.9.6
 
