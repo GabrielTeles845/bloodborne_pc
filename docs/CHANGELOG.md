@@ -4,7 +4,10 @@ Windows releases of this fork, newest first. Each is on the
 [releases page](https://github.com/Jgamrot/bloodborne_pc/releases) as `bbport-windows.zip`.
 Planned work is in [ROADMAP.md](ROADMAP.md).
 
-## Unreleased
+## 1.9.7
+
+A full-screen map, frame generation, seamless co-op that hands out its bells, and fixes from
+the issues and from Supermedo's port. Everyone in a co-op session needs 1.9.7 for the bells.
 
 - **Hunter's Atlas, a full-screen map** by MikeTat1988 ([HuntersAtlas](https://github.com/MikeTat1988/HuntersAtlas),
   GPL-2.0), built in: your position and facing, floors, lamps, NPCs and gates for the 16 main
@@ -61,9 +64,14 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
   "exit code 3" ([#14](https://github.com/Jgamrot/bloodborne_pc/issues/14)).
 - **Keyboard:** a sprint is kept when you change direction (W, then A), and a half turn goes
   through forward; it used to cut across and drop to a walk.
-- **Video memory full** on 4-8 GB cards: the game's memory moves to system memory instead of
-  stopping, and textures near the limit go there first; under pressure textures stay for 5
-  seconds instead of being uploaded again at once (from Supermedo's port).
+- **Video memory full** on cards where the game's memory may live outside VRAM: it moves to
+  system memory instead of stopping (from Supermedo's port). Two other upstream video-memory
+  changes were tried and taken out again: on an 8 GB laptop RTX 4060 they made the game run out
+  of video memory.
+- **Seamless co-op gives its bells:** BBSC hands out its Hunt Bell (host) and Kin Bell (guest)
+  only after it has backed up the save, and copying the save the running game had open always
+  failed, so the bells never came and a new character could not start co-op. BBSC now backs up
+  the copy the launcher makes before each session.
 - **More from Supermedo's port:** large outputs on PCs with little RAM no longer stop at start
   (memory committed as the game maps it); a flip out of order no longer stops the game; mods on
   read-only game files load (WinError 5); more mod folder layouts load, and folders that are not
