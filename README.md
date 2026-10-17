@@ -217,6 +217,11 @@ page take precedence:
   [gpu/bbnet/THD-PORT.md](gpu/bbnet/THD-PORT.md). Thanks to Metr1k and The Hunter's Dream team, and
   to Wozzardman's [shadp2p](https://github.com/Wozzardman/shadp2p), which the first online version
   was built on.
+- [Hunter's Atlas](https://github.com/MikeTat1988/HuntersAtlas), the full-screen map, by MikeTat1988
+  (GPL-2.0); see [tools/atlas/README.md](tools/atlas/README.md).
+- Frame generation from Supermedo's port, and fixes from more of its pull requests: emurphy04
+  (ultrawide, live resolution), EricDar12, DarkSpartan, kamikaze-san, k1m0206, andrecabralgit,
+  fliperama86, parsifal295, T0ug (older processors) and cassioKenji (keyboard sprint).
 - Fixes and features from Supermedo pull requests, kept with their authors' commits: ayozetr
   (DLC), DarkSpartan, gtggdd4mzb-source and yumlevi, andrecabralgit, noatdk, FIocker (including
   the English menu), jpramosjp and gStone.

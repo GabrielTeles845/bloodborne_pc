@@ -6,6 +6,33 @@ Planned work is in [ROADMAP.md](ROADMAP.md).
 
 ## Unreleased
 
+- **Hunter's Atlas, a full-screen map** by MikeTat1988 ([HuntersAtlas](https://github.com/MikeTat1988/HuntersAtlas),
+  GPL-2.0), built in: your position and facing, floors, lamps, NPCs and gates for the 16 main
+  areas, with optional fast travel to discovered lamps, pickup markers and a map that opens up
+  after each area's boss. *Settings → Mods & Patches → Hunter's Atlas*: turn it on and press
+  *Prepare maps* once (5-15 minutes; the maps are made from your own game files). In the game,
+  open the quick menu and choose *Map*. Needs the clean 1.09 game.
+- **Frame generation** (from Supermedo's port): AMD FSR 3.1 on any GPU, NVIDIA DLSS on GeForce RTX
+  40/50 (up to 4x on RTX 50), in *Visuals → Frame generation* and the in-game menu. 60 FPS on
+  screen becomes 120; it needs a display that fast.
+- **Sharper 4K:** with *Live resolution* on Auto, outputs above 1080p use the startup patch while
+  depth of field is on; the live path blurred their depth of field, so 4K Native looked softer
+  than 4K Performance (emurphy04, Supermedo PR #75).
+- **Game of the Year dumps** whose param.sfo says 01.00 but hold the 1.09 code get the patches
+  (FPS, resolution, effects) (EricDar12, PR #83); a modified eboot.bin is recognised by its code
+  and left unpatched, and the launcher warns about it.
+- **Crash fixes** from DarkSpartan (PR #87): lamp travel (GetBarriers assertion), random crashes
+  after about an hour (the per-frame render heaps are now 1 MiB), a report instead of a frozen
+  screen when the GPU device is lost, and texture hashing of unmapped memory.
+- **Integrated graphics** (Ryzen laptops, ROG Ally): textures go to shared memory and the small
+  dedicated heap stays free, instead of "ErrorOutOfDeviceMemory" after a while (PR #89).
+- **Audio:** no more crackle or short cutouts when Windows' audio period is long (PR #80).
+- **HDR on in Windows:** blacks are no longer lifted (gamma 2.2; BB_HDR_GAMMA=0 turns it off) (PR #71).
+- **Offline, the title screen goes straight to the main menu** (no Play online / offline
+  question) (PR #65); a damaged extraction whose shaders do not unpack is named at start instead
+  of the game hanging (PR #64).
+- **Chinese** (traditional and simplified) turns on the region unlock it needs, and online keeps
+  working with it (PR #91).
 - **More game languages** in *Settings → Game & Saves*: Portuguese (Brazil), with its dubbing,
   Portuguese (Portugal), Spanish (Latin America), English (UK), Dutch, Polish, Turkish, Finnish,
   Swedish, Danish, Norwegian, Korean and Chinese, as the game ships them
