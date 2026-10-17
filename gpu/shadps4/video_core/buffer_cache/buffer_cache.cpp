@@ -7,7 +7,9 @@
 #include <unordered_map>
 #include <algorithm>
 #include <bit>
+#include <cstdio>
 #include <cstdlib>
+#include <tuple>
 #include <magic_enum/magic_enum.hpp>
 #include "bbport_copy.h"
 #include "bbport_toggles.h"
@@ -95,6 +97,7 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
         FindMemoryType(instance.GetMemoryProperties(), vk::MemoryPropertyFlagBits::eDeviceLocal,
                        reqs.memoryTypeBits)
             .value();
+    arena_memory_type_bits = reqs.memoryTypeBits;
 
     const u64 bda_pagetable_size =
         (blocks_per_arena_page * num_arena_pages) * sizeof(vk::DeviceAddress);
@@ -462,6 +465,35 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
     return new_arena;
 }
 
+vk::DeviceMemory BufferCache::AllocateArenaChunk(vk::MemoryAllocateInfo alloc_info) {
+    auto [result, memory] = instance.GetDevice().allocateMemory(alloc_info);
+    if (result == vk::Result::eErrorOutOfDeviceMemory) {
+        // bbport (Supermedo/bloodborne_pc 96502c8): VRAM full. The guest memory the GPU uses is
+        // backed here and only grows as areas load; on 4-8 GB cards it ran out
+        // ("ErrorOutOfDeviceMemory" stopped the game). Another memory type the arena accepts,
+        // outside VRAM (system memory the GPU reaches), is slower but keeps the game going.
+        const auto& props = instance.GetMemoryProperties();
+        const u32 vram_heap = props.memoryTypes[arena_memory_type_index].heapIndex;
+        for (u32 i = 0; i < props.memoryTypeCount && result != vk::Result::eSuccess; ++i) {
+            if (((arena_memory_type_bits >> i) & 1) == 0 ||
+                props.memoryTypes[i].heapIndex == vram_heap) {
+                continue;
+            }
+            alloc_info.memoryTypeIndex = i;
+            std::tie(result, memory) = instance.GetDevice().allocateMemory(alloc_info);
+        }
+        if (result == vk::Result::eSuccess) {
+            Vulkan::NoteOverBudget("buffer");
+        } else {
+            std::printf("Buffer cache: no memory left for the guest memory backing (%llu MiB "
+                        "more); VRAM and the system-memory types the arena accepts are full
+",
+                        (unsigned long long)(alloc_info.allocationSize >> 20));
+        }
+    }
+    return Vulkan::Check(vk::ResultValue<vk::DeviceMemory>{result, memory});
+}
+
 void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_block) {
     // bbport: whole chunks, each its own allocation (see chunk_memory), and their last use.
     const u64 first_chunk = first_block >> blocks_per_chunk_shift;
@@ -501,8 +533,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
         // Residency only ever changes by whole chunks, so the gaps are whole chunks.
         for (u64 start = range.start; start < range.end; start += u64{1} << blocks_per_chunk_shift) {
             const u64 chunk = start >> blocks_per_chunk_shift;
-            const auto device_memory =
-                Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
+            const auto device_memory = AllocateArenaChunk(alloc_info);
             chunk_memory[chunk] = device_memory;
             chunk_arenas[chunk].push_back(arena);
 

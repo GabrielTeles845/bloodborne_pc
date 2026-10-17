@@ -138,6 +138,7 @@ private:
     const Buffer* GetArena(u64 first_block, u64 last_block);
 
     void EnsureResident(const Buffer* arena, u64 first_block, u64 last_block);
+    vk::DeviceMemory AllocateArenaChunk(vk::MemoryAllocateInfo alloc_info);
 
     void DownloadMemory(const Buffer* arena, VAddr device_addr, u64 size);
 
@@ -216,6 +217,7 @@ private:
     std::chrono::steady_clock::time_point gc_report_time{};
 
     u32 arena_memory_type_index{};
+    u32 arena_memory_type_bits{}; ///< bbport: the types the arena accepts (system memory fallback)
     u32 block_size{};
     u32 block_shift{};
     u32 blocks_per_arena_page{};
