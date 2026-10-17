@@ -215,7 +215,7 @@ ENHANCEMENTS = [
 INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'mouse_camera', 'mouse_invert_y', 'mouse_menu',
              *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS)}
 INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': '0.50',
-                'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'model_lod': '0',
+                'object_motion': '1', 'show_fps': '1', 'output_res': '2560x1440', 'hud_position': '100', 'model_lod': '0',
                 'live_resolution': 'auto', 'mouse_camera': '1', 'mouse_sensitivity': '10', 'mouse_menu': '1',
                 'mouse_invert_y': '0', 'move_smoothing': '60',
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS}}
@@ -249,7 +249,11 @@ OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',)),
            ('1280x800', ('1280 x 800 (16:10)',)), ('2560x1080', ('2560 x 1080 (Ultrawide)',)),
            ('3440x1440', ('3440 x 1440 (Ultrawide)',)), ('5120x1440', ('5120 x 1440 (32:9)',)),
-           ('5120x2160', ('5120 x 2160 (Ultrawide)',)), ('1080x1920', ('1080 x 1920 (Portrait)',))]
+           ('5120x2160', ('5120 x 2160 (Ultrawide)',)), ('3840x1600', ('3840 x 1600 (Ultrawide)',)),
+           ('3840x1080', ('3840 x 1080 (32:9)',)), ('1080x1920', ('1080 x 1920 (Portrait)',))]
+# Ultrawide outputs: where the HUD's corner groups go (scripts/hud_layout.py at start).
+HUD_POSITIONS = [('100', ('Screen edges', 'У краёв экрана')), ('75', ('75%',)), ('50', ('Halfway', 'Посередине')),
+                 ('25', ('25%',)), ('0', ('Centred (16:9)', 'По центру (16:9)'))]
 
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
@@ -1449,6 +1453,12 @@ class Launcher:
         self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
                  _('Choose a preset or type WxH (even dimensions, 256x144 through 7680x4320).',
                    'Что выдаёт апскейлер; интерфейс рисуется в этом же размере.'))
+        self.row(f, _('HUD position (ultrawide)', 'Положение интерфейса (21:9)'),
+                 self.choice(f, 'hud_position', 'ini', HUD_POSITIONS),
+                 _('21:9 and 32:9 outputs: health, items and Blood Echoes at the screen edges, or in the '
+                   'centred 16:9 area as on a 16:9 screen.',
+                   'Для 21:9 и 32:9: здоровье, предметы и Отголоски крови у краёв экрана или в центральной '
+                   'области 16:9, как на обычном экране.'))
         self.row(f, _('Live resolution changes', 'Смена разрешения на лету'), self.choice(f, 'live_resolution', 'ini', LIVE),
                  _('Off: outputs other than 1080p are set by a patch at start (fastest; changing them in the '
                    'game restarts it). On: change output and preset in the game without a restart, at a cost.',

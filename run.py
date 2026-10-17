@@ -213,6 +213,25 @@ def main():
     env['BB_PC_REBIRTH_ACTIVE'] = '1' if any(Path(f).name == 'rebirth' for f in generated) else '0'
     env['BB_PC_MENU_QUIT'] = '1' if menu and all(
         (menu / 'dvdroot_ps4/menu' / name).is_file() for name in ('title.gfx', 'title_dlc.gfx')) else '0'
+    # Ultrawide outputs (wider than 16:9): the menu movies with full-screen backdrops widened and
+    # the HUD's corner groups toward the screen edges (bbport.ini hud_position, 0 centred .. 100
+    # edges), a layer above the generated ones (it builds on their menu movies) and below the
+    # mods. Only for the 01.09 game, whose camera and HUD canvas patches.py widens (hud_canvas).
+    # From emurphy04 (Supermedo/bloodborne_pc PR #70).
+    sys.path.insert(0, str(PORT / 'scripts'))
+    from patches import OUTPUT_SIZE, game_app_version, hud_canvas, output_size
+    hud_layer = Path(out) / 'hud_layout'
+    shutil.rmtree(hud_layer, ignore_errors=True)
+    output_res = env.get('BB_OUTPUT_RES') or ini_value(config, 'output_res') or ''
+    canvas = hud_canvas(output_size({'output_res': output_res}))
+    if canvas != OUTPUT_SIZE and (game_app_version(game) in (None, '01.09') or env.get('BB_FORCE_PATCHES')):
+        position = ini_value(config, 'hud_position') or '100'
+        position = max(0, min(100, int(position) if position.isdigit() else 100)) / 100
+        run_script('hud_layout.py', game, '--out', hud_layer, '--canvas-width', canvas[0],
+                   '--position', position, *(arg for folder in generated for arg in ('--source', folder)),
+                   optional=True)
+        if (hud_layer / 'dvdroot_ps4').is_dir():
+            generated.append(str(hud_layer))
     # The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).
     bundled = [folder for folder in (PORT / 'mods' / XBOX_PROMPTS, PORT / 'packaging/windows/mods' / XBOX_PROMPTS)
                if folder.is_dir()][:1]
@@ -291,10 +310,20 @@ def main():
                                             stdout=subprocess.PIPE, text=True, creationflags=no_console())
                     live = result.stdout.strip() if result.returncode == 0 else '0'
             live = '1' if live == '1' or not patched else '0'
+        from patches import hud_canvas, ultrawide
+        env.pop('BB_ASPECT_PATCHED', None)
         if scaled_output or env.get('BB_OUTPUT_RES'):
             movie_output = scaled_output or env['BB_OUTPUT_RES']
             ow, oh = map(int, movie_output.split('x'))
-            if ow * 9 != oh * 16:
+            if patched and ultrawide((ow, oh)):
+                # Kyo's 21:9 patch for this aspect ratio (patches.py ultrawide_writes): camera,
+                # HUD canvas and markers at start, so no live changes and no camera hook.
+                live = '0'
+                canvas = hud_canvas((ow, oh))
+                env['BB_UI_RES'] = f'{canvas[0]}x{canvas[1]}'
+                env['BB_ASPECT_PATCHED'] = '1'
+                print(f'Output {movie_output}: ultrawide, HUD {env["BB_UI_RES"]}; aspect changes require restart')
+            elif ow * 9 != oh * 16:
                 live = '0'
                 env['BB_UI_RES'] = movie_output
                 print('Aspect correction: centered 16:9 stage; aspect changes require restart')

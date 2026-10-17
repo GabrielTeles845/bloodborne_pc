@@ -628,7 +628,7 @@ void SettingsTab() {
     InfoRow("Active scene resolution", "%d x %d", s.active_render_width.load(),
             s.active_render_height.load());
     if (BbSettings::AspectNeedsRestart()) {
-        Hint("Changing aspect ratio requires a restart. HUD remains centered at 16:9.");
+        Hint("Changing aspect ratio requires a restart. Ultrawide outputs (21:9, 32:9) widen the camera and HUD (HUD position: in the launcher); other aspect ratios keep a centred 16:9 HUD.");
     } else if (BbSettings::FixedRenderSession()) {
         InfoRow("Startup preset", "%s", BbSettings::PresetName(s.startup_preset));
         if (const char* automatic = std::getenv("BB_AUTO_RENDER_RES");
@@ -686,7 +686,7 @@ void SettingsTab() {
         ImGui::EndCombo();
     }
     if (BbSettings::AspectNeedsRestart()) {
-        Hint("Changing aspect ratio requires a restart. HUD remains centered at 16:9.");
+        Hint("Changing aspect ratio requires a restart. Ultrawide outputs (21:9, 32:9) widen the camera and HUD (HUD position: in the launcher); other aspect ratios keep a centred 16:9 HUD.");
     } else if (BbSettings::FixedRenderSession()) {
         Hint("Final image and HUD resolution. The preset controls scene resolution relative to the output. 4K Performance is approximately 1920x1080. Changes require a restart.");
     } else {

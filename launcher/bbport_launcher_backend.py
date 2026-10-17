@@ -53,6 +53,9 @@ FIELDS = {
         row('preset', 'Upscaling preset', 'choice', core.PRESETS,
             'How far below the output the game renders: higher factors are faster and softer.'),
         row('output_res', 'Output resolution', 'choice', core.OUTPUTS, "The final image size, usually your display's."),
+        row('hud_position', 'HUD position (ultrawide)', 'choice', core.HUD_POSITIONS,
+            '21:9 and 32:9 outputs: health, items and Blood Echoes at the screen edges, or in the '
+            'centred 16:9 area as on a 16:9 screen. Applies at the next start.'),
         row('live_resolution', 'Live resolution changes', 'choice', core.LIVE,
             'Lets the in-game menu change the upscaling preset without a restart, at some cost in speed.'),
         row('sharpen', 'Sharpening (RCAS)', 'toggle', hint='Sharpens the upscaled image.'),
@@ -135,7 +138,7 @@ FIELDS = {
 # field definitions remain the single source for control types and options.
 SETTINGS_SECTIONS = {
     'Visuals': [
-        ('Display & frame rate', ['output_res', 'fullscreen', 'hdr', 'fps_mode', 'frame_cap',
+        ('Display & frame rate', ['output_res', 'hud_position', 'fullscreen', 'hdr', 'fps_mode', 'frame_cap',
                                   'frames_ahead', 'present_mode']),
         ('Upscaling', ['upscaler', 'preset', 'live_resolution', 'sharpen', 'sharpness',
                        'object_motion']),

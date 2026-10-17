@@ -60,6 +60,9 @@ extern "C" void aspect_ratio_bind_image(void* image,uint64_t size) {
     uint32_t w=1920,h=1080;
     if (const char* res=std::getenv("BB_OUTPUT_RES")) std::sscanf(res,"%ux%u",&w,&h);
     if (!w || !h || uint64_t(w)*9==uint64_t(h)*16) return;
+    if (const char* patched=std::getenv("BB_ASPECT_PATCHED"); patched && !std::strcmp(patched,"1")) {
+        std::puts("Aspect: ultrawide output, camera and HUD set by the 21:9 patch (patches.py)"); return;
+    }
     if (const char* off=std::getenv("BB_ASPECT"); off && !std::strcmp(off,"0")) {
         std::puts("Aspect: off (BB_ASPECT=0); the 16:9 camera and HUD are stretched to the output"); return;
     }

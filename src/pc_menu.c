@@ -191,7 +191,13 @@ typedef struct {
 
 static const Option UPSCALERS[] = {{0, 117100}, {1, 117101}, {2, 117102}, {3, 117103}, {4, 117104}, {5, 117105}};
 static const Option PRESETS[] = {{0, 117110}, {1, 117111}, {2, 117112}, {3, 117113}, {4, 117114}};
-static const Option OUTPUTS[] = {{0, 125100}, {1, 125101}, {2, 125102}, {3, 125103}};
+/* The 16:9 outputs and the two common ultrawide ones; the other ultrawide outputs show only
+ * while chosen (from the launcher), so the list stays as short as the others. Values index
+ * BbSettings::OutputWidths. */
+enum { OUTPUTS_ALWAYS = 6 };
+static const Option OUTPUTS[] = {{0, 125100}, {1, 125101}, {2, 125102}, {3, 125103},
+                                 {5, 125104}, {6, 125105}, {10, 125106}, {8, 125107},
+                                 {11, 125108}, {7, 125109}};
 static const Option LIVE[] = {{-1, 125110}, {0, 125111}, {1, 125112}};
 static const Option LODS[] = {{-2, 125120}, {0, 125121}, {1, 125122}, {2, 125123}};
 #define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
@@ -263,11 +269,12 @@ static void seed(Row *r) {
         return;
     }
     r->shown_count = 0;
-    for (int i = 0; i < r->option_count; ++i) {
+    const int now = setting(r->key);
+    for (int i = 0; i < r->option_count && r->shown_count < MAX_OPTIONS; ++i) {
         if (!strcmp(r->key, "upscaler") && !bbgpu_upscaler_supported(r->options[i].value)) continue;
+        if (r->options == OUTPUTS && i >= OUTPUTS_ALWAYS && r->options[i].value != now) continue;
         r->shown[r->shown_count++] = r->options[i];
     }
-    const int now = setting(r->key);
     r->pick = r->shown_count ? r->shown[0].value : 0;
     for (int i = 0; i < r->shown_count; ++i)
         if (r->shown[i].value == now) r->pick = now;
