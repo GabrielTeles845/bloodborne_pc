@@ -417,7 +417,7 @@ def create_account(address, key, name, password):
 
 # --- The game ------------------------------------------------------------------------------------
 
-def co_op_environment(env, address, name, password, probe):
+def co_op_environment(env, address, name, password, probe, save_copy=None):
     """The normal game environment, pointed at the host's servers with BBSC loaded. run.py writes
     this launch's server redirects (user/host_overrides.json) from these values."""
     launcher = package_dir('client') / 'bbsc' / 'bbsc-launch.exe'
@@ -445,9 +445,13 @@ def co_op_environment(env, address, name, password, probe):
                 'BB_THD_RULESET'):
         env.pop(key, None)
     # BBSC's co-op kit (its Hunt Bell, Kin Bell and the rest, which replace the vanilla bells) is
-    # only given after BBSC has backed up the save, and BBSC finds saves only in shadPS4's layout
-    # unless BBSC_SAVE_DIR names the folder: this port's user\savedata\<user>\CUSA00207\SPRJ0005.
-    save_dir = active_save_dir(Path(env.get('BB_USER_DIR') or port_user))
+    # only given after BBSC has copied the save folder BBSC_SAVE_DIR names (BBSC's
+    # BackupBbscSaves; it finds saves only in shadPS4's layout otherwise). Copying the save the
+    # running game has open failed every time, so the kit never came and a new character had no
+    # bell to start co-op with. BBSC gets the copy this launcher made just before the session
+    # (`save_copy`, backup_saves), which nothing has open; the bells still go into the live save.
+    save_dir = (active_save_dir(save_copy) if save_copy else None) or \
+        active_save_dir(Path(env.get('BB_USER_DIR') or port_user))
     if save_dir:
         env['BBSC_SAVE_DIR'] = str(save_dir)
     env.update({

@@ -1342,7 +1342,7 @@ class LauncherBackend(QObject):
             coop.create_account(address, key, name, password)
             backup = coop.backup_saves(self.app.get('user_dir') or core.DATA_DIR / 'user')
             self._coop_launch_env = coop.co_op_environment(core.game_environment(self.app), address,
-                                                           name, password, game)
+                                                           name, password, game, save_copy=backup)
             where = f' Saves backed up to {backup}.' if backup else ''
             return f'Starting co-op with {address}. Host: ring the Hunt Bell. Guest: ring the Kin Bell.{where}'
         self._coop_run('Getting co-op ready…', work)

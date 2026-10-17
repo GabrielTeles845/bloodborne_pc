@@ -96,6 +96,14 @@ class CoopTests(unittest.TestCase):
         env = coop.co_op_environment({'BB_USER_DIR': str(user)}, '100.65.141.9', 'hunter', 'secret',
                                      port / 'bin' / 'bb-probe.exe')
         self.assertEqual(Path(env['BBSC_SAVE_DIR']), newer)
+        # With the copy made before the session, BBSC backs that up instead: copying the save the
+        # running game has open failed, and the kit was never given.
+        copy = coop.backup_saves(user)
+        env = coop.co_op_environment({'BB_USER_DIR': str(user)}, '100.65.141.9', 'hunter', 'secret',
+                                     port / 'bin' / 'bb-probe.exe', save_copy=copy)
+        self.assertEqual(Path(env['BBSC_SAVE_DIR']),
+                         copy / 'savedata' / '1' / 'CUSA00207' / 'SPRJ0005')
+        self.assertTrue((Path(env['BBSC_SAVE_DIR']) / 'userdata0000').is_file())
 
     def test_unsafe_package_paths_are_refused(self):
         data = io.BytesIO()
