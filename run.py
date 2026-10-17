@@ -360,7 +360,12 @@ def main():
             env.setdefault('BB_DMEM_MB', '9152')
             print(f'Output {scaled_output}: scene {scaled_render}, direct memory {env["BB_DMEM_MB"]} MiB '
                   '(live_resolution=1: live changes)')
-        run_script('patches.py', '--out', out, '--fps', fps, '--extra', env.get('BB_PATCHES', ''),
+        extra = env.get('BB_PATCHES', '')
+        # Chinese text (BB_LANGUAGE 10, 11) shows only with the game's region unlocked
+        # (k1m0206, Supermedo PR #91; its server lookups stay on Europe).
+        if env.get('BB_LANGUAGE') in ('10', '11') and 'Unlock Game Region' not in extra:
+            extra = ';'.join(filter(None, (extra, 'Unlock Game Region')))
+        run_script('patches.py', '--out', out, '--fps', fps, '--extra', extra,
                    '--settings', config, '--game-dir', game, '--render-res', env.get('BB_RENDER_RES', ''),
                    '--output-res', env.get('BB_OUTPUT_RES', ''),
                    '--patches-dir', env.get('BB_PATCHES_DIR', data / 'patches'),
