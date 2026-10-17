@@ -518,10 +518,33 @@ class LauncherBackend(QObject):
         missing = core.fsr4_missing()
         return 'FSR 4 assets ready' if not missing else f'{len(missing)} FSR 4 assets missing'
 
+    def scene_size_text(self):
+        """The size the game renders at before upscaling (patches.py scaled_sizes), so a soft
+        image at 4K is explained: Balanced renders 3840x2160 at 2258x1270."""
+        try:
+            w, h = (int(v) for v in str(self.ini.get('output_res', '1920x1080')).lower().split('x'))
+        except ValueError:
+            return ''
+        scale = 1.0
+        if self.ini.get('upscaler', 'dlss') not in ('off', 'taa'):
+            try:
+                scale = core.PRESET_SCALE_VALUES[int(self.ini.get('preset', '0') or 0)]
+            except (ValueError, IndexError):
+                return ''
+        rw, rh = (max(2, round(v / scale / 2) * 2) for v in (w, h))
+        if scale == 1.0:
+            return f'Now: the game renders at the output size, {w} × {h}.'
+        return f'Now: the game renders at {rw} × {rh} and upscales it to {w} × {h}.'
+
+    def live_field(self, field):
+        if field['key'] == 'preset':
+            return {**field, 'hint': f"{field['hint']} {self.scene_size_text()}".strip()}
+        return field
+
     @Slot(str, result='QVariantList')
     def fields(self, page):
         # The revision makes the rows differ after a preset, so the page builds them anew.
-        return [{**field, 'revision': self._settings_revision} for field in FIELDS.get(page, [])]
+        return [{**self.live_field(field), 'revision': self._settings_revision} for field in FIELDS.get(page, [])]
 
     @Slot(str, result='QVariantList')
     def categorySections(self, category):
@@ -532,7 +555,8 @@ class LauncherBackend(QObject):
         for name, keys in SETTINGS_SECTIONS.get(category, []):
             if name == section:
                 # The revision makes the rows differ after a preset, so the page builds them anew.
-                return [{**SETTING_FIELDS[key], 'revision': self._settings_revision} for key in keys]
+                return [{**self.live_field(SETTING_FIELDS[key]), 'revision': self._settings_revision}
+                        for key in keys]
         return []
 
     @Slot(str, result='QVariantList')
@@ -649,6 +673,8 @@ class LauncherBackend(QObject):
                 except (ValueError, TypeError):
                     value = self.ini.get(key, '0.50')
             self.ini[key] = str(value)
+            if key in ('upscaler', 'preset', 'output_res'):
+                self._settings_revision += 1  # the preset's hint names the new scene size
         else:
             self.app[key] = value
         self._write()
