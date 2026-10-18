@@ -236,7 +236,7 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
-                'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
+                'fps_mode': '120', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'vram_budget_mb': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': True, 'online': False, 'online_server': 'srv.shadps4.net:31313',
@@ -250,6 +250,17 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 # finished or skipped; launchDirectly starts the game without the launcher.
                 'setupCompleted': False, 'setupSkipped': False, 'setupVersion': 1,
                 'launchDirectly': True}
+
+
+
+def app_settings(saved):
+    """The launcher settings: APP_DEFAULTS under the saved ones. Settings saved before 120 FPS was
+    the default and without a frame rate of their own ran unlocked: they keep that."""
+    settings = {**APP_DEFAULTS, **saved}
+    if saved and 'fps_mode' not in saved:
+        settings['fps_mode'] = 'uncap'
+    return settings
+
 
 UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
              ('fsr4', ('FSR 4 (best quality)', 'FSR 4 (лучшее качество)')),
@@ -283,8 +294,14 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LODS = [('0', ('As in the game', 'Как в игре')), ('-2', ('Highest (−2)', 'Максимальная (−2)')),
         ('1', ('Lower (1)', 'Ниже (1)')), ('2', ('Lowest (2)', 'Минимальная (2)'))]
-FPS_MODES = [('uncap', ('Unlocked (frame-time patch)', 'Без ограничения (патч)')), ('60', ('60 FPS',)),
-             ('90', ('90 FPS',)), ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
+# 120 and 144: 90 FPS++ with its values for that rate (scripts/patches.py SCALED_FPS). Unlocked froze
+# at the end of Vicar Amelia's intro; settings saved before 120 was the default keep it
+# (app_settings).
+FPS_MODES = [('120', ('120 FPS (recommended)', '120 FPS (рекомендуется)')), ('144', ('144 FPS',)),
+             ('90', ('90 FPS',)), ('60', ('60 FPS',)),
+             ('uncap', ("Unlocked (frame-time patch; can freeze at the end of Vicar Amelia's intro)",
+                        'Без ограничения (патч; может зависнуть в конце заставки Викарии Амелии)')),
+             ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
 PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (без разрывов)')),
                  ('Fifo', ('FIFO (VSync)',)), ('FifoRelaxed', ('FIFO Relaxed',)),
                  ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
@@ -331,21 +348,21 @@ GRAPHICS_PRESETS = {
     'low': {'preset': '3', 'model_lod': '1', 'effect_ssao': '0', 'effect_dynamic_shadows': '0',
             'effect_ssr': '0', 'fps_mode': '60'},
     'balanced': {'preset': '2', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-                 'effect_ssr': '0', 'fps_mode': 'uncap'},
+                 'effect_ssr': '0', 'fps_mode': '120'},
     'high': {'preset': '1', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-             'effect_ssr': '0', 'fps_mode': 'uncap'},
+             'effect_ssr': '0', 'fps_mode': '120'},
     'ultra': {'preset': '0', 'model_lod': '-2', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-              'effect_ssr': '1', 'fps_mode': 'uncap'},
+              'effect_ssr': '1', 'fps_mode': '120'},
 }
 GRAPHICS_PRESET_INFO = {
     'low': ('Low', 'Performance upscaling (×2), lower model detail, no SSAO or dynamic-light shadows, 60 FPS. '
                    'For integrated graphics, the Steam Deck and cards with under 4 GB.'),
-    'balanced': ('Balanced', "Balanced upscaling (×1.7) and the game's own detail, unlocked frame rate. "
+    'balanced': ('Balanced', "Balanced upscaling (×1.7) and the game's own detail, 120 FPS. "
                              'The default; for cards with 4-8 GB.'),
-    'high': ('High', "Quality upscaling (×1.5) and the game's own detail, unlocked frame rate. "
+    'high': ('High', "Quality upscaling (×1.5) and the game's own detail, 120 FPS. "
                      'For cards with 8-12 GB.'),
     'ultra': ('Ultra', 'Native resolution, highest model detail and screen-space reflections (not in the '
-                       'original game), unlocked frame rate. For cards with 12 GB or more.'),
+                       'original game), 120 FPS. For cards with 12 GB or more.'),
     'custom': ('Custom', 'Your own combination. Choosing a preset changes only upscaling, model detail, SSAO, '
                          'dynamic-light shadows, reflections and the frame rate.'),
 }
@@ -722,7 +739,7 @@ class Launcher:
     def __init__(self, root, tk, ttk, filedialog, messagebox):
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
-        self.app = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+        self.app = app_settings(load_json(CONFIG_FILE, {}))
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -2509,13 +2526,13 @@ def main():
     import bbport_startup
     keys_held = bbport_startup.launcher_keys_held()  # read first: the user may let go soon
     saved = load_json(CONFIG_FILE, {})
-    settings = {**APP_DEFAULTS, **saved}
+    settings = app_settings(saved)
     if bbport_startup.migrate(saved, settings):
         try:
             CONFIG_FILE.write_text(json.dumps(saved, indent=2, ensure_ascii=False), encoding='utf-8')
         except OSError:
             pass
-        settings = {**APP_DEFAULTS, **saved}
+        settings = app_settings(saved)
     LANG = settings.get('ui_language') or windows_language()
     if args[:1] == ['--install-update'] and len(args) == 3:
         sys.exit(install_update(args[1], args[2]))

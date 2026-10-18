@@ -245,7 +245,7 @@ class LauncherBackend(QObject):
 
     def __init__(self, route=None):
         super().__init__()
-        self.app = {**core.APP_DEFAULTS, **core.load_json(core.CONFIG_FILE, {})}
+        self.app = core.app_settings(core.load_json(core.CONFIG_FILE, {}))
         for signal in (self.changed, self.coopChanged, self.thdChanged):
             signal.connect(self.playModeChanged)
         self._route = dict(route or LAUNCHER_ROUTE)
@@ -390,12 +390,12 @@ class LauncherBackend(QObject):
     @Property(str, notify=changed)
     def setupSummary(self):
         return (f"{self.ini.get('output_res', '1920x1080').replace('x', ' × ')}  ·  "
-                f"{self.app.get('fps_mode', 'uncap').upper()} FPS  ·  "
+                f"{self.app.get('fps_mode', '120').upper()} FPS  ·  "
                 f"{self.ini.get('upscaler', 'dlss').upper()}")
 
     @Property('QVariantMap', notify=changed)
     def setupFacts(self):
-        fps = str(self.app.get('fps_mode', 'uncap'))
+        fps = str(self.app.get('fps_mode', '120'))
         return {
             'resolution': self.ini.get('output_res', '1920x1080').replace('x', ' × '),
             'frameRate': 'Unlocked' if fps == 'uncap' else f'{fps} FPS',

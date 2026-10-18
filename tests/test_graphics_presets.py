@@ -38,6 +38,16 @@ class GraphicsPresetTests(unittest.TestCase):
                          ('fsr3', '3840x2160', '0', '0'))
         self.assertEqual(app['fps_mode'], '60')
 
+    def test_new_installs_run_120_and_saved_settings_keep_their_frame_rate(self):
+        self.assertEqual(core.app_settings({})['fps_mode'], '120')
+        # Saved before 120 was the default, without a frame rate of their own: they ran unlocked.
+        self.assertEqual(core.app_settings({'game_dir': 'x'})['fps_mode'], 'uncap')
+        self.assertEqual(core.app_settings({'fps_mode': '60'})['fps_mode'], '60')
+        modes = [v for v, _ in core.FPS_MODES]
+        self.assertEqual(modes[0], '120')
+        self.assertTrue({'120', '144', 'uncap', '90', '60', '30'} <= set(modes))
+        self.assertIn('Amelia', dict(core.FPS_MODES)['uncap'][0])
+
     def test_recommendation_from_gpu_status(self):
         cases = {
             'NVIDIA GeForce RTX 4060 Laptop GPU, discrete, 7956 MiB': 'high',

@@ -396,7 +396,12 @@ def main():
                    '--output-res', env.get('BB_OUTPUT_RES', ''),
                    '--patches-dir', env.get('BB_PATCHES_DIR', data / 'patches'),
                    '--patches-config', env.get('BB_PATCHES_CONFIG', data / 'patches.json'))
-        if not env.get('BB_VBLANK_HZ'):
+        if fps in ('120', '144'):
+            # 90 FPS++ scaled to the rate (patches.py SCALED_FPS): vblank and frame limit at the
+            # rate, as Awakenchan/BloodBorneButPc sets them; another cap would change its timing.
+            env['BB_VBLANK_HZ'] = env.get('BB_VBLANK_HZ') or fps
+            env['BB_FPS_LIMIT'] = fps
+        elif not env.get('BB_VBLANK_HZ'):
             env['BB_VBLANK_HZ'] = {'uncap': '0', '90': '90'}.get(fps, '60')
 
         # The in-game restart starts this script again once this process is gone.

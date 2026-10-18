@@ -1,4 +1,7 @@
 from paths import ROOT
+from contextlib import redirect_stdout
+import io
+import os
 import struct
 import tempfile
 import unittest
@@ -12,7 +15,8 @@ from patches import (EBOOT_BASE, FIXES, FPS_PRESETS, OUTPUT_SIZE, RESOLUTION_TEM
                      validate_patch_requirements, external_patches, external_selection,
                      compile_external, frame_rate_fixes, sprint_fix_enabled, eboot_bytes,
                      eboot_matches_patches, patch_fingerprint, patch_sites, game_app_version,
-                     eboot_is_109)
+                     eboot_is_109, SCALED_BASE, SCALED_FPS, SCALED_VALUES, fps_preset, rate_scaled,
+                     eboot_segments)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -137,6 +141,78 @@ class FpsPatchTests(unittest.TestCase):
             writes = compile_patches(path, ['60 FPS++'], '01.08', SEGMENTS)
             self.assertIn(0x011383ca - EBOOT_BASE, [at for at, data in writes])
             self.assertNotIn(0x00f383ca - EBOOT_BASE, [at for at, data in writes])
+
+
+# A prepared 1.09 eboot.elf (prepare.py's out/eboot.elf, or BB_TEST_EBOOT_ELF): the tests that
+# check sites against the game's own code skip without one.
+GAME_ELF = Path(os.environ.get('BB_TEST_EBOOT_ELF') or ROOT / 'out/eboot.elf')
+
+
+class ScaledFpsTests(unittest.TestCase):
+    """120 and 144: 90 FPS++ (rate base) with its frame-rate values for the rate."""
+    def base(self):
+        return compile_patches(XML, [SCALED_BASE], '01.09', SEGMENTS)
+
+    def test_presets_use_the_base(self):
+        self.assertEqual(SCALED_FPS, {'120': 120, '144': 144})
+        names = [m.get('Name') for m in ET.parse(XML).getroot().iter('Metadata')]
+        self.assertEqual(names.count(SCALED_BASE), 1)
+
+    def test_90_is_the_list_as_it_is(self):
+        self.assertEqual(rate_scaled(self.base(), 90), self.base())
+
+    def test_120_and_144_values(self):
+        base = dict(self.base())
+        for fps in (120, 144):
+            with self.subTest(fps=fps):
+                writes = rate_scaled(self.base(), fps)
+                self.assertEqual(len(writes), len(base))
+                scaled = dict(writes)
+                f = lambda address, at=0: struct.unpack_from('<f', scaled[address - EBOOT_BASE], at)[0]
+                self.assertAlmostEqual(f(0x0F383CA), 1 / fps, places=7)          # physics step
+                self.assertAlmostEqual(f(0x1CBDB42, 6), 1.125 / fps, places=7)   # stamina
+                self.assertAlmostEqual(f(0x4D29170), 1 / fps, places=7)
+                self.assertEqual([f(0x4CF6420, i) for i in (0, 4, 8, 12)], [f(0x4CF6420)] * 4)
+                self.assertAlmostEqual(f(0x4CF6420), 3 / fps, places=7)
+                self.assertAlmostEqual(f(0x4D27FD4), -3 / fps, places=7)
+                limiter = scaled[0x2C012CC - EBOOT_BASE]
+                self.assertEqual(struct.unpack_from('<I', limiter, 2)[0], {120: 8000, 144: 6500}[fps])
+                self.assertEqual(struct.unpack_from('<I', limiter, 9)[0], {120: 8000, 144: 6500}[fps])
+                self.assertEqual(struct.unpack('<i', scaled[0x1929676 - EBOOT_BASE])[0], fps // 6)
+                self.assertEqual(struct.unpack('<i', scaled[0x192C405 - EBOOT_BASE])[0], fps // 3)
+                self.assertEqual(struct.unpack_from('<I', scaled[0x25629F0 - EBOOT_BASE], 1)[0], 990000 // fps)
+                # Everything else is the 90 FPS++ list's own bytes.
+                changed = {a for a in base if base[a] != scaled[a]}
+                self.assertLessEqual({a + EBOOT_BASE for a in changed}, set(SCALED_VALUES))
+                for a in changed:  # only the value fields, never the instructions around them
+                    fields = SCALED_VALUES[a + EBOOT_BASE]
+                    for i, (old, new) in enumerate(zip(base[a], scaled[a])):
+                        if old != new:
+                            self.assertTrue(any(at <= i < at + struct.calcsize(fmt) for at, fmt, _ in fields))
+
+    def test_another_list_under_the_name_is_refused(self):
+        for change in ('value', 'missing'):
+            with self.subTest(change=change):
+                writes = self.base()
+                at = [i for i, (o, _) in enumerate(writes) if o == 0x0F383CA - EBOOT_BASE][0]
+                if change == 'value':
+                    writes[at] = (writes[at][0], struct.pack('<f', 1 / 60))
+                else:
+                    del writes[at]
+                with self.assertRaises(ValueError):
+                    rate_scaled(writes, 120)
+
+    def test_other_code_gets_no_scaled_preset(self):
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(fps_preset('120', fake_elf(0x400000, bytes(64)), XML, '01.09'), [])
+        self.assertEqual(fps_preset('90', b'', XML, '01.09'), ['90 FPS++'])
+
+    @unittest.skipUnless(GAME_ELF.is_file(), 'needs a prepared 1.09 eboot.elf (BB_TEST_EBOOT_ELF)')
+    def test_game_matches_and_the_base_keeps_no_game_bytes(self):
+        elf = GAME_ELF.read_bytes()
+        self.assertEqual(fps_preset('144', elf, XML, '01.09'), [SCALED_BASE])
+        for offset, data in compile_patches(XML, [SCALED_BASE], '01.09', eboot_segments(elf)):
+            self.assertNotEqual(eboot_bytes(elf, offset, offset + len(data)), data, hex(offset + EBOOT_BASE))
 
 
 def fake_elf(vaddr, code):
