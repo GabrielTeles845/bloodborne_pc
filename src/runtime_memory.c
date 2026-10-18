@@ -24,16 +24,18 @@
 #include <unistd.h>
 #endif
 /* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. BB_DMEM_MB raises it (the resolution
- * patches above 1080p need about 4 GiB more; run.sh sets it). */
+ * patches above 1080p need about 4 GiB more; run.sh sets it). pool() falls back to the retail
+ * size when Windows refuses the larger pool. */
+#define RETAIL_POOL (UINT64_C(5056) * 1024 * 1024)
+static uint64_t pool_bytes;
 static uint64_t pool_size_bytes(void) {
-    static uint64_t size;
-    if (!size) {
+    if (!pool_bytes) {
         const char *env = getenv("BB_DMEM_MB");
         uint64_t mb = env ? strtoull(env, NULL, 10) : 0;
         if (mb < 5056 || mb > 16384) mb = 5056;
-        size = mb * 1024 * 1024;
+        pool_bytes = mb * 1024 * 1024;
     }
-    return size;
+    return pool_bytes;
 }
 #define POOL_SIZE pool_size_bytes()
 #define FLEXIBLE_SIZE (UINT64_C(448) * 1024 * 1024)
@@ -243,7 +245,7 @@ static int host_protect(uintptr_t address, uint64_t size, int prot) {
 /* Released pages read as zero when reused, like the memfd's punched holes. */
 static void host_discard(uint64_t phys, uint64_t size) { commit_backing(phys,size); memset(backing_base+phys,0,size); }
 /* Direct memory occupies [0,POOL_SIZE) of the section, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
+static int pool_create(void) {
     if (backing_base) return 0;
     runtime_memory_reserve();
     uint64_t bytes=POOL_SIZE+FLEX_SPAN;
@@ -265,15 +267,19 @@ static int pool(void) {
     }
     if (!section) { fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError()); return -1; }
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
-    return backing_base ? 0 : -1;
+    if (backing_base) return 0;
+    fprintf(stderr,"Runtime: cannot map %" PRIu64 " MiB of guest memory (error %lu)\n",bytes>>20,GetLastError());
+    CloseHandle(section); section=NULL; commit_on_map=0;
+    return -1;
 }
 #else
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
-    if (pool_fd>=0) return 0;
-    pool_fd=memfd_create("bb-guest-memory", MFD_CLOEXEC);
-    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) return -1;
-    void *view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
+static int pool_create(void) {
+    if (backing_base) return 0;
+    if (pool_fd<0) pool_fd=memfd_create("bb-guest-memory", MFD_CLOEXEC);
+    void *view=MAP_FAILED;
+    if (pool_fd>=0 && !ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN)))
+        view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
     if (view==MAP_FAILED) return -1;
     backing_base=view;
     return 0;
@@ -291,6 +297,22 @@ static void host_discard(uint64_t phys, uint64_t size) {
     fallocate(pool_fd,FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE,(off_t)phys,(off_t)size);
 }
 #endif
+/* A pool larger than the PS4's (BB_DMEM_MB) that the host refuses (Windows error 1450 on some
+ * laptops) falls back to the retail 5056 MiB instead of stopping the game, as Awakenchan's
+ * 0.9.34 beta 4 does; resolutions that need the larger pool may then run out of direct memory.
+ * Called with the write lock held. BB_TEST_REFUSE_DMEM=1 refuses the larger pool (tests). */
+static int pool(void) {
+    if (backing_base) return 0;
+    const char *refuse=getenv("BB_TEST_REFUSE_DMEM");
+    int refused=refuse && refuse[0]=='1' && POOL_SIZE>RETAIL_POOL;
+    if (!refused && !pool_create()) return 0;
+    if (POOL_SIZE<=RETAIL_POOL) return -1;
+    printf("Runtime: the host refused %" PRIu64 " MiB of direct memory (BB_DMEM_MB); falling back to "
+           "the PS4's 5056 MiB. High output resolutions may run out of memory: lower the output "
+           "resolution if the game stops\n",POOL_SIZE>>20);
+    pool_bytes=RETAIL_POOL;
+    return pool_create();
+}
 static void queue_hook(int kind, uintptr_t address, uint64_t size) {
     GpuRange hook = kind==HOOK_MAP ? hook_map : kind==HOOK_UNMAP ? hook_unmap : hook_invalidate;
     if (!hook) return;
@@ -428,16 +450,24 @@ static int direct_range_allocated(uint64_t phys, uint64_t size) {
     return 1;
 }
 
-static ABI uint64_t direct_size(void) { return POOL_SIZE; }
+/* The pool is created first so that the size reported is the one the host granted. */
+static ABI uint64_t direct_size(void) {
+    write_lock();
+    pool();
+    uint64_t size=POOL_SIZE;
+    write_unlock();
+    return size;
+}
 static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
                                   uint64_t alignment, int type, int64_t *out) {
     if (!alignment) alignment = PAGE;
     if (!out || low < 0 || high < 0 || !size || size % PAGE || !valid_alignment(alignment) || type < 0 || type > 10)
         return INVALID;
-    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
-    if ((uint64_t)low >= end || size > end - (uint64_t)low) return NO_SPACE;
     write_lock();
     if (pool()) { write_unlock(); return NO_MEMORY; }
+    /* After pool(): the pool may have fallen back to the retail size. */
+    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
+    if ((uint64_t)low >= end || size > end - (uint64_t)low) { write_unlock(); return NO_SPACE; }
     uint64_t start = align_up((uint64_t)low, alignment);
     int slot = -1;
     for (int i=0; i<LIMIT; ++i) if (!blocks[i].used) { slot=i; break; }
