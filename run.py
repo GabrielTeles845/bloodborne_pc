@@ -384,6 +384,9 @@ def main():
         # pc_heaps=0 / BB_PC_HEAPS=0: the PS4's heaps, the larger pool only above 1080p).
         if patched and (env.get('BB_PC_HEAPS') or ini_value(config, 'pc_heaps') or '1') != '0':
             env.setdefault('BB_DMEM_MB', '9152')
+        # Frame limiter slots on the planned grid (driver.cpp, Supermedo d646b1d); off by default.
+        if not env.get('BB_FRAME_CAP_GRID') and ini_value(config, 'frame_cap_grid') == '1':
+            env['BB_FRAME_CAP_GRID'] = '1'
         extra = env.get('BB_PATCHES', '')
         # Chinese text (BB_LANGUAGE 10, 11) shows only with the game's region unlocked
         # (k1m0206, Supermedo PR #91; its server lookups stay on Europe).
