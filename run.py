@@ -181,6 +181,33 @@ def shader_prebuild(game, out, env):
         env['BB_SHADER_CATALOG'] = str(catalog)
 
 
+def start_companions(data, env, game_pid):
+    """Companions (tools/bloodborne_rpc: Discord Rich Presence): programs in <data>/companions/<name>/
+    that run beside the game, each started only when companions.json lists its folder name under
+    "enabled" (none by default). companion.json names the program; it gets the game's process id
+    in BB_GAME_PID. They end with the game."""
+    started = []
+    try:
+        enabled = set(json.loads((data / 'companions.json').read_text(encoding='utf-8')).get('enabled', []))
+    except (OSError, ValueError):
+        return started
+    companions = data / 'companions'
+    for folder in sorted(companions.iterdir() if companions.is_dir() else ()):
+        if not folder.is_dir() or folder.name not in enabled:
+            continue
+        try:
+            spec = json.loads((folder / 'companion.json').read_text(encoding='utf-8'))
+            exe = folder / spec.get('exe', '')
+            if not exe.is_file() or exe.suffix.lower() != '.exe':
+                continue
+            print(f'Companion: {spec.get("name", folder.name)}')
+            started.append(subprocess.Popen([str(exe)], cwd=folder, env={**env, 'BB_GAME_PID': str(game_pid)},
+                                            stdin=subprocess.DEVNULL, creationflags=no_console()))
+        except (OSError, ValueError) as error:
+            print(f'Companion {folder.name} not started: {error}', file=sys.stderr)
+    return started
+
+
 def main():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
@@ -418,49 +445,21 @@ def main():
         this = ['--run'] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())]
         restart = [sys.executable, *this, '--after', str(os.getpid()), *args]
         env['BB_RESTART_COMMAND'] = subprocess.list2cmdline(restart)
-        
         command = [str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
                    '--patches', str(out / 'patches.bin'), '--app0', str(game),
                    '--user', str(user_dir),
                    '--timeout', env.get('BB_TIMEOUT', '0'), *args]
-                   
-        # Launch the game
+        # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
         game_proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
-        
-        # --- COMPANION LOADER (Discord RPC, dll) ---
-        started_companions = []
+        started = []
         try:
-            companions_dir = data / 'companions'
-            companions_json = data / 'companions.json'
-            if companions_dir.is_dir() and companions_json.is_file():
-                try:
-                    with open(companions_json, 'r', encoding='utf-8') as f:
-                        enabled = set(json.load(f).get('enabled', []))
-                    for folder in companions_dir.iterdir():
-                        if not folder.is_dir() or folder.name not in enabled:
-                            continue
-                        spec_file = folder / 'companion.json'
-                        if not spec_file.is_file():
-                            continue
-                        with open(spec_file, 'r', encoding='utf-8') as f:
-                            spec = json.load(f)
-                        exe_path = folder / spec.get('exe', '')
-                        if exe_path.is_file() and exe_path.suffix.lower() == '.exe':
-                            comp_env = env.copy()
-                            comp_env['BB_GAME_PID'] = str(game_proc.pid)
-                            print(f'Starting Companion: {spec.get("name", folder.name)}')
-                            proc = subprocess.Popen([str(exe_path)], cwd=folder, env=comp_env, creationflags=no_console())
-                            started_companions.append(proc)
-                except Exception as e:
-                    print(f'Failed to start companions: {e}', file=sys.stderr)
-
+            started = start_companions(data, env, game_proc.pid)
             return game_proc.wait()
         finally:
-            for proc in started_companions:
+            for proc in started:
                 proc.terminate()
             if game_proc.poll() is None:
                 game_proc.terminate()
-
     finally:
         if mod_view:
             # Read-only game files leave read-only links (mods.remove_overlay clears them).

@@ -22,7 +22,7 @@ if not errorlevel 1 (
 where clang++ >nul 2>nul
 if not errorlevel 1 (
     echo Building with Clang...
-    clang++ -std=c++17 -O2 -DUNICODE -D_UNICODE -mwindows main.cpp -o BloodborneRPC.exe -static -lkernel32 -luser32
+    clang++ -std=c++17 -O2 -DUNICODE -D_UNICODE -municode -mwindows main.cpp -o BloodborneRPC.exe -static -lkernel32 -luser32
     if errorlevel 1 exit /b 1
     echo Built: BloodborneRPC.exe
     exit /b 0

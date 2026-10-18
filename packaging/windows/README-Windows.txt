@@ -90,6 +90,12 @@ PC enhancements
   Altar are optional and off by default. They are made from your own game files at launch;
   turn one on, then restart. They do not require the Load mods switch.
 
+Discord Rich Presence
+- Optional and off by default: shows your area, boss fight, level, Blood Echoes and Insight on
+  your Discord profile (Discord must be running). To turn it on, create companions.json next to
+  Bloodborne.exe containing {"enabled": ["Discord Rich Presence"]}, then start the game. Its
+  settings are in companions\Discord Rich Presence\config.json. It only reads the game's memory.
+
 Cheats
 - The "Cheats" page has cheats (never die, enemies do not see or hear you, Rally never fades,
   control the targeted enemy) and gameplay tweaks (no Rally, camera further away, no camera
