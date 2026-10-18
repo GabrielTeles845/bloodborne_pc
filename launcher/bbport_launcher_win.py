@@ -194,6 +194,8 @@ TWEAKS = [
     ('tweak_camera_distance', ('Camera further from the character', 'Камера дальше от персонажа'), False),
     ('tweak_no_camera_rotation', ('No camera auto-rotation while moving', 'Без автоповорота камеры при движении'), False),
     ('tweak_easy_run', ('Run with less stick tilt (about 70%)', 'Бег при меньшем наклоне стика (около 70%)'), False),
+    ('tweak_circle_confirm', ('Japanese/Asian buttons: Circle confirms and interacts, Cross dodges',
+                              'Японская раскладка: Круг — подтверждение и действие, Крест — уклонение'), False),
     ('tweak_ragdoll', ('Dark Souls-style ragdoll physics (corpses fly further)',
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]
@@ -235,8 +237,10 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS + ATLAS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
-                'fps_mode': 'uncap', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
+                'voice_language': 'auto',
+                'player_name': '', 'fullscreen': False, 'fullscreen_mode': 'borderless', 'display': '',
+                'hdr': False, 'present_mode': 'Mailbox',
+                'fps_mode': '120', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'vram_budget_mb': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
                 'check_updates': True, 'online': False, 'online_server': 'srv.shadps4.net:31313',
@@ -250,6 +254,17 @@ APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'
                 # finished or skipped; launchDirectly starts the game without the launcher.
                 'setupCompleted': False, 'setupSkipped': False, 'setupVersion': 1,
                 'launchDirectly': True}
+
+
+
+def app_settings(saved):
+    """The launcher settings: APP_DEFAULTS under the saved ones. Settings saved before 120 FPS was
+    the default and without a frame rate of their own ran unlocked: they keep that."""
+    settings = {**APP_DEFAULTS, **saved}
+    if saved and 'fps_mode' not in saved:
+        settings['fps_mode'] = 'uncap'
+    return settings
+
 
 UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
              ('fsr4', ('FSR 4 (best quality)', 'FSR 4 (лучшее качество)')),
@@ -283,8 +298,22 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LODS = [('0', ('As in the game', 'Как в игре')), ('-2', ('Highest (−2)', 'Максимальная (−2)')),
         ('1', ('Lower (1)', 'Ниже (1)')), ('2', ('Lowest (2)', 'Минимальная (2)'))]
-FPS_MODES = [('uncap', ('Unlocked (frame-time patch)', 'Без ограничения (патч)')), ('60', ('60 FPS',)),
-             ('90', ('90 FPS',)), ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
+# 120 and 144: 90 FPS++ with its values for that rate (scripts/patches.py SCALED_FPS). Unlocked froze
+# at the end of Vicar Amelia's intro; settings saved before 120 was the default keep it
+# (app_settings).
+FPS_MODES = [('120', ('120 FPS (recommended)', '120 FPS (рекомендуется)')), ('144', ('144 FPS',)),
+             ('90', ('90 FPS',)), ('60', ('60 FPS',)),
+             ('uncap', ("Unlocked (frame-time patch; can freeze at the end of Vicar Amelia's intro)",
+                        'Без ограничения (патч; может зависнуть в конце заставки Викарии Амелии)')),
+             ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
+# Fullscreen (BB_FULLSCREEN_MODE; window.cpp, after RafaelHGOliveira's Supermedo PR #68): a
+# borderless window over the desktop, or exclusive (the display switched to its desktop mode).
+FULLSCREEN_MODES = [('borderless', ('Borderless (default)', 'Без рамки (по умолчанию)')),
+                    ('exclusive', ('Exclusive', 'Эксклюзивный'))]
+# The monitor the game opens on (BB_DISPLAY; window.cpp, after parsifal295's Supermedo PR #66):
+# numbered in the order the game's log lists them ("Display 1: ...").
+DISPLAYS = [('', ('Primary monitor', 'Основной монитор'))] + \
+    [(str(n), (f'Monitor {n}', f'Монитор {n}')) for n in range(1, 5)]
 PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (без разрывов)')),
                  ('Fifo', ('FIFO (VSync)',)), ('FifoRelaxed', ('FIFO Relaxed',)),
                  ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
@@ -300,6 +329,12 @@ LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Ру
              ('13', ('Swedish', 'Шведский')), ('14', ('Danish', 'Датский')), ('15', ('Norwegian', 'Норвежский')),
              ('9', ('Korean', 'Корейский')), ('10', ('Chinese (Traditional)', 'Китайский (традиционный)')),
              ('11', ('Chinese (Simplified)', 'Китайский (упрощённый)'))]
+# Voice tracks apart from the text language (BB_VOICE_LANGUAGE, scripts/language_files.py; after
+# Berleis, Supermedo/bloodborne_pc PR #20): the game's sound/*_<code>.fsb files.
+VOICE_LANGUAGES = [('auto', ('As in the game', 'Как в игре')), ('eng', ('English',)),
+                   ('ptb', ('Português (Brasil)',)), ('ded', ('Deutsch',)),
+                   ('esa', ('Español (América)',)), ('ese', ('Español (España)',)),
+                   ('frf', ('Français',)), ('iti', ('Italiano',)), ('jaj', ('日本語',))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
@@ -331,21 +366,21 @@ GRAPHICS_PRESETS = {
     'low': {'preset': '3', 'model_lod': '1', 'effect_ssao': '0', 'effect_dynamic_shadows': '0',
             'effect_ssr': '0', 'fps_mode': '60'},
     'balanced': {'preset': '2', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-                 'effect_ssr': '0', 'fps_mode': 'uncap'},
+                 'effect_ssr': '0', 'fps_mode': '120'},
     'high': {'preset': '1', 'model_lod': '0', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-             'effect_ssr': '0', 'fps_mode': 'uncap'},
+             'effect_ssr': '0', 'fps_mode': '120'},
     'ultra': {'preset': '0', 'model_lod': '-2', 'effect_ssao': '1', 'effect_dynamic_shadows': '1',
-              'effect_ssr': '1', 'fps_mode': 'uncap'},
+              'effect_ssr': '1', 'fps_mode': '120'},
 }
 GRAPHICS_PRESET_INFO = {
     'low': ('Low', 'Performance upscaling (×2), lower model detail, no SSAO or dynamic-light shadows, 60 FPS. '
                    'For integrated graphics, the Steam Deck and cards with under 4 GB.'),
-    'balanced': ('Balanced', "Balanced upscaling (×1.7) and the game's own detail, unlocked frame rate. "
+    'balanced': ('Balanced', "Balanced upscaling (×1.7) and the game's own detail, 120 FPS. "
                              'The default; for cards with 4-8 GB.'),
-    'high': ('High', "Quality upscaling (×1.5) and the game's own detail, unlocked frame rate. "
+    'high': ('High', "Quality upscaling (×1.5) and the game's own detail, 120 FPS. "
                      'For cards with 8-12 GB.'),
     'ultra': ('Ultra', 'Native resolution, highest model detail and screen-space reflections (not in the '
-                       'original game), unlocked frame rate. For cards with 12 GB or more.'),
+                       'original game), 120 FPS. For cards with 12 GB or more.'),
     'custom': ('Custom', 'Your own combination. Choosing a preset changes only upscaling, model detail, SSAO, '
                          'dynamic-light shadows, reflections and the frame rate.'),
 }
@@ -686,9 +721,13 @@ def game_environment(s):
     env['BB_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['BB_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['BB_LANGUAGE'] = s['language']
+    env['BB_VOICE_LANGUAGE'] = s.get('voice_language') or 'auto'
     if str(s['player_name']).strip():
         env['BB_USER_NAME'] = str(s['player_name']).strip()
     env['BB_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
+    env['BB_FULLSCREEN_MODE'] = s.get('fullscreen_mode') or 'borderless'
+    if s.get('display'):
+        env['BB_DISPLAY'] = str(s['display'])
     env['BB_PRESENT_MODE'] = s['present_mode']
     if s['hdr']:
         env['BB_HDR'] = '1'
@@ -754,7 +793,7 @@ class Launcher:
     def __init__(self, root, tk, ttk, filedialog, messagebox):
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
-        self.app = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+        self.app = app_settings(load_json(CONFIG_FILE, {}))
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -1602,6 +1641,12 @@ class Launcher:
                    '1 — ровная подача кадров; больше может поднять FPS, если упирается в видеокарту.'))
         self.section(f, _('Window', 'Окно'))
         self.check(f, 'fullscreen', 'app', _('Fullscreen', 'Полноэкранный режим'))
+        self.row(f, _('Fullscreen type', 'Тип полного экрана'), self.choice(f, 'fullscreen_mode', 'app', FULLSCREEN_MODES),
+                 _('Exclusive switches the display to its own mode: notifications and other windows do not show over the game.',
+                   'Эксклюзивный переключает монитор в собственный режим: уведомления и другие окна не видны поверх игры.'))
+        self.row(f, _('Monitor', 'Монитор'), self.choice(f, 'display', 'app', DISPLAYS),
+                 _('The monitor the game window and fullscreen go to, in the order the game log lists them.',
+                   'Монитор для окна и полного экрана игры, в порядке списка в журнале игры.'))
         self.row(f, _('Presentation', 'Режим показа кадров'), self.choice(f, 'present_mode', 'app', PRESENT_MODES))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
@@ -1624,6 +1669,9 @@ class Launcher:
                     _('Your dumped add-ons, one folder each named like SPEXPANSIONDLC03 (The Old Hunters). '
                       'Only needed with a base-game dump; the Game of the Year edition (CUSA03173) has it.'))
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
+        self.row(f, _('Voice language', 'Язык озвучки'), self.choice(f, 'voice_language', 'app', VOICE_LANGUAGES),
+                 _('As in the game uses the original voice setting; other choices use available tracks.',
+                   '«Как в игре» оставляет исходную озвучку; другие варианты берут доступные дорожки.'))
         self.row(f, _('Player name', 'Имя игрока'), self.ttk.Entry(f, textvariable=self.var('player_name', 'app'), width=30),
                  _('Where the game shows the PSN name; empty: the default.', 'Где игра показывает имя PSN; пусто — по умолчанию.'))
         self.section(f, _('Effects', 'Эффекты'))
@@ -2536,13 +2584,13 @@ def main():
     import bbport_startup
     keys_held = bbport_startup.launcher_keys_held()  # read first: the user may let go soon
     saved = load_json(CONFIG_FILE, {})
-    settings = {**APP_DEFAULTS, **saved}
+    settings = app_settings(saved)
     if bbport_startup.migrate(saved, settings):
         try:
             CONFIG_FILE.write_text(json.dumps(saved, indent=2, ensure_ascii=False), encoding='utf-8')
         except OSError:
             pass
-        settings = {**APP_DEFAULTS, **saved}
+        settings = app_settings(saved)
     LANG = settings.get('ui_language') or windows_language()
     if args[:1] == ['--install-update'] and len(args) == 3:
         sys.exit(install_update(args[1], args[2]))

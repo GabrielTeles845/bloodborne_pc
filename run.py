@@ -263,6 +263,16 @@ def main():
                    optional=True)
         if (hud_layer / 'dvdroot_ps4').is_dir():
             generated.append(str(hud_layer))
+    # Text and voice languages (scripts/language_files.py): Brazilian Portuguese text from the
+    # game's porbr files, and the voice language apart from the text's (BB_VOICE_LANGUAGE).
+    # BB_LANGUAGE_FILES=0: the game's own choice. (After Berleis, Supermedo PR #20.)
+    language_layer = Path(out) / 'language'
+    voice = env.get('BB_VOICE_LANGUAGE') or ini_value(config, 'voice_language') or ''
+    if env.get('BB_LANGUAGE_FILES') != '0':
+        run_script('language_files.py', game, '--out', language_layer, '--language', env.get('BB_LANGUAGE', ''),
+                   '--voice', voice, optional=True)
+        if (language_layer / 'dvdroot_ps4').is_dir():
+            generated.append(str(language_layer))
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),
@@ -371,6 +381,13 @@ def main():
             env.setdefault('BB_DMEM_MB', '9152')
             print(f'Output {scaled_output}: scene {scaled_render}, direct memory {env["BB_DMEM_MB"]} MiB '
                   '(live_resolution=1: live changes)')
+        # The game's graphics heaps at PC sizes need the larger pool (patches.py HEAP_PATCH;
+        # pc_heaps=0 / BB_PC_HEAPS=0: the PS4's heaps, the larger pool only above 1080p).
+        if patched and (env.get('BB_PC_HEAPS') or ini_value(config, 'pc_heaps') or '1') != '0':
+            env.setdefault('BB_DMEM_MB', '9152')
+        # Frame limiter slots on the planned grid (driver.cpp, Supermedo d646b1d); off by default.
+        if not env.get('BB_FRAME_CAP_GRID') and ini_value(config, 'frame_cap_grid') == '1':
+            env['BB_FRAME_CAP_GRID'] = '1'
         extra = env.get('BB_PATCHES', '')
         # Chinese text (BB_LANGUAGE 10, 11) shows only with the game's region unlocked
         # (k1m0206, Supermedo PR #91; its server lookups stay on Europe).
@@ -387,7 +404,12 @@ def main():
                    '--output-res', env.get('BB_OUTPUT_RES', ''),
                    '--patches-dir', env.get('BB_PATCHES_DIR', data / 'patches'),
                    '--patches-config', env.get('BB_PATCHES_CONFIG', data / 'patches.json'))
-        if not env.get('BB_VBLANK_HZ'):
+        if fps in ('120', '144'):
+            # 90 FPS++ scaled to the rate (patches.py SCALED_FPS): vblank and frame limit at the
+            # rate, as Awakenchan/BloodBorneButPc sets them; another cap would change its timing.
+            env['BB_VBLANK_HZ'] = env.get('BB_VBLANK_HZ') or fps
+            env['BB_FPS_LIMIT'] = fps
+        elif not env.get('BB_VBLANK_HZ'):
             env['BB_VBLANK_HZ'] = {'uncap': '0', '90': '90'}.get(fps, '60')
 
         # The in-game restart starts this script again once this process is gone.
