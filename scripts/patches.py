@@ -14,6 +14,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from cpu_compat import site_check  # noqa: E402
+
 EBOOT_BASE=0x400000
 # BB_FPS presets: patch names from patches/Bloodborne.xml (app version 01.09).
 FPS_PRESETS={'30':[],'60':['60 FPS++'],'90':['90 FPS++'],'uncap':['Uncap FPS++']}
@@ -261,8 +264,8 @@ def resolution_writes(xml,size,app_version,segments,ui=OUTPUT_SIZE):
 # divides the moved distance by the frame time (dt, local -0x74(%rbp)) instead: "blocked" is
 # then below 1 m/s at any frame rate. Off with sprint_fix=0 in bbport.ini or BB_SPRINT_FIX=0.
 FRAME_RATE_FIXES=[
-    # (vaddr, original bytes, replacement)
-    (0x1514c24,bytes.fromhex('c5fa590500174103'),bytes.fromhex('c5fa5e458c0f1f00')),  # vdivss -0x74(%rbp),%xmm0; nop
+    # (vaddr, (length, site_check of the original vmulss), replacement)
+    (0x1514c24,(8,'d84fc9844600213c'),bytes.fromhex('c5fa5e458c0f1f00')),  # vdivss -0x74(%rbp),%xmm0; nop
 ]
 
 
@@ -280,7 +283,7 @@ def frame_rate_fixes(elf):
     writes=[]
     for vaddr,original,new in FRAME_RATE_FIXES:
         at=next((offset+vaddr-start for start,offset,filesz in loads if start<=vaddr<start+filesz),None)
-        if at is None or elf[at:at+len(original)]!=original:
+        if at is None or site_check(elf[at:at+original[0]])!=original[1]:
             print(f'Patches: frame-rate fix at {vaddr:#x} skipped (unexpected code)')
             continue
         writes.append((vaddr,new))
@@ -319,7 +322,7 @@ def eboot_bytes(elf,start,end):
 # step at 0x00F383CA); both were checked on the same clean eboot (sha256 d65f0b4f...).
 BUILTIN_XML=Path(__file__).resolve().parent.parent/'patches/Bloodborne.xml'
 FINGERPRINT_PATCHES=sorted({n for names in FPS_PRESETS.values() for n in names}|{RESOLUTION_TEMPLATE})
-PATCH_FINGERPRINTS={'01.09':'f1322113eac92470b28f1cb3ccd7479b27f3daf7a9a31a6107f1fa14c8d94f14'}
+PATCH_FINGERPRINTS={'01.09':'0c970cb2522ee7882ce59fec1b85715942873b82dd8e458b5c6a44bf7c09c116'}
 
 
 def patch_sites(xml,app_version,names=FINGERPRINT_PATCHES):
@@ -364,8 +367,9 @@ def encode(line):
 
 # Patches that replace code which the fingerprint above does not cover: the bytes they overwrite,
 # as the 1.09 build has them (eboot offset, hex). Another build there gets the patch left out.
+# name: (offset, length, site_check of the code the patch expects there)
 PATCH_GUARDS={
-    'Skip Online/Offline Choice':(0x1b39030,'554889e54157415641554154534881ec48130000'),
+    'Skip Online/Offline Choice':(0x1b39030,20,'2ba50af621aa1f80'),
 }
 
 
@@ -375,9 +379,8 @@ def guarded_patches(names,elf):
     for name in names:
         guard=PATCH_GUARDS.get(name)
         if guard:
-            offset,expected=guard
-            expected=bytes.fromhex(expected)
-            if eboot_bytes(elf,offset,offset+len(expected))!=expected:
+            offset,length,expected=guard
+            if site_check(eboot_bytes(elf,offset,offset+length))!=expected:
                 print(f'Patches: {name} left out: this eboot.bin has other code at its address')
                 continue
         kept.append(name)
@@ -399,7 +402,7 @@ def compile_patches(xml, names, app_version, segments):
             # 0x011383ca lies inside an unrelated multi-byte NOP;
             # the intended float immediate is at 0x00f383ca in this build (1/30 in the game).
             # The values in patches/Bloodborne.xml for these presets are shadPS4's maintained
-            # ones (upstream be1cde3): 1/30 at 60 FPS, 1/90 at 90, 1/120 uncapped.
+            # ones (upstream be1cde3): 1/90 at 90, 1/120 uncapped; 60 FPS keeps the game's 1/30.
             if (app_version == '01.09' and name in ('60 FPS++', '90 FPS++', 'Uncap FPS++')
                     and offset == 0x011383ca-EBOOT_BASE):
                 offset = 0x00f383ca-EBOOT_BASE

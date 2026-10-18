@@ -944,26 +944,41 @@ class LauncherBackend(QObject):
     def _mods_dir(self):
         return Path(self.app.get('mods_dir') or core.DATA_DIR / 'mods')
 
+    def _choose_prompt_download(self, choice):
+        """The player's own download of a prompt pack: opens its Nexus page, then asks for the
+        file. '' when cancelled."""
+        _, page, title, creator = core.PROMPT_PACKS[choice]
+        webbrowser.open(page)
+        source, _ = QFileDialog.getOpenFileName(
+            None, f'Choose your {title} download (by {creator}, opened on Nexus Mods)',
+            str(Path.home() / 'Downloads'), 'Prompt mod download (*.zip *.7z *.rar common.tpf.dcx);;All files (*)')
+        return source
+
     @Slot(str)
     def setPrompt(self, choice):
-        """Xbox and Keyboard: prompt images the port ships (Dommo's Xbox prompts; JinkiJinn's
-        PCBButtons key images, copied into the mods folder the first time, with the keys those
-        images show bound in bbport.ini). PlayStation: the game's own."""
+        """Xbox and Keyboard: prompt images from Nexus Mods (Dommo's Xbox prompts; JinkiJinn's
+        PCBButtons key images, with the keys those images show bound in bbport.ini). The port does
+        not ship them: the first time, the player's own download is added to the mods folder
+        (core.install_prompt_pack). PlayStation: the game's own."""
         if choice not in ('Xbox', 'PlayStation', 'Keyboard'):
             return
         names = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
         xbox = [n for n in names if n != core.KEYBOARD_PROMPTS]
-        if choice == 'Xbox' and not xbox:
-            self._set_notice('The Xbox prompts are missing from the mods folder. Download the latest release.')
-            return
-        if choice == 'Keyboard' and core.KEYBOARD_PROMPTS not in names:
+        if (choice == 'Xbox' and not xbox) or (choice == 'Keyboard' and core.KEYBOARD_PROMPTS not in names):
+            _, page, title, creator = core.PROMPT_PACKS[choice]
+            source = self._choose_prompt_download(choice)
+            if not source:
+                self._set_notice(f'{choice} prompts are a separate download: get {title} by {creator} from '
+                                 f'{page}, then choose {choice} again and pick the downloaded file.')
+                return
             try:
-                core.install_keyboard_prompts(self._mods_dir())
+                core.install_prompt_pack(choice, source, self._mods_dir())
             except (OSError, ValueError) as error:
                 self._set_notice(str(error))
                 return
             self.refresh_addons()
             names = [m['name'] for m in self._mods if self._is_prompt_mod(m['name'])]
+            xbox = [n for n in names if n != core.KEYBOARD_PROMPTS]
         profile_file = core.DATA_DIR / 'mods.json'
         profile_file.parent.mkdir(parents=True, exist_ok=True)
         profile = core.load_json(profile_file, {})

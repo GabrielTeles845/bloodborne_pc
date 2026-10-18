@@ -602,14 +602,21 @@ def server_check_hunters_dream(community):
     return '\n'.join(lines)
 
 
-# Keyboard button prompts: PCBButtons by JinkiJinn (Nexus Mods, Bloodborne mod 460, shipped with
-# credit as its permissions allow) replaces the game's prompt images with keyboard keys. The
-# package keeps it in bundled/ (packaging/windows/bundled in a source checkout), outside the mods
-# folder so it is not switched on beside the Xbox prompts; choosing Keyboard copies it in. Its
-# images show shadPS4's PC layout, so choosing it also binds those keys (bbport.ini key_*); the
-# engine names keys in text (src/key_prompts.c) when the bindings differ from the images.
+# Button prompt packs. Both are edits of the game's own menu/common.tpf.dcx, so the port does not
+# ship them: the player downloads one from Nexus Mods and the launcher adds it to the mods folder
+# (install_prompt_pack). Keyboard is PCBButtons by JinkiJinn; its images show shadPS4's PC layout,
+# so choosing it also binds those keys (bbport.ini key_*); the engine names keys in text
+# (src/key_prompts.c) when the bindings differ from the images.
 KEYBOARD_PROMPTS = 'Keyboard Prompts (PCBButtons)'
 KEYBOARD_PROMPTS_URL = 'https://www.nexusmods.com/bloodborne/mods/460'
+XBOX_PROMPTS = 'Xbox Prompts (Dommo)'
+XBOX_PROMPTS_URL = 'https://www.nexusmods.com/bloodborne/mods/30'
+# choice: (mods folder name, Nexus page, mod title, creator)
+PROMPT_PACKS = {
+    'Xbox': (XBOX_PROMPTS, XBOX_PROMPTS_URL, 'Xbox (and switch) UI for Bloodborne', 'Dommo'),
+    'Keyboard': (KEYBOARD_PROMPTS, KEYBOARD_PROMPTS_URL, 'PCBButtons', 'JinkiJinn'),
+}
+PROMPT_ARCHIVES = ('.zip', '.7z', '.rar')
 KEYBOARD_PROMPT_LAYOUT = {
     'key_interact': 'E', 'key_roll': 'Left Shift', 'key_blood_vial': 'R', 'key_use_item': 'Q',
     'key_transform': 'F', 'key_attack': 'Mouse1', 'key_firearm': 'Mouse2',
@@ -618,24 +625,49 @@ KEYBOARD_PROMPT_LAYOUT = {
 }
 
 
-def bundled_keyboard_prompts():
-    """The keyboard prompt pack the port ships, or None in a copy without it."""
-    for folder in (PORT_DIR / 'bundled', PORT_DIR / 'packaging' / 'windows' / 'bundled'):
-        if (folder / KEYBOARD_PROMPTS / 'menu' / 'common.tpf.dcx').is_file():
-            return folder / KEYBOARD_PROMPTS
-    return None
+def _prompt_textures(folder):
+    return [path for path in Path(folder).rglob('*')
+            if path.is_file() and path.name.casefold() == 'common.tpf.dcx']
 
 
-def install_keyboard_prompts(mods_dir):
-    """Copies the bundled keyboard prompts into the mods folder (once). Returns the mod folder;
-    ValueError when this copy of the port does not have them."""
-    source = bundled_keyboard_prompts()
-    if source is None:
-        raise ValueError('The keyboard prompt images are missing from this copy of the port. '
-                         'Download the latest release.')
-    target = Path(mods_dir) / KEYBOARD_PROMPTS
-    if not (target / 'menu' / 'common.tpf.dcx').is_file():
-        shutil.copytree(source, target, dirs_exist_ok=True)
+def install_prompt_pack(choice, source, mods_dir):
+    """Adds a prompt pack from the player's own Nexus download: the archive (.zip, .7z or .rar,
+    unpacked with Windows' tar), its unpacked folder or its common.tpf.dcx. Copies the texture to
+    <mods>/<pack>/menu/common.tpf.dcx and returns that mod folder; ValueError when the download
+    has none, or several (a pack with variants: choose the variant's own file)."""
+    name, page, title, creator = PROMPT_PACKS[choice]
+    source = Path(source)
+    with tempfile.TemporaryDirectory(prefix='bbport-prompts-') as scratch:
+        if source.is_dir():
+            found = _prompt_textures(source)
+        elif source.name.casefold() == 'common.tpf.dcx':
+            found = [source]
+        elif source.suffix.casefold() in PROMPT_ARCHIVES:
+            tar = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'tar.exe'
+            # bsdtar refuses absolute and ../ member paths, so nothing lands outside scratch.
+            result = subprocess.run([str(tar if tar.is_file() else 'tar'), '-xf', str(source), '-C', scratch],
+                                    capture_output=True, text=True, creationflags=NO_WINDOW)
+            if result.returncode:
+                raise ValueError(f'Could not unpack {source.name}: {result.stderr.strip() or result.returncode}. '
+                                 'Unpack it yourself and choose its common.tpf.dcx.')
+            found = _prompt_textures(scratch)
+        else:
+            raise ValueError('Choose the downloaded .zip, .7z or .rar, or the common.tpf.dcx inside it.')
+        if not found:
+            raise ValueError(f'{source.name} has no menu/common.tpf.dcx. Choose the {title} download from {page}.')
+        if len(found) > 1:
+            raise ValueError(f'{source.name} has {len(found)} prompt variants. Unpack it and choose the '
+                             'common.tpf.dcx of the one you want.')
+        with open(found[0], 'rb') as texture:
+            if texture.read(4) != b'DCX\0':
+                raise ValueError(f'{found[0].name} is not a game archive (DCX). Choose the {title} download.')
+        target = Path(mods_dir) / name
+        (target / 'menu').mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(found[0], target / 'menu' / 'common.tpf.dcx')
+    (target / 'SOURCE.txt').write_text(
+        f'{title} by {creator}\nSource: {page}\n'
+        f'Added by the launcher from your own download ({source.name}); the port does not ship it.\n',
+        encoding='utf-8')
     return target
 
 
@@ -2483,11 +2515,6 @@ def install_update(target, wait_pid):
     for attempt in range(30):
         try:
             shutil.copytree(PORT_DIR, target, dirs_exist_ok=True, ignore=ignore)
-            bundled_prompts = PORT_DIR / 'mods' / 'Xbox 360 Prompts (Elden Ring)'
-            installed_prompts = target / 'mods' / bundled_prompts.name
-            if bundled_prompts.is_dir() and not installed_prompts.exists():
-                installed_prompts.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(bundled_prompts, installed_prompts)
             break
         except OSError:  # a file still in use: the old launcher is closing
             time.sleep(1)
