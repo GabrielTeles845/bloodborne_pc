@@ -4,6 +4,7 @@
 #include <chrono>
 #include <array>
 #include <map>
+#include <optional>
 #include <unordered_map>
 #include <algorithm>
 #include <bit>
@@ -98,6 +99,30 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
                        reqs.memoryTypeBits)
             .value();
     arena_memory_type_bits = reqs.memoryTypeBits;
+    // bbport (Supermedo/bloodborne_pc 5f65e2d): discrete GPUs keep a reserve of VRAM for the
+    // guest memory backing (AllocateArenaChunk), used only once VRAM is otherwise full. The
+    // backing grows as areas load and, on NVIDIA, cannot be outside VRAM (sparse buffers accept
+    // VRAM types only): on 4 GB cards textures filled VRAM and the next area stopped the game
+    // with ErrorOutOfDeviceMemory (Jgamrot/bloodborne_pc#31). BB_ARENA_RESERVE=0: no reserve.
+    const char* reserve_env = std::getenv("BB_ARENA_RESERVE");
+    if (!instance.IsIntegrated() && !(reserve_env && reserve_env[0] == '0')) {
+        const auto& props = instance.GetMemoryProperties();
+        const u64 heap =
+            props.memoryHeaps[props.memoryTypes[arena_memory_type_index].heapIndex].size;
+        const u64 size = Common::AlignDown(std::min<u64>(512_MB, heap / 8), u64{1} << chunk_shift);
+        if (size) {
+            const auto [result, memory] = device.allocateMemory({
+                .allocationSize = size,
+                .memoryTypeIndex = arena_memory_type_index,
+            });
+            if (result == vk::Result::eSuccess) {
+                reserve_memory = memory;
+                reserve_size = size;
+                LOG_INFO(Render_Vulkan, "Guest memory backing: {} MiB of VRAM kept in reserve",
+                         size >> 20);
+            }
+        }
+    }
 
     const u64 bda_pagetable_size =
         (blocks_per_arena_page * num_arena_pages) * sizeof(vk::DeviceAddress);
@@ -465,8 +490,48 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
     return new_arena;
 }
 
-vk::DeviceMemory BufferCache::AllocateArenaChunk(vk::MemoryAllocateInfo alloc_info) {
-    auto [result, memory] = instance.GetDevice().allocateMemory(alloc_info);
+BufferCache::ChunkBacking BufferCache::AllocateArenaChunk(vk::MemoryAllocateInfo alloc_info) {
+    // BB_ARENA_LIMIT_MB=N: VRAM counts as full once N MiB are backed by allocations of their own
+    // (tests the reserve and the system memory fallback).
+    static const u64 arena_limit = [] {
+        const char* env = std::getenv("BB_ARENA_LIMIT_MB");
+        return env ? std::strtoull(env, nullptr, 10) << 20 : 0;
+    }();
+    vk::Result result = vk::Result::eErrorOutOfDeviceMemory;
+    vk::DeviceMemory memory{};
+    if (!arena_limit || vram_allocated + alloc_info.allocationSize <= arena_limit) {
+        std::tie(result, memory) = instance.GetDevice().allocateMemory(alloc_info);
+    }
+    if (result == vk::Result::eSuccess) {
+        vram_allocated += alloc_info.allocationSize;
+        return {memory, 0, true};
+    }
+    if (result == vk::Result::eErrorOutOfDeviceMemory && reserve_memory) {
+        // The reserve kept at start (VRAM; on NVIDIA no other memory type takes sparse buffers).
+        std::optional<u64> slot;
+        {
+            std::scoped_lock lk{reserve_mutex};
+            if (!reserve_free.empty()) {
+                slot = reserve_free.back();
+                reserve_free.pop_back();
+            }
+        }
+        if (!slot && reserve_size - reserve_next >= alloc_info.allocationSize) {
+            slot = reserve_next;
+            const u64 quarter_before = reserve_next * 4 / reserve_size;
+            reserve_next += alloc_info.allocationSize;
+            if (*slot == 0 || reserve_next * 4 / reserve_size != quarter_before) {
+                std::printf("GPU: video memory full: game memory from its reserve (%llu of %llu "
+                            "MiB handed out)\n",
+                            static_cast<unsigned long long>(reserve_next >> 20),
+                            static_cast<unsigned long long>(reserve_size >> 20));
+                std::fflush(stdout);
+            }
+        }
+        if (slot) {
+            return {reserve_memory, *slot, false};
+        }
+    }
     if (result == vk::Result::eErrorOutOfDeviceMemory) {
         // bbport (Supermedo/bloodborne_pc 96502c8): VRAM full. The guest memory the GPU uses is
         // backed here and only grows as areas load; on 4-8 GB cards it ran out
@@ -490,7 +555,7 @@ vk::DeviceMemory BufferCache::AllocateArenaChunk(vk::MemoryAllocateInfo alloc_in
                         (unsigned long long)(alloc_info.allocationSize >> 20));
         }
     }
-    return Vulkan::Check(vk::ResultValue<vk::DeviceMemory>{result, memory});
+    return {Vulkan::Check(vk::ResultValue<vk::DeviceMemory>{result, memory}), 0, false};
 }
 
 void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_block) {
@@ -532,15 +597,15 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
         // Residency only ever changes by whole chunks, so the gaps are whole chunks.
         for (u64 start = range.start; start < range.end; start += u64{1} << blocks_per_chunk_shift) {
             const u64 chunk = start >> blocks_per_chunk_shift;
-            const auto device_memory = AllocateArenaChunk(alloc_info);
-            chunk_memory[chunk] = device_memory;
+            const ChunkBacking chunk_backing = AllocateArenaChunk(alloc_info);
+            chunk_memory[chunk] = chunk_backing;
             chunk_arenas[chunk].push_back(arena);
 
             Backing backing;
             backing.start = start;
             backing.end = start + (u64{1} << blocks_per_chunk_shift);
-            backing.memory = device_memory;
-            backing.offset = 0;
+            backing.memory = chunk_backing.memory;
+            backing.offset = chunk_backing.offset;
             resident_ranges.Add(backing);
 
             LOG_INFO(Render, "Making range start={}, end={} resident", backing.start,
@@ -558,8 +623,8 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
             const auto& bind = binds->binds.emplace_back(vk::SparseMemoryBind{
                 .resourceOffset = resource_offset,
                 .size = alloc_info.allocationSize,
-                .memory = device_memory,
-                .memoryOffset = 0,
+                .memory = backing.memory,
+                .memoryOffset = backing.offset,
             });
 
             for (u64 block = 0; block < bind.size; block += block_size) {
@@ -851,10 +916,22 @@ void BufferCache::RunGarbageCollector(u64 used_memory, u64 pressure_memory, u64 
         runtime.FillBuffer(bda_pagetable_buffer.get(), first_block * sizeof(vk::DeviceAddress),
                            (end_block - first_block) * sizeof(vk::DeviceAddress), 0u);
         memory_tracker->MarkRegionAsCpuModified(address, chunk_size);
-        // Freed once the GPU has finished the commands submitted with the release.
-        scheduler.DeferOperation([device, memory = chunk_memory[chunk]] {
-            device.freeMemory(memory);
-        });
+        // Freed (or its reserve slot given back) once the GPU has finished the commands
+        // submitted with the release.
+        const ChunkBacking backing = chunk_memory[chunk];
+        if (backing.counted) {
+            vram_allocated -= chunk_size;
+        }
+        if (backing.memory == reserve_memory) {
+            scheduler.DeferOperation([this, offset = backing.offset] {
+                std::scoped_lock lk{reserve_mutex};
+                reserve_free.push_back(offset);
+            });
+        } else {
+            scheduler.DeferOperation([device, memory = backing.memory] {
+                device.freeMemory(memory);
+            });
+        }
         chunk_memory.erase(chunk);
         chunk_arenas.erase(chunk);
     }
