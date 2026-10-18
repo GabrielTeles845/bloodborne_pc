@@ -137,6 +137,10 @@ private:
     }
 
     const Buffer* GetArena(u64 first_block, u64 last_block);
+    /// bbport: the arenas whose range includes arena page `page` (at most two).
+    boost::container::small_vector<const Buffer*, 2> ArenasCovering(u64 page) const;
+    /// bbport: binds the memory already resident in the range of a new arena.
+    void BindResidentRanges(const Buffer* arena);
 
     void EnsureResident(const Buffer* arena, u64 first_block, u64 last_block);
     struct ChunkBacking;
@@ -179,7 +183,13 @@ private:
     std::unique_ptr<FaultManager> fault_manager;
     std::unique_ptr<Buffer> bda_pagetable_buffer;
 
+    /// bbport: the arena starting at each arena page, two pages long (one at the top), so a
+    /// request (at most two pages) always fits the arena of its first page and arenas never
+    /// migrate; neighbouring arenas overlap by a page and memory there is bound in both.
+    /// BB_ARENA_MIGRATE=1: as before, the arena covering each page, merged when a request spans
+    /// two of them.
     std::array<const Buffer*, MAX_ARENA_PAGES> address_space{};
+    bool migrate_arenas{};
     u64 arena_page_bits{MAX_ARENA_PAGE_BITS};
     u64 arena_page_size{u64{1} << MAX_ARENA_PAGE_BITS};
     u64 num_arena_pages{u64{1} << (ADDRESS_SPACE_BITS - MAX_ARENA_PAGE_BITS)};
