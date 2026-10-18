@@ -82,6 +82,10 @@ FIELDS = {
         row('frame_cap', 'Unlocked mode limit', 'choice', core.FRAME_CAPS),
         row('frames_ahead', 'Frames ahead', 'choice', core.FRAMES_AHEAD),
         row('fullscreen', 'Fullscreen', 'toggle'),
+        row('fullscreen_mode', 'Fullscreen type', 'choice', core.FULLSCREEN_MODES,
+            'Exclusive switches the display to its own mode: notifications and other windows do not show over the game.'),
+        row('display', 'Monitor', 'choice', core.DISPLAYS,
+            'The monitor the game window and fullscreen go to, in the order the game log lists them.'),
         row('present_mode', 'Presentation mode', 'choice', core.PRESENT_MODES),
         row('hdr', 'HDR output', 'toggle'),
     ],
@@ -151,7 +155,7 @@ FIELDS = {
 # field definitions remain the single source for control types and options.
 SETTINGS_SECTIONS = {
     'Visuals': [
-        ('Display & frame rate', ['output_res', 'hud_position', 'fullscreen', 'hdr', 'fps_mode', 'frame_cap',
+        ('Display & frame rate', ['output_res', 'hud_position', 'fullscreen', 'fullscreen_mode', 'display', 'hdr', 'fps_mode', 'frame_cap',
                                   'frames_ahead', 'present_mode']),
         ('Upscaling', ['upscaler', 'preset', 'live_resolution', 'sharpen', 'sharpness',
                        'object_motion']),

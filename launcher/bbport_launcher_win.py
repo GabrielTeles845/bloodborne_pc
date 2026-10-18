@@ -238,7 +238,8 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'voice_language': 'auto',
-                'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
+                'player_name': '', 'fullscreen': False, 'fullscreen_mode': 'borderless', 'display': '',
+                'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': '120', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'vram_budget_mb': '', 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'extra_env': '', 'close_on_play': False,
@@ -305,6 +306,14 @@ FPS_MODES = [('120', ('120 FPS (recommended)', '120 FPS (рекомендует�
              ('uncap', ("Unlocked (frame-time patch; can freeze at the end of Vicar Amelia's intro)",
                         'Без ограничения (патч; может зависнуть в конце заставки Викарии Амелии)')),
              ('30', ('30 FPS (as on PS4)', '30 FPS (как на PS4)'))]
+# Fullscreen (BB_FULLSCREEN_MODE; window.cpp, after RafaelHGOliveira's Supermedo PR #68): a
+# borderless window over the desktop, or exclusive (the display switched to its desktop mode).
+FULLSCREEN_MODES = [('borderless', ('Borderless (default)', 'Без рамки (по умолчанию)')),
+                    ('exclusive', ('Exclusive', 'Эксклюзивный'))]
+# The monitor the game opens on (BB_DISPLAY; window.cpp, after parsifal295's Supermedo PR #66):
+# numbered in the order the game's log lists them ("Display 1: ...").
+DISPLAYS = [('', ('Primary monitor', 'Основной монитор'))] + \
+    [(str(n), (f'Monitor {n}', f'Монитор {n}')) for n in range(1, 5)]
 PRESENT_MODES = [('Mailbox', ('Mailbox (low latency, no tearing)', 'Mailbox (без разрывов)')),
                  ('Fifo', ('FIFO (VSync)',)), ('FifoRelaxed', ('FIFO Relaxed',)),
                  ('Immediate', ('Immediate (tearing)', 'Immediate (с разрывами)'))]
@@ -684,6 +693,9 @@ def game_environment(s):
     if str(s['player_name']).strip():
         env['BB_USER_NAME'] = str(s['player_name']).strip()
     env['BB_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
+    env['BB_FULLSCREEN_MODE'] = s.get('fullscreen_mode') or 'borderless'
+    if s.get('display'):
+        env['BB_DISPLAY'] = str(s['display'])
     env['BB_PRESENT_MODE'] = s['present_mode']
     if s['hdr']:
         env['BB_HDR'] = '1'
@@ -1597,6 +1609,12 @@ class Launcher:
                    '1 — ровная подача кадров; больше может поднять FPS, если упирается в видеокарту.'))
         self.section(f, _('Window', 'Окно'))
         self.check(f, 'fullscreen', 'app', _('Fullscreen', 'Полноэкранный режим'))
+        self.row(f, _('Fullscreen type', 'Тип полного экрана'), self.choice(f, 'fullscreen_mode', 'app', FULLSCREEN_MODES),
+                 _('Exclusive switches the display to its own mode: notifications and other windows do not show over the game.',
+                   'Эксклюзивный переключает монитор в собственный режим: уведомления и другие окна не видны поверх игры.'))
+        self.row(f, _('Monitor', 'Монитор'), self.choice(f, 'display', 'app', DISPLAYS),
+                 _('The monitor the game window and fullscreen go to, in the order the game log lists them.',
+                   'Монитор для окна и полного экрана игры, в порядке списка в журнале игры.'))
         self.row(f, _('Presentation', 'Режим показа кадров'), self.choice(f, 'present_mode', 'app', PRESENT_MODES))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
