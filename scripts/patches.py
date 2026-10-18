@@ -624,6 +624,14 @@ def external_patches(directory, app_version='01.09', exclude=Path(__file__).reso
     directory=Path(directory)
     for path in sorted(directory.glob('*.xml')) if directory.is_dir() else []:
         if path.resolve()==Path(exclude).resolve(): continue  # the built-in file (patches/ in a checkout)
+        # Copies of the built-in file in the data folder's patches/ (an older package's, or the
+        # shadPS4 file of that name): their isEnabled frame-rate patches went on top of the
+        # port's own (Uncap FPS++ over 90 FPS++). After Awakenchan/BloodBorneButPc.
+        # external_bloodborne_xml=1 in bbport.ini or BB_EXTERNAL_BLOODBORNE_XML=1 reads them.
+        if path.name.lower()==Path(exclude).name.lower() and not external_copy_allowed():
+            print(f'Patches: {path} ignored: a copy of the built-in patch file '
+                  '(BB_EXTERNAL_BLOODBORNE_XML=1 reads it)',file=sys.stderr)
+            continue
         # Left by bbbridge's app (Supermedo's builds): play logs every 5 s to The Hunter's Dream.
         if path.name.lower()=='bbbridge-live-map.xml': continue
         try:
@@ -637,6 +645,14 @@ def external_patches(directory, app_version='01.09', exclude=Path(__file__).reso
             if meta.get('AppVer')==app_version and meta.get('AppElf','eboot.bin')=='eboot.bin':
                 found.append((f'{path.name}/{meta.get("Name")}',path,meta))
     return found
+
+
+def external_copy_allowed():
+    value=os.environ.get('BB_EXTERNAL_BLOODBORNE_XML')
+    if value is None:
+        config=os.environ.get('BB_CONFIG')
+        value=read_settings(config).get('external_bloodborne_xml','0') if config else '0'
+    return value=='1'
 
 
 def external_selection(found, config):
@@ -668,6 +684,25 @@ def compile_external(selected, segments):
         writes+=ours
         print(f'Patches: external {key} ({len(ours)} writes)')
     return writes
+
+
+def with_external(writes, preset_count, selected, segments):
+    """`writes` (the FPS preset's first, `preset_count` of them) and the selected external
+    patches' after them, and the key of an external patch that replaced the preset, if any. An FPS
+    patch of its own (e.g. "60FPS (no deltatime)", at 60 FPS++'s addresses with other values)
+    replaces the built-in preset whole: applied over it, the two mixed. From ethan (emurphy04),
+    Supermedo/bloodborne_pc PR #93 (8042500)."""
+    preset_ranges=[(offset,offset+len(data)) for offset,data in writes[:preset_count]]
+    external=[]
+    replaced=None
+    for item in selected:
+        ours=compile_external([item],segments)
+        if not replaced and preset_count and any(start<offset+len(data) and offset<end
+                                                 for offset,data in ours for start,end in preset_ranges):
+            writes=writes[preset_count:]
+            replaced=item[0]
+        external+=ours
+    return writes+external,replaced
 
 
 def main():
@@ -727,6 +762,7 @@ def main():
     names=guarded_patches(names,elf)
     segments=eboot_segments(elf)
     writes=preset_writes(a.xml,preset,a.fps,a.app_version,segments,elf,read_settings(a.settings))
+    preset_count=len(writes)  # the first writes, replaced whole by an external FPS patch
     writes+=compile_patches(a.xml,[n for n in names if n not in preset],a.app_version,segments)
     if a.fps!='30' and sprint_fix_enabled(read_settings(a.settings)):
         fixes=frame_rate_fixes(elf)
@@ -754,8 +790,11 @@ def main():
         print(f'Patches: scene {size[0]}x{size[1]}; UI {ui[0]}x{ui[1]}')
     if a.patches_dir:
         # After the built-in ones: an external patch of the same bytes wins.
-        writes+=compile_external(external_selection(external_patches(a.patches_dir,a.app_version,a.xml),
-                                                    a.patches_config),segments)
+        selected=external_selection(external_patches(a.patches_dir,a.app_version,a.xml),a.patches_config)
+        writes,replaced=with_external(writes,preset_count,selected,segments)
+        if replaced:
+            print(f'Patches: external {replaced} replaces the built-in {", ".join(preset)}')
+            names=[n for n in names if n not in preset]
     # BBPATCH2: the patch base, so the loader can rebase pointers the patches write into
     # relocated slots (60/90 FPS++ replace function pointers).
     blob=struct.pack('<8sQQ',b'BBPATCH2',EBOOT_BASE,len(writes))

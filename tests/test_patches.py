@@ -1,5 +1,5 @@
 from paths import ROOT
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import os
 import struct
@@ -17,7 +17,7 @@ from patches import (EBOOT_BASE, FIXES, FPS_PRESETS, OUTPUT_SIZE, RESOLUTION_TEM
                      eboot_matches_patches, patch_fingerprint, patch_sites, game_app_version,
                      eboot_is_109, SCALED_BASE, SCALED_FPS, SCALED_VALUES, fps_preset, rate_scaled,
                      eboot_segments, rate_corrections, camera_value, EFFECT_RATE_SITES,
-                     CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS, frame_steps, preset_writes)
+                     CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS, frame_steps, preset_writes, with_external)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -312,6 +312,51 @@ class FrameStepTests(unittest.TestCase):
                            and eboot_bytes(elf, o, o + 4) == struct.pack('<f', 1 / 30)
                            and dict(before)[o] == struct.pack('<f', 1 / 60)]
                 self.assertEqual(len(stepped), count)
+
+
+class ExternalFpsPatchTests(unittest.TestCase):
+    EXTERNAL = """<?xml version="1.0"?>
+<Patch><TitleID><ID>CUSA03173</ID></TitleID>
+<Metadata Title="Bloodborne" Name="{name}" AppVer="01.09" AppElf="eboot.bin" isEnabled="true"><PatchList>
+<Line Type="bytes" Address="{address}" Value="8988883C"/>
+</PatchList></Metadata></Patch>"""
+
+    def folder(self, files):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        for name, text in files.items():
+            (Path(directory.name) / name).write_text(text)
+        return Path(directory.name)
+
+    def test_copies_of_the_built_in_file_are_ignored(self):
+        folder = self.folder({'bloodborne.XML': XML.read_text(encoding='utf-8'),
+                              'other.xml': self.EXTERNAL.format(name='Mine', address='0x00500000')})
+        with mock.patch.dict('os.environ', {}, clear=True), redirect_stderr(io.StringIO()) as log:
+            self.assertEqual([key for key, _, _ in external_patches(folder)], ['other.xml/Mine'])
+        self.assertIn('ignored', log.getvalue())
+        with mock.patch.dict('os.environ', {'BB_EXTERNAL_BLOODBORNE_XML': '1'}, clear=True):
+            self.assertIn('bloodborne.XML/Uncap FPS++', [key for key, _, _ in external_patches(folder)])
+        ini = folder / 'bbport.ini'
+        ini.write_text('external_bloodborne_xml=1\n')
+        with mock.patch.dict('os.environ', {'BB_CONFIG': str(ini)}, clear=True):
+            self.assertIn('bloodborne.XML/Uncap FPS++', [key for key, _, _ in external_patches(folder)])
+
+    def test_an_external_fps_patch_replaces_the_preset(self):
+        preset = compile_patches(XML, ['60 FPS++'], '01.09', SEGMENTS)
+        others = [(0x500000, b'\x01')]
+        for address, replaces in (('0x00F383CA', True), ('0x00500010', False)):
+            with self.subTest(address=address):
+                folder = self.folder({'fps.xml': self.EXTERNAL.format(name='60FPS (no deltatime)', address=address)})
+                with mock.patch.dict('os.environ', {}, clear=True), redirect_stdout(io.StringIO()):
+                    selected = external_selection(external_patches(folder), None)
+                    writes, replaced = with_external(preset + others, len(preset), selected, SEGMENTS)
+                external = [(int(address, 16) - EBOOT_BASE, bytes.fromhex('8988883C'))]
+                if replaces:
+                    self.assertEqual(replaced, 'fps.xml/60FPS (no deltatime)')
+                    self.assertEqual(writes, others + external)
+                else:
+                    self.assertIsNone(replaced)
+                    self.assertEqual(writes, preset + others + external)
 
 
 def fake_elf(vaddr, code):
