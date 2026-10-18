@@ -17,7 +17,7 @@ from patches import (EBOOT_BASE, FIXES, FPS_PRESETS, OUTPUT_SIZE, RESOLUTION_TEM
                      eboot_matches_patches, patch_fingerprint, patch_sites, game_app_version,
                      eboot_is_109, SCALED_BASE, SCALED_FPS, SCALED_VALUES, fps_preset, rate_scaled,
                      eboot_segments, rate_corrections, camera_value, EFFECT_RATE_SITES,
-                     CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS)
+                     CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS, frame_steps, preset_writes)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -269,6 +269,49 @@ class RateCorrectionTests(unittest.TestCase):
                 writes = compile_patches(XML, [preset], '01.09', SEGMENTS)
                 with mock.patch.dict('os.environ', {}, clear=True), redirect_stdout(io.StringIO()):
                     self.assertEqual(rate_corrections(writes, fps, None, {}), writes)
+
+
+class FrameStepTests(unittest.TestCase):
+    """The lists' fixed 1/60 steps follow the rate above 60 FPS (BB_FRAME_STEP_FIX)."""
+    def setUp(self):
+        code = bytearray(0x40)
+        struct.pack_into('<f', code, 0x10, 1 / 30)   # a game step
+        struct.pack_into('<f', code, 0x20, 0.25)     # something else
+        self.elf = fake_elf(0, bytes(code))
+        self.writes = [(0x10, struct.pack('<f', 1 / 60)), (0x20, struct.pack('<f', 1 / 60)),
+                       (0x30, b'\x90' * 4)]
+
+    def steps(self, fps, env=None, settings=None):
+        with mock.patch.dict('os.environ', env or {}, clear=True), redirect_stdout(io.StringIO()):
+            return frame_steps(self.writes, fps, self.elf, settings or {})
+
+    def test_only_steps_the_game_has_at_1_30(self):
+        for fps in (90, 120, 144):
+            with self.subTest(fps=fps):
+                out = self.steps(fps)
+                self.assertEqual(out[0], (0x10, struct.pack('<f', 1 / fps)))
+                self.assertEqual(out[1:], self.writes[1:])
+
+    def test_60_uncapped_and_off_keep_the_list(self):
+        self.assertEqual(self.steps(60), self.writes)
+        self.assertEqual(self.steps(None), self.writes)
+        self.assertEqual(self.steps(120, env={'BB_FRAME_STEP_FIX': '0'}), self.writes)
+        self.assertEqual(self.steps(120, settings={'frame_step_fix': '0'}), self.writes)
+
+    @unittest.skipUnless(GAME_ELF.is_file(), 'needs a prepared 1.09 eboot.elf (BB_TEST_EBOOT_ELF)')
+    def test_sites_in_the_game(self):
+        elf = GAME_ELF.read_bytes()
+        segments = eboot_segments(elf)
+        for preset, fps, count in (('90 FPS++', '90', 95), (SCALED_BASE, '120', 78)):
+            with self.subTest(preset=preset), mock.patch.dict('os.environ', {}, clear=True), \
+                    redirect_stdout(io.StringIO()):
+                before = rate_scaled(compile_patches(XML, [preset], '01.09', segments), int(fps)) \
+                    if preset == SCALED_BASE else compile_patches(XML, [preset], '01.09', segments)
+                after = preset_writes(XML, [preset], fps, '01.09', segments, elf, {})
+                stepped = [o for (o, d) in after if d == struct.pack('<f', 1 / int(fps))
+                           and eboot_bytes(elf, o, o + 4) == struct.pack('<f', 1 / 30)
+                           and dict(before)[o] == struct.pack('<f', 1 / 60)]
+                self.assertEqual(len(stepped), count)
 
 
 def fake_elf(vaddr, code):

@@ -66,7 +66,8 @@ def preset_writes(xml,preset,fps,app_version,segments,elf=None,settings=None):
     if fps in SCALED_FPS:
         writes=rate_scaled(writes,SCALED_FPS[fps])
         print(f'Patches: {fps} FPS: {SCALED_BASE} with its frame-rate values for {fps}')
-    return rate_corrections(writes,PRESET_RATES.get(fps),elf,settings or {})
+    writes=rate_corrections(writes,PRESET_RATES.get(fps),elf,settings or {})
+    return frame_steps(writes,PRESET_RATES.get(fps),elf,settings or {})
 
 
 # Corrections to the community frame-rate lists (Kyo's 1.0 lists), from Awakenchan/BloodBorneButPc
@@ -111,6 +112,33 @@ CAMERA_ANGLE,CAMERA_KEPT=0x238,0x1a8
 # The game's own value at each of these (a float the eboot must hold there, else left alone).
 CAMERA_EASES={0x4D25E68:0.1,0x4D25E94:1/30,0x183A7DE:0.05}  # the last: mov dword [rbx+0x330], 0.05
 PRESET_RATES={'60':60,'90':90,**SCALED_FPS}  # uncapped: the rate is not known here
+
+
+# Fixed time steps (frame_step_fix=0 / BB_FRAME_STEP_FIX=0: off). The game advances physics,
+# falling objects and other systems by a fixed step a frame, 1/30 s. The 60 FPS++ list halves
+# them to 1/60 and the 90 FPS++ lists keep that 1/60 (78 sites in the rate base, 95 in the older
+# 90 FPS++), so above 60 FPS they ran fps/60 times as fast: gravity 1.5x at 90, 2x at 120, 2.4x
+# at 144. Each 4-byte line that writes 1/60 where the eboot has the game's 1/30 gets 1/fps.
+# Awakenchan/BloodBorneButPc 0.9.32 beta 6 made the same change (released without source); these
+# sites are found again from the lists and the eboot, not taken from that build.
+FRAME_STEP_GAME=struct.pack('<f',1/30)
+FRAME_STEP_LIST=struct.pack('<f',1/60)
+
+
+def frame_steps(writes, fps, elf, settings):
+    """The preset's writes with its fixed 1/60 steps at 1/fps, above 60 FPS."""
+    if not fps or fps<=60 or elf is None or not setting_on(settings,'frame_step_fix','BB_FRAME_STEP_FIX','1'):
+        return writes
+    step=struct.pack('<f',1/fps)
+    out=[]
+    count=0
+    for offset,data in writes:
+        if data==FRAME_STEP_LIST and eboot_bytes(elf,offset,offset+4)==FRAME_STEP_GAME:
+            data=step
+            count+=1
+        out.append((offset,data))
+    print(f'Patches: {count} fixed frame steps at 1/{fps} s (frame_step_fix=0: 1/60)')
+    return out
 
 
 def setting_on(settings,key,env,default):
