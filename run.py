@@ -181,6 +181,33 @@ def shader_prebuild(game, out, env):
         env['BB_SHADER_CATALOG'] = str(catalog)
 
 
+def start_companions(data, env, game_pid):
+    """Companions (tools/bloodborne_rpc: Discord Rich Presence): programs in <data>/companions/<name>/
+    that run beside the game, each started only when companions.json lists its folder name under
+    "enabled" (none by default). companion.json names the program; it gets the game's process id
+    in BB_GAME_PID. They end with the game."""
+    started = []
+    try:
+        enabled = set(json.loads((data / 'companions.json').read_text(encoding='utf-8')).get('enabled', []))
+    except (OSError, ValueError):
+        return started
+    companions = data / 'companions'
+    for folder in sorted(companions.iterdir() if companions.is_dir() else ()):
+        if not folder.is_dir() or folder.name not in enabled:
+            continue
+        try:
+            spec = json.loads((folder / 'companion.json').read_text(encoding='utf-8'))
+            exe = folder / spec.get('exe', '')
+            if not exe.is_file() or exe.suffix.lower() != '.exe':
+                continue
+            print(f'Companion: {spec.get("name", folder.name)}')
+            started.append(subprocess.Popen([str(exe)], cwd=folder, env={**env, 'BB_GAME_PID': str(game_pid)},
+                                            stdin=subprocess.DEVNULL, creationflags=no_console()))
+        except (OSError, ValueError) as error:
+            print(f'Companion {folder.name} not started: {error}', file=sys.stderr)
+    return started
+
+
 def main():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
@@ -423,7 +450,16 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('BB_TIMEOUT', '0'), *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        game_proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        started = []
+        try:
+            started = start_companions(data, env, game_proc.pid)
+            return game_proc.wait()
+        finally:
+            for proc in started:
+                proc.terminate()
+            if game_proc.poll() is None:
+                game_proc.terminate()
     finally:
         if mod_view:
             # Read-only game files leave read-only links (mods.remove_overlay clears them).

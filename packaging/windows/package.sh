@@ -102,6 +102,13 @@ if [[ -x out/atlas-generator/generate_atlas.exe ]]; then
 else
     echo "Note: no out/atlas-generator (build_atlas_generator.sh): the package cannot prepare Hunter's Atlas maps" >&2
 fi
+# Discord Rich Presence (tools/bloodborne_rpc, by erezeth): built here from its source, shipped in
+# companions/ and off until the player lists it in companions.json (run.py start_companions).
+rpc="$dest/companions/Discord Rich Presence"
+mkdir -p "$rpc"
+clang++ -std=c++17 -O2 -DUNICODE -D_UNICODE -municode -mwindows -static \
+    tools/bloodborne_rpc/main.cpp -o "$rpc/BloodborneRPC.exe" -lkernel32 -luser32
+cp tools/bloodborne_rpc/companion.json tools/bloodborne_rpc/config.json "$rpc/"
 # Xbox button prompts by Dommo (nexusmods.com/bloodborne/mods/30, redistribution allowed with
 # credit), shipped in every package so a fresh download has them. BB_XBOX_PROMPTS_DIR overrides
 # the copy kept in packaging/windows/mods.
