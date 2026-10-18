@@ -17,9 +17,8 @@ import subprocess
 import sys
 
 PORT = Path(__file__).resolve().parent
-# The Xbox button prompts mod the package ships (packaging/windows/mods).
-XBOX_PROMPTS = 'Xbox 360 Prompts (Elden Ring)'
-# The keyboard key images the port ships, off until chosen (launcher KEYBOARD_PROMPTS, PCBButtons).
+# The keyboard key images (PCBButtons from Nexus Mods), as the launcher adds them to the mods
+# folder (launcher KEYBOARD_PROMPTS).
 KEYBOARD_PROMPTS = 'Keyboard Prompts (PCBButtons)'
 
 
@@ -264,19 +263,11 @@ def main():
                    optional=True)
         if (hud_layer / 'dvdroot_ps4').is_dir():
             generated.append(str(hud_layer))
-    # The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).
-    bundled = [folder for folder in (PORT / 'mods' / XBOX_PROMPTS, PORT / 'packaging/windows/mods' / XBOX_PROMPTS)
-               if folder.is_dir()][:1]
-    bundled_off = [folder for folder in (PORT / 'bundled' / KEYBOARD_PROMPTS,
-                                         PORT / 'packaging/windows/bundled' / KEYBOARD_PROMPTS)
-                   if folder.is_dir()][:1]
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),
                            '--enabled', env.get('BB_MODS_ENABLED', '1'),
                            *(arg for folder in generated for arg in ('--generated', folder)),
-                           *(arg for folder in bundled for arg in ('--bundled', folder)),
-                           *(arg for folder in bundled_off for arg in ('--bundled-off', folder)),
                            capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     # Keyboard prompts: whether the key images are among the mods in use, as the launcher's

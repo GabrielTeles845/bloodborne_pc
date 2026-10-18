@@ -6,6 +6,7 @@
 
 #include "thd.h"
 #include "thd_internal.h"
+#include "../../../src/code_check.h"
 
 #include <algorithm>
 #include <atomic>
@@ -828,8 +829,7 @@ constexpr std::uint64_t kCharaStep = 0x2043ee0;      // the login's character st
 constexpr std::uint64_t kSignalingGate = 0x586cc09;  // u8: the NpMatching2 callbacks' gate
 constexpr std::uint64_t kFrpgNetMan = 0x593b120;     // FrpgNetMan* (the singleton's slot)
 constexpr std::uint32_t kAreaOff = 0xa7c, kLevelOff = 0xaa8, kPosOff = 0xaac;
-const std::uint8_t kCharaStepPrologue[] = {0x55, 0x48, 0x89, 0xe5, 0x41, 0x57, 0x41, 0x56,
-                                           0x41, 0x54, 0x53, 0x48, 0x83, 0xec, 0x40};
+constexpr BbCode kCharaStepPrologue = {15, 0x112f66ddc4b76094ull};  // its first instructions
 std::uint8_t* g_image = nullptr;
 
 template <typename T>
@@ -841,8 +841,7 @@ bool ReadGuest(std::uint64_t at, T* out) {
 void SetImage(std::uint8_t* image, std::uint64_t size) {
     g_image = nullptr;
     if (!image || size < kFrpgNetMan + 8 - kImageBase) return;
-    if (std::memcmp(image + (kCharaStep - kImageBase), kCharaStepPrologue,
-                    sizeof(kCharaStepPrologue)) != 0) {
+    if (!bb_code_is(image + (kCharaStep - kImageBase), kCharaStepPrologue)) {
         return; // not 1.09: no game memory is touched
     }
     g_image = image;

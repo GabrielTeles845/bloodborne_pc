@@ -110,8 +110,8 @@ class NativeUiTests(unittest.TestCase):
 
 class FpsPatchTests(unittest.TestCase):
     def test_fps_physics_write_preserves_unrelated_instruction(self):
-        for preset, value in [('60 FPS++', '8988083D'), ('90 FPS++', '610B363C'),
-                              ('Uncap FPS++', '8988083C')]:
+        # 60 FPS++ keeps the game's own 1/30 step: the file has no write for it there.
+        for preset, value in [('90 FPS++', '610B363C'), ('Uncap FPS++', '8988083C')]:
             with self.subTest(preset=preset):
                 writes = compile_patches(XML, [preset], '01.09', SEGMENTS)
                 self.assertIn((0x00f383ca - EBOOT_BASE, bytes.fromhex(value)), writes)
@@ -120,21 +120,23 @@ class FpsPatchTests(unittest.TestCase):
     def test_fps_presets_set_the_physics_step_per_frame_rate(self):
         # shadPS4's maintained patch values (upstream be1cde3): 1/30 at 60 FPS (the game's own),
         # 1/90 at 90 FPS, 1/120 uncapped. The old values were 1/15, 1/30 and 1/240.
-        for preset, step in [('60 FPS++', 30), ('90 FPS++', 90), ('Uncap FPS++', 120)]:
+        for preset, step in [('90 FPS++', 90), ('Uncap FPS++', 120)]:
             with self.subTest(preset=preset):
                 writes = dict(compile_patches(XML, [preset], '01.09', SEGMENTS))
                 value = struct.unpack('<f', writes[0x00f383ca - EBOOT_BASE])[0]
                 self.assertAlmostEqual(1 / value, step, places=2)
+        # 60 FPS++ leaves the game's 1/30 in place (patches/Bloodborne.xml keeps no game bytes).
+        self.assertNotIn(0x00f383ca - EBOOT_BASE, dict(compile_patches(XML, ['60 FPS++'], '01.09', SEGMENTS)))
 
     def test_other_versions_keep_their_xml_addresses(self):
         tree = ET.parse(XML)
         for meta in tree.getroot().iter('Metadata'):
-            if meta.get('Name') == '60 FPS++' and meta.get('AppVer') == '01.09':
+            if meta.get('Name') == '90 FPS++' and meta.get('AppVer') == '01.09':
                 meta.set('AppVer', '01.08')
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'patch.xml'
             tree.write(path)
-            writes = compile_patches(path, ['60 FPS++'], '01.08', SEGMENTS)
+            writes = compile_patches(path, ['90 FPS++'], '01.08', SEGMENTS)
             self.assertIn(0x011383ca - EBOOT_BASE, [at for at, data in writes])
             self.assertNotIn(0x00f383ca - EBOOT_BASE, [at for at, data in writes])
 
@@ -150,8 +152,15 @@ def fake_elf(vaddr, code):
 
 class SprintFixTests(unittest.TestCase):
     def test_blocked_movement_check_divides_by_frame_time(self):
-        elf = fake_elf(0x1514c24, bytes.fromhex('c5fa590500174103'))
-        self.assertEqual(frame_rate_fixes(elf), [(0x1514c24, bytes.fromhex('c5fa5e458c0f1f00'))])
+        # The fix knows the game's vmulss only by length and hash (no game bytes here): stand-in
+        # bytes with a matching check exercise the same path.
+        import patches
+        from cpu_compat import site_check
+        stand_in = bytes(range(8))
+        fixes = [(vaddr, (8, site_check(stand_in)), new) for vaddr, _, new in patches.FRAME_RATE_FIXES]
+        with mock.patch.object(patches, 'FRAME_RATE_FIXES', fixes):
+            elf = fake_elf(0x1514c24, stand_in)
+            self.assertEqual(frame_rate_fixes(elf), [(0x1514c24, bytes.fromhex('c5fa5e458c0f1f00'))])
 
     def test_unexpected_code_is_left_alone(self):
         elf = fake_elf(0x1514c24, bytes.fromhex('9090909090909090'))
