@@ -237,6 +237,7 @@ INI_DEFAULTS = {'upscaler': 'dlss', 'preset': '2', 'sharpen': '1', 'sharpness': 
                 **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS + ENHANCEMENTS + ATLAS}}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '', 'dlc_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
+                'voice_language': 'auto',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
                 'fps_mode': '120', 'frame_cap': '', 'draw_pipe': '', 'readbacks': '',
                 'frames_ahead': '', 'vram_budget_mb': '', 'frame_stats': False, 'gpu_profile': False,
@@ -319,6 +320,12 @@ LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Ру
              ('13', ('Swedish', 'Шведский')), ('14', ('Danish', 'Датский')), ('15', ('Norwegian', 'Норвежский')),
              ('9', ('Korean', 'Корейский')), ('10', ('Chinese (Traditional)', 'Китайский (традиционный)')),
              ('11', ('Chinese (Simplified)', 'Китайский (упрощённый)'))]
+# Voice tracks apart from the text language (BB_VOICE_LANGUAGE, scripts/language_files.py; after
+# Berleis, Supermedo/bloodborne_pc PR #20): the game's sound/*_<code>.fsb files.
+VOICE_LANGUAGES = [('auto', ('As in the game', 'Как в игре')), ('eng', ('English',)),
+                   ('ptb', ('Português (Brasil)',)), ('ded', ('Deutsch',)),
+                   ('esa', ('Español (América)',)), ('ese', ('Español (España)',)),
+                   ('frf', ('Français',)), ('iti', ('Italiano',)), ('jaj', ('日本語',))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
@@ -673,6 +680,7 @@ def game_environment(s):
     env['BB_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['BB_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['BB_LANGUAGE'] = s['language']
+    env['BB_VOICE_LANGUAGE'] = s.get('voice_language') or 'auto'
     if str(s['player_name']).strip():
         env['BB_USER_NAME'] = str(s['player_name']).strip()
     env['BB_FULLSCREEN'] = '1' if s['fullscreen'] else '0'
@@ -1611,6 +1619,9 @@ class Launcher:
                     _('Your dumped add-ons, one folder each named like SPEXPANSIONDLC03 (The Old Hunters). '
                       'Only needed with a base-game dump; the Game of the Year edition (CUSA03173) has it.'))
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
+        self.row(f, _('Voice language', 'Язык озвучки'), self.choice(f, 'voice_language', 'app', VOICE_LANGUAGES),
+                 _('As in the game uses the original voice setting; other choices use available tracks.',
+                   '«Как в игре» оставляет исходную озвучку; другие варианты берут доступные дорожки.'))
         self.row(f, _('Player name', 'Имя игрока'), self.ttk.Entry(f, textvariable=self.var('player_name', 'app'), width=30),
                  _('Where the game shows the PSN name; empty: the default.', 'Где игра показывает имя PSN; пусто — по умолчанию.'))
         self.section(f, _('Effects', 'Эффекты'))

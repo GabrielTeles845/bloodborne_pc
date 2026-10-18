@@ -90,6 +90,8 @@ FIELDS = {
         row('user_dir', 'Saves folder', 'folder'),
         row('dlc_dir', 'DLC folder (base-game dumps only, e.g. SPEXPANSIONDLC03)', 'folder'),
         row('language', 'Game language', 'choice', core.LANGUAGES),
+        row('voice_language', 'Voice language', 'choice', core.VOICE_LANGUAGES,
+            'As in the game uses the original voice setting; other choices use available tracks.'),
         row('player_name', 'Hunter name'),
         *[row(key, title[0], 'toggle') for key, title, _ in core.EXTRAS[:1]],
     ],
@@ -166,7 +168,7 @@ SETTINGS_SECTIONS = {
     'Game & Saves': [
         ('Game files', ['game_dir', 'dlc_dir']),
         ('Your data', ['user_dir']),
-        ('In-game preferences', ['language', 'player_name'] + [key for key, _, _ in core.EXTRAS[:1]]),
+        ('In-game preferences', ['language', 'voice_language', 'player_name'] + [key for key, _, _ in core.EXTRAS[:1]]),
     ],
     # Online is The Hunter's Dream only; how PLAY starts the game is chosen on the Home page.
     'Online': [

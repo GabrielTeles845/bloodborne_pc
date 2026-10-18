@@ -264,6 +264,16 @@ def main():
                    optional=True)
         if (hud_layer / 'dvdroot_ps4').is_dir():
             generated.append(str(hud_layer))
+    # Text and voice languages (scripts/language_files.py): Brazilian Portuguese text from the
+    # game's porbr files, and the voice language apart from the text's (BB_VOICE_LANGUAGE).
+    # BB_LANGUAGE_FILES=0: the game's own choice. (After Berleis, Supermedo PR #20.)
+    language_layer = Path(out) / 'language'
+    voice = env.get('BB_VOICE_LANGUAGE') or ini_value(config, 'voice_language') or ''
+    if env.get('BB_LANGUAGE_FILES') != '0':
+        run_script('language_files.py', game, '--out', language_layer, '--language', env.get('BB_LANGUAGE', ''),
+                   '--voice', voice, optional=True)
+        if (language_layer / 'dvdroot_ps4').is_dir():
+            generated.append(str(language_layer))
     # The Xbox button prompts the package ships (packaging/windows/mods in a source checkout).
     bundled = [folder for folder in (PORT / 'mods' / XBOX_PROMPTS, PORT / 'packaging/windows/mods' / XBOX_PROMPTS)
                if folder.is_dir()][:1]
