@@ -58,13 +58,116 @@ def fps_preset(fps,elf,xml,app_version):
     return [SCALED_BASE]
 
 
-def preset_writes(xml,preset,fps,app_version,segments):
-    """The FPS preset's writes: for 120/144 the base with its values for that rate."""
+def preset_writes(xml,preset,fps,app_version,segments,elf=None,settings=None):
+    """The FPS preset's writes: for 120/144 the base with its values for that rate, then the
+    high-FPS corrections (rate_corrections)."""
     writes=compile_patches(xml,preset,app_version,segments)
-    if fps in SCALED_FPS and preset:
+    if not preset: return writes
+    if fps in SCALED_FPS:
         writes=rate_scaled(writes,SCALED_FPS[fps])
         print(f'Patches: {fps} FPS: {SCALED_BASE} with its frame-rate values for {fps}')
-    return writes
+    return rate_corrections(writes,PRESET_RATES.get(fps),elf,settings or {})
+
+
+# Corrections to the community frame-rate lists (Kyo's 1.0 lists), from Awakenchan/BloodBorneButPc
+# (after bbhost's frame_rate.cpp and follow_camera.cpp, Kyo's 1.3 lists and yogesh1239's AI/Camera
+# fix). They change only sites a list writes (and the camera's own eases): the 60, 90 and uncapped
+# lists of this file write none of the effect or cloth sites, so those corrections are for the
+# 120/144 base.
+#
+# Effects keep the data's rate (effect_rate_fix=0 / BB_EFFECT_RATE_FIX=0: off). The effect
+# manager's 30.0 (0x26FB39F) and the GPU particle update's (0x4CAD7FC) turn effect data, written in
+# 30 fps frames, into seconds; the lists set both to 60, which halved each emitter's interval and
+# lifetime and ran GPU particles twice as fast (the motes rising from a lamp's travel and a
+# boss's blood rain went missing).
+EFFECT_RATE_SITES=(0x26FB39F,0x4CAD7FC)
+# The cloth above 60, as Kyo's 1.3 (cloth_fix=0 / BB_CLOTH_FIX=0: off): one substep a frame runs
+# the solver at the frame rate against the 60 its part files are tuned for, and the six
+# constraint caves scale its stiffness by the scalars at 0x4D3BD00: (60/fps)^2. The 1.0 lists
+# scale it by 60/fps and also point the damping exponent's load (0xB6FBD4) at it and scale the
+# integrator's dt*dt (a hook at 0xB73F84, its cave at 0xB73FA8, the factor at 0x4D3BD10), which 1.3
+# leaves as the game has them: the cloth jumped and ran fast at 90 and above.
+CLOTH_STIFFNESS=0x4D3BD00
+CLOTH_LEFT_OUT=((0xB6FBD4,0xB6FBD8),(0xB73F84,0xB73F8D),(0xB73FA8,0xB73FC1),(0x4D3BD10,0x4D3BD20))
+# The follow camera (ChrExFollowCam) eases by weights a frame (camera_fix=1 / BB_CAMERA_FIX=1: on;
+# off by default, as Awakenchan ships it: players found it trailing too far behind when running).
+# The lists store Kyo's 60 fps values for them at every rate - its constructor's immediates (field
+# by address below) and two runs of stores that replace its parameter reads (mov dword
+# [r13+field], value) - so at 90, 120 and 144 it chased, turned and settled 1.5, 2 and 2.4 times as
+# fast. They are converted from a 60 fps frame: a weight w to 1-(1-w)^(60/fps), the pitch return's
+# kept share k (+0x1a8) to k^(60/fps); the direct pitch angle (+0x238) is an angle. Three weights no
+# list tunes are the game's own for a 30 fps frame, converted from it at every rate: the
+# LockCamParam blend (+0x330, an immediate no list writes), the distance ease (0x4D25E68, 0.1) and
+# the chase-rate ease (0x4D25E94, 1/30).
+CAMERA_FIELDS={0x183a4c3:0x19c,0x183a4cd:0x1a0,0x183a4d7:0x1a4,0x183a4e1:0x1a8,0x183a4f5:0x1b0,
+               0x183a4ff:0x1b4,0x183a509:0x1b8,0x183a527:0x1c4,0x183a531:0x1c8,0x183a53b:0x1cc,
+               0x183a649:0x238,0x183a653:0x23c,0x183a65d:0x240,0x183a8c1:0x19c,0x183a8cb:0x1a0,
+               0x183a8d5:0x1a4,0x183a8df:0x1a8,0x183a8f3:0x1b0,0x183a8fd:0x1b4,0x183a907:0x1b8,
+               0x183a925:0x1c4,0x183a92f:0x1c8,0x183a939:0x1cc,0x183aa47:0x238,0x183aa51:0x23c,
+               0x183aa5b:0x240}
+CAMERA_STORES=((0x183FF29,0x183FF6B),(0x1840799,0x18407E6))
+CAMERA_STORE=bytes.fromhex('41c785')  # the lists' mov dword [r13+disp32], imm32
+CAMERA_ANGLE,CAMERA_KEPT=0x238,0x1a8
+# The game's own value at each of these (a float the eboot must hold there, else left alone).
+CAMERA_EASES={0x4D25E68:0.1,0x4D25E94:1/30,0x183A7DE:0.05}  # the last: mov dword [rbx+0x330], 0.05
+PRESET_RATES={'60':60,'90':90,**SCALED_FPS}  # uncapped: the rate is not known here
+
+
+def setting_on(settings,key,env,default):
+    return os.environ.get(env,settings.get(key,default))!='0'
+
+
+def camera_value(field, value, frames):
+    """A camera field's value for a frame `frames` of the frames it was tuned for."""
+    if field==CAMERA_ANGLE or not 0<value<1: return value
+    return value**frames if field==CAMERA_KEPT else 1-(1-value)**frames
+
+
+def rate_corrections(writes, fps, elf, settings):
+    """The preset's writes with the corrections above for `fps` (None: uncapped; only the
+    effects' rate is put back)."""
+    f=lambda v: struct.pack('<f',v)
+    effects=setting_on(settings,'effect_rate_fix','BB_EFFECT_RATE_FIX','1')
+    cloth=bool(fps and fps>60 and setting_on(settings,'cloth_fix','BB_CLOTH_FIX','1'))
+    camera=bool(fps and setting_on(settings,'camera_fix','BB_CAMERA_FIX','0'))
+    out=[]
+    eases=set()
+    for offset,data in writes:
+        a=offset+EBOOT_BASE
+        if effects and a in EFFECT_RATE_SITES and len(data)==4:
+            continue
+        if cloth:
+            left=next(((lo,hi) for lo,hi in CLOTH_LEFT_OUT if lo<=a<hi),None)
+            if left:
+                if a+len(data)>left[1]: raise ValueError(f'frame-rate patch: {a:#x} reaches past {left[1]:#x}')
+                continue
+            if a==CLOTH_STIFFNESS:
+                values=struct.unpack('<4f',data) if len(data)==16 else ()
+                if len(set(values))!=1 or not 0<values[0]<=1:
+                    raise ValueError(f'frame-rate patch: unexpected cloth stiffness at {a:#x}')
+                data=f((60/fps)**2)*4
+        if camera:
+            if a in CAMERA_FIELDS and len(data)==4:
+                data=f(camera_value(CAMERA_FIELDS[a],struct.unpack('<f',data)[0],60/fps))
+            elif any(lo<=a<hi for lo,hi in CAMERA_STORES) and len(data)==11 and data[:3]==CAMERA_STORE:
+                field,value=struct.unpack('<If',data[3:])
+                data=data[:7]+f(camera_value(field,value,60/fps))
+            elif a in CAMERA_EASES and len(data)==4:
+                data=f(camera_value(None,CAMERA_EASES[a],30/fps))
+                eases.add(a)
+        out.append((offset,data))
+    if camera and elf is not None:
+        # The eases no line of the list writes, where the eboot holds the game's value.
+        for a,value in CAMERA_EASES.items():
+            if a in eases: continue
+            at=a-EBOOT_BASE
+            if eboot_bytes(elf,at,at+4)==f(value):
+                out.append((at,f(camera_value(None,value,30/fps))))
+            else:
+                print(f'Patches: camera ease at {a:#x} left alone (unexpected code)')
+    names=[n for n,on in (('effect rate',effects),('cloth',cloth),('camera',camera)) if on]
+    print(f'Patches: frame-rate corrections: {", ".join(names) or "none"}')
+    return out
 
 
 def rate_scaled(writes, fps):
@@ -595,7 +698,7 @@ def main():
     validate_patch_requirements(names,a.game_dir)
     names=guarded_patches(names,elf)
     segments=eboot_segments(elf)
-    writes=preset_writes(a.xml,preset,a.fps,a.app_version,segments)
+    writes=preset_writes(a.xml,preset,a.fps,a.app_version,segments,elf,read_settings(a.settings))
     writes+=compile_patches(a.xml,[n for n in names if n not in preset],a.app_version,segments)
     if a.fps!='30' and sprint_fix_enabled(read_settings(a.settings)):
         fixes=frame_rate_fixes(elf)

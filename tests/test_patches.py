@@ -16,7 +16,8 @@ from patches import (EBOOT_BASE, FIXES, FPS_PRESETS, OUTPUT_SIZE, RESOLUTION_TEM
                      compile_external, frame_rate_fixes, sprint_fix_enabled, eboot_bytes,
                      eboot_matches_patches, patch_fingerprint, patch_sites, game_app_version,
                      eboot_is_109, SCALED_BASE, SCALED_FPS, SCALED_VALUES, fps_preset, rate_scaled,
-                     eboot_segments)
+                     eboot_segments, rate_corrections, camera_value, EFFECT_RATE_SITES,
+                     CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -213,6 +214,61 @@ class ScaledFpsTests(unittest.TestCase):
         self.assertEqual(fps_preset('144', elf, XML, '01.09'), [SCALED_BASE])
         for offset, data in compile_patches(XML, [SCALED_BASE], '01.09', eboot_segments(elf)):
             self.assertNotEqual(eboot_bytes(elf, offset, offset + len(data)), data, hex(offset + EBOOT_BASE))
+
+
+class RateCorrectionTests(unittest.TestCase):
+    """High-FPS corrections (Awakenchan/BloodBorneButPc): effect rate, cloth, camera."""
+    def corrected(self, fps, settings=None, env=None):
+        writes = rate_scaled(compile_patches(XML, [SCALED_BASE], '01.09', SEGMENTS), fps)
+        with mock.patch.dict('os.environ', env or {}, clear=True), redirect_stdout(io.StringIO()):
+            return writes, rate_corrections(writes, fps, None, settings or {})
+
+    def test_effects_keep_the_games_rate(self):
+        writes, out = self.corrected(120)
+        sites = {a - EBOOT_BASE for a in EFFECT_RATE_SITES}
+        self.assertTrue(sites <= dict(writes).keys())
+        self.assertFalse(sites & dict(out).keys())
+        _, out = self.corrected(120, env={'BB_EFFECT_RATE_FIX': '0'})
+        self.assertTrue(sites <= dict(out).keys())
+        _, out = self.corrected(120, settings={'effect_rate_fix': '0'})
+        self.assertTrue(sites <= dict(out).keys())
+
+    def test_cloth_stiffness_and_the_1_0_sites_above_60(self):
+        for fps in (120, 144):
+            with self.subTest(fps=fps):
+                writes, out = self.corrected(fps)
+                out = dict(out)
+                self.assertEqual(struct.unpack('<4f', out[CLOTH_STIFFNESS - EBOOT_BASE]),
+                                 (struct.unpack('<f', struct.pack('<f', (60 / fps) ** 2))[0],) * 4)
+                left = [o for o, _ in writes if any(lo <= o + EBOOT_BASE < hi for lo, hi in CLOTH_LEFT_OUT)]
+                self.assertTrue(left)
+                self.assertFalse(set(left) & out.keys())
+        writes, out = self.corrected(144, env={'BB_CLOTH_FIX': '0'})
+        self.assertEqual(dict(out)[CLOTH_STIFFNESS - EBOOT_BASE], dict(writes)[CLOTH_STIFFNESS - EBOOT_BASE])
+
+    def test_camera_only_when_asked(self):
+        writes, out = self.corrected(144)
+        cams = {a - EBOOT_BASE for a in CAMERA_FIELDS}
+        self.assertEqual({o: d for o, d in out if o in cams}, {o: d for o, d in writes if o in cams})
+        _, on = self.corrected(144, env={'BB_CAMERA_FIX': '1'})
+        on, base = dict(on), dict(writes)
+        changed = [o for o in cams if on[o] != base[o]]
+        self.assertTrue(changed)
+        for o in changed:
+            w = struct.unpack('<f', base[o])[0]
+            expected = camera_value(CAMERA_FIELDS[o + EBOOT_BASE], w, 60 / 144)
+            self.assertAlmostEqual(struct.unpack('<f', on[o])[0], expected, places=6)
+        self.assertAlmostEqual(camera_value(0x19c, 0.05, 1), 0.05)
+        self.assertAlmostEqual(camera_value(0x19c, 0.5, 0.5), 1 - 0.5 ** 0.5)
+        self.assertAlmostEqual(camera_value(0x1a8, 0.5, 0.5), 0.5 ** 0.5)
+        self.assertEqual(camera_value(0x238, 0.5, 0.5), 0.5)
+
+    def test_existing_presets_are_unchanged_by_default(self):
+        for preset, fps in (('60 FPS++', 60), ('90 FPS++', 90), ('Uncap FPS++', None)):
+            with self.subTest(preset=preset):
+                writes = compile_patches(XML, [preset], '01.09', SEGMENTS)
+                with mock.patch.dict('os.environ', {}, clear=True), redirect_stdout(io.StringIO()):
+                    self.assertEqual(rate_corrections(writes, fps, None, {}), writes)
 
 
 def fake_elf(vaddr, code):
