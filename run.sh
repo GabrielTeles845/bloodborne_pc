@@ -124,6 +124,15 @@ elif [[ -n ${scaled_output:-} ]]; then
     export BB_DMEM_MB=${BB_DMEM_MB:-9152}
     echo "Output ${scaled_output}: scene ${scaled_render}, direct memory ${BB_DMEM_MB} MiB (live_resolution=1: live changes)"
 fi
+# The game's graphics heaps at PC sizes need the larger pool (patches.py HEAP_PATCH; pc_heaps=0 or
+# BB_PC_HEAPS=0: the PS4's heaps, the larger pool only above 1080p).
+pc_heaps=${BB_PC_HEAPS:-}
+if [[ -z $pc_heaps && -f $BB_CONFIG ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+        [[ $line =~ ^pc_heaps=([01])$ ]] && pc_heaps=${BASH_REMATCH[1]}
+    done < "$BB_CONFIG"
+fi
+[[ $pc_heaps == 0 ]] || export BB_DMEM_MB=${BB_DMEM_MB:-9152}
 "$PYTHON" scripts/patches.py --out "$out" --fps "$fps" --extra "${BB_PATCHES:-}" --settings "$BB_CONFIG" --game-dir "$game" --render-res "${BB_RENDER_RES:-}" --output-res "${BB_OUTPUT_RES:-}" \
     --patches-dir "${BB_PATCHES_DIR:-$data/patches}" --patches-config "${BB_PATCHES_CONFIG:-$data/patches.json}"
 if [[ $fps == 120 || $fps == 144 ]]; then

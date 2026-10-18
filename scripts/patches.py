@@ -569,6 +569,26 @@ PATCH_GUARDS={
 }
 
 
+# The game's graphics heaps at PC sizes (auser1337's "Increased Graphics Heap Sizes"; with the
+# larger direct memory pool, BB_DMEM_MB 9152, which run.py sets with it). The PS4's sizes left models
+# missing with the highest model detail or screen-space reflections (ladders, ground, the Astral
+# Clocktower's clock). Awakenchan/BloodBorneButPc 0.9.32 gives every player and setting these
+# sizes; before, the port applied them for scenes above 1080p only. pc_heaps=0 in bbport.ini or
+# BB_PC_HEAPS=0: that again. The guard: (offset, length, sha256 prefix of the 1.09 build's bytes
+# over both of the patch's writes).
+HEAP_PATCH='Increased Graphics Heap Sizes'
+HEAP_GUARD=(0x04b36dda-EBOOT_BASE,10,'2655d1cb82ac9da1')
+
+
+def pc_heaps_enabled(settings):
+    return setting_on(settings,'pc_heaps','BB_PC_HEAPS','1')
+
+
+def site_matches(elf,guard):
+    offset,length,check=guard
+    return hashlib.sha256(eboot_bytes(elf,offset,offset+length)).hexdigest()[:16]==check
+
+
 def guarded_patches(names,elf):
     """`names` without the guarded patches whose site in eboot.elf is not the code they expect."""
     kept=[]
@@ -783,11 +803,13 @@ def main():
         if ultrawide(out):
             writes+=ultrawide_writes(a.xml,out,a.app_version,segments)
             names.append(f'ultrawide {out[0]}x{out[1]} (HUD {ui[0]}x{ui[1]})')
-        if size[0]*size[1]>OUTPUT_SIZE[0]*OUTPUT_SIZE[1]:
-            heap='Increased Graphics Heap Sizes'
-            writes+=compile_patches(a.xml,[heap],a.app_version,segments)
-            names.append(heap)
         print(f'Patches: scene {size[0]}x{size[1]}; UI {ui[0]}x{ui[1]}')
+    if size and size[0]*size[1]>OUTPUT_SIZE[0]*OUTPUT_SIZE[1] or pc_heaps_enabled(read_settings(a.settings)):
+        if site_matches(elf,HEAP_GUARD):
+            writes+=compile_patches(a.xml,[HEAP_PATCH],a.app_version,segments)
+            names.append(HEAP_PATCH)
+        else:
+            print(f'Patches: {HEAP_PATCH} left out: this eboot.bin has other code at its address')
     if a.patches_dir:
         # After the built-in ones: an external patch of the same bytes wins.
         selected=external_selection(external_patches(a.patches_dir,a.app_version,a.xml),a.patches_config)

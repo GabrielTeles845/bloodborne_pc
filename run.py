@@ -380,6 +380,10 @@ def main():
             env.setdefault('BB_DMEM_MB', '9152')
             print(f'Output {scaled_output}: scene {scaled_render}, direct memory {env["BB_DMEM_MB"]} MiB '
                   '(live_resolution=1: live changes)')
+        # The game's graphics heaps at PC sizes need the larger pool (patches.py HEAP_PATCH;
+        # pc_heaps=0 / BB_PC_HEAPS=0: the PS4's heaps, the larger pool only above 1080p).
+        if patched and (env.get('BB_PC_HEAPS') or ini_value(config, 'pc_heaps') or '1') != '0':
+            env.setdefault('BB_DMEM_MB', '9152')
         extra = env.get('BB_PATCHES', '')
         # Chinese text (BB_LANGUAGE 10, 11) shows only with the game's region unlocked
         # (k1m0206, Supermedo PR #91; its server lookups stay on Europe).
