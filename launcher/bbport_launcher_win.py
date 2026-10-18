@@ -194,6 +194,8 @@ TWEAKS = [
     ('tweak_camera_distance', ('Camera further from the character', 'Камера дальше от персонажа'), False),
     ('tweak_no_camera_rotation', ('No camera auto-rotation while moving', 'Без автоповорота камеры при движении'), False),
     ('tweak_easy_run', ('Run with less stick tilt (about 70%)', 'Бег при меньшем наклоне стика (около 70%)'), False),
+    ('tweak_circle_confirm', ('Japanese/Asian buttons: Circle confirms and interacts, Cross dodges',
+                              'Японская раскладка: Круг — подтверждение и действие, Крест — уклонение'), False),
     ('tweak_ragdoll', ('Dark Souls-style ragdoll physics (corpses fly further)',
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]

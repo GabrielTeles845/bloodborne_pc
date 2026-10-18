@@ -330,6 +330,11 @@
             <Line Type="bytes" Address="0x01f39030" Value="554889e5534883ec184889fb488d05ed2d80034889042448897424084889e6e87c0c01004889d84883c4185b5dc3"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="Bloodborne" Name="Circle Confirm (Japanese/Asian button layout)" Note="The game's check for the regions where Circle confirms (Japan, Asia) always answers yes: Circle confirms and interacts, Cross cancels and dodges, and the on-screen button icons follow. Applied after Unlock Game Region, which clears the same check." Author="bbport (parsifal295)" PatchVer="1.0" AppVer="01.09" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x023B8730" Value="B801000000C3"/>
+        </PatchList>
+    </Metadata>
     <Metadata Title="Bloodborne" Name="Larger Frame Heaps" Note="Raises the two per-frame render heaps from 256 KiB to 1 MiB each. A busy frame used up 256 KiB, and the game copied into the NULL block it got back (crash at 0x025d5b40). The port applies this always." Author="bbport" PatchVer="1.0" AppVer="01.09" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes32" Address="0x02595c0a" Value="0x00100000"/>

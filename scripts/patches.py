@@ -263,6 +263,8 @@ EFFECTS={
     'tweak_no_camera_rotation':(None,'Disable Camera Auto Rotation via Movement'),
     'tweak_easy_run':(None,'Sensitive Analog Input (easier to run)'),
     'tweak_ragdoll':(None,'DS1-like physics'),
+    # parsifal295, Supermedo/bloodborne_pc PR #17.
+    'tweak_circle_confirm':(None,'Circle Confirm (Japanese/Asian button layout)'),
 }
 # model_lod: -2 highest, 0 the game's, 1 lower, 2 lowest.
 MODEL_LOD={'-2':'Model LOD -2 (Highest)','1':'Model LOD 1 (Lower)','2':'Model LOD 2 (Lowest)'}
@@ -567,6 +569,11 @@ def encode(line):
 PATCH_GUARDS={
     'Skip Online/Offline Choice':(0x1b39030,'554889e54157415641554154534881ec48130000'),
 }
+# The same, by length and hash (sha256 prefix) of the code they expect, so no game bytes are kept:
+# name -> (eboot offset, length, check).
+HASH_GUARDS={
+    'Circle Confirm (Japanese/Asian button layout)':(0x1fb8730,6,'f909b8f17e0b6494'),
+}
 
 
 # The game's graphics heaps at PC sizes (auser1337's "Increased Graphics Heap Sizes"; with the
@@ -593,6 +600,9 @@ def guarded_patches(names,elf):
     """`names` without the guarded patches whose site in eboot.elf is not the code they expect."""
     kept=[]
     for name in names:
+        if name in HASH_GUARDS and not site_matches(elf,HASH_GUARDS[name]):
+            print(f'Patches: {name} left out: this eboot.bin has other code at its address')
+            continue
         guard=PATCH_GUARDS.get(name)
         if guard:
             offset,expected=guard

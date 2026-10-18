@@ -18,7 +18,8 @@ from patches import (EBOOT_BASE, FIXES, FPS_PRESETS, OUTPUT_SIZE, RESOLUTION_TEM
                      eboot_is_109, SCALED_BASE, SCALED_FPS, SCALED_VALUES, fps_preset, rate_scaled,
                      eboot_segments, rate_corrections, camera_value, EFFECT_RATE_SITES,
                      CLOTH_STIFFNESS, CLOTH_LEFT_OUT, CAMERA_FIELDS, frame_steps, preset_writes, with_external,
-                     HEAP_PATCH, HEAP_GUARD, pc_heaps_enabled, site_matches)
+                     HEAP_PATCH, HEAP_GUARD, pc_heaps_enabled, site_matches,
+                     HASH_GUARDS, guarded_patches)
 
 XML = ROOT / 'patches/Bloodborne.xml'
 SEGMENTS = [(0, 0x6000000)]
@@ -379,6 +380,23 @@ class PcHeapTests(unittest.TestCase):
     @unittest.skipUnless(GAME_ELF.is_file(), 'needs a prepared 1.09 eboot.elf (BB_TEST_EBOOT_ELF)')
     def test_guard_matches_the_game(self):
         self.assertTrue(site_matches(GAME_ELF.read_bytes(), HEAP_GUARD))
+
+
+class CircleConfirmTests(unittest.TestCase):
+    NAME = 'Circle Confirm (Japanese/Asian button layout)'
+
+    def test_switch_and_guard(self):
+        self.assertIn(self.NAME, effect_patches({'tweak_circle_confirm': '1'}))
+        self.assertNotIn(self.NAME, effect_patches({'tweak_circle_confirm': '0'}))
+        offset, length, _ = HASH_GUARDS[self.NAME]
+        (at, data), = compile_patches(XML, [self.NAME], '01.09', SEGMENTS)
+        self.assertEqual((at, len(data)), (offset, length))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(guarded_patches([self.NAME], fake_elf(0, bytes(0x2000000))), [])
+
+    @unittest.skipUnless(GAME_ELF.is_file(), 'needs a prepared 1.09 eboot.elf (BB_TEST_EBOOT_ELF)')
+    def test_guard_matches_the_game(self):
+        self.assertEqual(guarded_patches([self.NAME], GAME_ELF.read_bytes()), [self.NAME])
 
 
 def fake_elf(vaddr, code):
